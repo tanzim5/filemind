@@ -68,6 +68,26 @@ def main():
             if _ours(port):
                 break
             time.sleep(0.1)
+    url = f"http://127.0.0.1:{port}"
+    if "--browser" not in sys.argv:
+        try:
+            _window(url)
+            os._exit(0)                                           # window closed: stop the server too
+        except Exception as e:                                    # no pywebview / no GUI toolkit (common on Linux)
+            print(f"No app window available ({type(e).__name__}: {e}); opening your browser instead.")
+    import webbrowser
+    webbrowser.open(url)
+    if serve:
+        print(f"File Mind is running at {url}  (press Ctrl+C here to quit)")
+        try:
+            while True:
+                time.sleep(3600)
+        except KeyboardInterrupt:
+            pass
+    os._exit(0)
+
+
+def _window(url):
     import webview
 
     class Api:                                                    # window.pywebview.api.* in the page
@@ -75,10 +95,9 @@ def main():
             r = win.create_file_dialog(webview.FileDialog.FOLDER)
             return r[0] if r else None
 
-    win = webview.create_window("File Mind", f"http://127.0.0.1:{port}", width=1480, height=940, min_size=(900, 600),
+    win = webview.create_window("File Mind", url, width=1480, height=940, min_size=(900, 600),
                                 background_color="#f5f6f9", js_api=Api())
-    webview.start(private_mode=False, storage_path=str(HOME / "data" / "webview"))
-    os._exit(0)                                                   # window closed: stop the server too
+    webview.start(private_mode=False, storage_path=str(Path(os.environ["FILEMIND_DATA"]) / "webview"))
 
 
 if __name__ == "__main__":

@@ -12,3 +12,4 @@ scikit-learn
 numpy
 soundfile
 librosa
+pywebview; sys_platform != "linux"

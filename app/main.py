@@ -1,6 +1,7 @@
 import os
 import re
 import subprocess
+import sys
 import time
 from collections import Counter
 from pathlib import Path
@@ -87,13 +88,26 @@ $owner.Dispose()
 
 @app.post("/api/pick_folder")
 def pick_folder():
-    """Opens the native Windows folder picker on this PC (the app is local) and returns the chosen path."""
-    try:
-        r = subprocess.run(["powershell", "-NoProfile", "-STA", "-Command", _PICK_PS],
-                           capture_output=True, text=True, timeout=600)
-        return {"path": r.stdout.strip() or None}
-    except Exception as e:
-        raise HTTPException(500, f"Could not open the folder picker: {e}")
+    """Opens the system folder picker on this PC (the app is local) and returns the chosen path."""
+    title = "Choose a folder for File Mind to read (it is only read, never changed)"
+    if os.name == "nt":
+        cmds = [["powershell", "-NoProfile", "-STA", "-Command", _PICK_PS]]
+    elif sys.platform == "darwin":
+        cmds = [["osascript", "-e", f'POSIX path of (choose folder with prompt "{title}")']]
+    else:
+        cmds = [["zenity", "--file-selection", "--directory", f"--title={title}"],
+                ["kdialog", "--getexistingdirectory", str(Path.home()), "--title", title]]
+    for cmd in cmds:
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        except FileNotFoundError:
+            continue                                   # this dialog tool isn't installed; try the next
+        except Exception as e:
+            raise HTTPException(500, f"Could not open the folder picker: {e}")
+        path = r.stdout.strip()
+        return {"path": path.rstrip("/") or path or None}     # macOS adds a trailing slash; keep "/" itself
+    raise HTTPException(501, "No folder picker found on this system (install zenity or kdialog). "
+                             "You can paste the folder path instead.")
 
 
 @app.get("/api/known_folders")
@@ -599,9 +613,22 @@ def reveal(fid: int):
     p = os.path.normpath(r["path"])
     if not os.path.exists(p):
         raise HTTPException(404, "That file is no longer at its old location.")
-    # Explorer wants the whole thing as ONE argument:  /select,"C:\path with spaces\file.png"
-    subprocess.Popen(f'explorer /select,"{p}"')
-    return {"ok": True}
+    if os.name == "nt":
+        # Explorer wants the whole thing as ONE argument:  /select,"C:\path with spaces\file.png"
+        subprocess.Popen(f'explorer /select,"{p}"')
+        return {"ok": True, "where": "File Explorer"}
+    if sys.platform == "darwin":
+        subprocess.Popen(["open", "-R", p])
+        return {"ok": True, "where": "Finder"}
+    try:                                              # Linux: highlight it if the file manager supports that
+        ok = subprocess.run(["dbus-send", "--session", "--print-reply", "--dest=org.freedesktop.FileManager1",
+                             "/org/freedesktop/FileManager1", "org.freedesktop.FileManager1.ShowItems",
+                             f"array:string:{Path(p).as_uri()}", "string:"], capture_output=True, timeout=3).returncode == 0
+    except Exception:
+        ok = False
+    if not ok:
+        subprocess.Popen(["xdg-open", os.path.dirname(p)])
+    return {"ok": True, "where": "your file manager"}
 
 
 # ---------------------------------------------------------------- projects (virtual)

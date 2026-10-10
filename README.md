@@ -4,7 +4,7 @@
   <a href="https://github.com/tanzim5/filemind/releases/latest"><b>⬇ Download for Windows</b></a> ·
   <a href="#what-it-does">What it does</a> ·
   <a href="#privacy">Privacy</a> ·
-  <a href="#run-from-source">Run from source</a>
+  <a href="#run-from-source-macos-linux-windows">macOS &amp; Linux</a>
 </p>
 
 ---
@@ -49,7 +49,7 @@ you can keep using File Mind while it works, and it picks up where it left off i
 Windows may show "Windows protected your PC" the first time, because the app isn't code-signed:
 click **More info → Run anyway**.
 
-macOS and Linux builds are planned; until then you can [run from source](#run-from-source) on any platform.
+On macOS or Linux? [Run it from source](#run-from-source-macos-linux-windows) — one command.
 
 ## Privacy
 
@@ -58,25 +58,71 @@ macOS and Linux builds are planned; until then you can [run from source](#run-fr
 - File Mind only **reads** your folders. Renames and moves happen only when you press commit, and can be undone.
 - The index lives in a `data` folder next to the app. Delete it to forget everything.
 
-## Run from source
+## Run from source (macOS, Linux, Windows)
 
-Requires Python 3.12 and [ffmpeg](https://ffmpeg.org/) on your PATH. An NVIDIA GPU makes indexing much faster; it also runs on CPU.
+Any computer with Python can run File Mind straight from this repository. It's the same app, opening in
+its own window or in your browser.
+
+**You need**
+
+- **Python 3.10 or newer** ([python.org](https://www.python.org/downloads/); on Linux, your distribution's `python3`).
+- **ffmpeg**, for videos, sounds and voice search (photos work without it):
+
+  | System | Install ffmpeg |
+  |---|---|
+  | macOS | `brew install ffmpeg` ([Homebrew](https://brew.sh)) |
+  | Debian / Ubuntu / Mint | `sudo apt install ffmpeg python3-venv` |
+  | Fedora | `sudo dnf install ffmpeg` (from [RPM Fusion](https://rpmfusion.org/Configuration)) |
+  | Arch | `sudo pacman -S ffmpeg` |
+  | Windows | `winget install Gyan.FFmpeg` |
+
+- About **8 GB of RAM** and **6 GB of disk** (Python packages plus the 1.5 GB model).
+
+**macOS and Linux** — one command sets everything up on the first run and starts File Mind:
 
 ```bash
-python -m venv .venv
-.venv\Scripts\activate          # Windows  (macOS/Linux: source .venv/bin/activate)
-pip install -r requirements.txt
-python -m uvicorn app.main:app --port 8765
+git clone https://github.com/tanzim5/filemind.git
+cd filemind
+./run.sh
 ```
 
-Open http://127.0.0.1:8765. On first run the model is downloaded once from Hugging Face
-(or place it in `models/embeddinggemma-2/` yourself); after that File Mind works with no internet connection.
+**Windows**
 
-On Windows you can also double-click `run.bat`. To get the desktop window instead of a browser tab,
-`pip install pywebview` and run `python filemind.py`.
+```bat
+git clone https://github.com/tanzim5/filemind.git
+cd filemind
+run.bat
+```
 
-To build the portable zip yourself, see `packaging/build_windows.py`; GitHub Actions builds it automatically
-for every `v*` tag.
+The first run creates a private Python environment in `.venv` and installs the packages (a few minutes).
+Then File Mind opens and downloads the AI model once. Later runs start in seconds; just run `./run.sh` or
+`run.bat` again. Add `--browser` to use your web browser instead of the app window. On Linux it always
+opens in your browser.
+
+<details>
+<summary><b>Manual setup</b> (if you prefer to do each step yourself)</summary>
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate              # Windows: .venv\Scripts\activate
+# Linux without an NVIDIA GPU: install the much smaller CPU-only PyTorch first
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements.txt
+python filemind.py                     # or: python -m uvicorn app.main:app --port 8765
+```
+
+To put the model somewhere else, set `FILEMIND_MODELS`; to keep the index somewhere else, set `FILEMIND_DATA`.
+You can also place the model files in `models/embeddinggemma-2/` yourself instead of letting the app download them.
+</details>
+
+**Speed.** With an NVIDIA GPU (and CUDA PyTorch), indexing is much faster. Everything else runs on the CPU,
+including Apple Silicon Macs: search is instant, and reading a new library takes a few seconds per photo.
+
+**Notes for Linux.** "Browse…" uses `zenity` or `kdialog` if one is installed; otherwise paste the folder path.
+"Show in folder" opens your file manager.
+
+To build the portable Windows zip yourself, see `packaging/build_windows.py`. GitHub Actions builds it
+automatically for every `v*` tag.
 
 ## Licence
 

@@ -59,7 +59,11 @@ const toast = (msg, icon = 'check', bad = false) => {
   const t = $('#toast'); t.innerHTML = `${ic(icon)}<span>${esc(msg)}</span>`; t.hidden = false; t.firstChild.style.color = bad ? '#ff8f8f' : '#7fe0a0';
   clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2600);
 };
-const reveal = async id => { try { await api(`/reveal/${id}`, { method: 'POST' }); toast('Shown in File Explorer', 'explorer'); } catch (e) { toast(e.message, 'x', true); } };
+/* name the user's file manager and path style for this OS */
+const OS = /Mac/.test(navigator.platform) ? 'mac' : /Win/.test(navigator.platform) ? 'win' : 'linux';
+const FM = { win: 'File Explorer', mac: 'Finder', linux: 'folder' }[OS], FMS = { win: 'Explorer', mac: 'Finder', linux: 'folder' }[OS];
+const EXPATH = { win: 'C:\\Users\\you\\Downloads', mac: '/Users/you/Downloads', linux: '/home/you/Downloads' }[OS];
+const reveal = async id => { try { const r = await api(`/reveal/${id}`, { method: 'POST' }); toast(`Shown in ${r.where || FM}`, 'explorer'); } catch (e) { toast(e.message, 'x', true); } };
 const copyText = async (text, msg = 'Path copied') => { try { await navigator.clipboard.writeText(text); toast(msg, 'copy'); } catch { toast('Could not copy', 'x', true); } };
 
 /* ================================================================ history: one stack, every view */
@@ -100,7 +104,7 @@ function addBoxHTML() {
   const colr = { Downloads: '#e8803a', Pictures: '#4a8be0', Videos: '#8e5bd0', Documents: '#d9a21f', Desktop: '#46a876', Music: '#e0629f' };
   const icn = { Downloads: 'inbox', Pictures: 'image', Videos: 'video', Documents: 'folder', Desktop: 'panel', Music: 'music' };
   return `<div class="addbox"><h4><i data-ic="folderplus"></i>Which folder should I read?</h4>
-    <div class="pathrow"><div class="inp"><i data-ic="folder"></i><input class="apath" placeholder="Paste a folder path, e.g. C:\\Users\\you\\Downloads" spellcheck="false"></div>
+    <div class="pathrow"><div class="inp"><i data-ic="folder"></i><input class="apath" placeholder="Paste a folder path, e.g. ${EXPATH}" spellcheck="false"></div>
       <button class="btn" data-browse><i data-ic="search"></i><span>Browse…</span></button><button class="btn dark" data-go>Add &amp; read</button></div>
     <div class="quick"><small>or pick one:</small>${S.known.map(k => `<button data-path="${esc(k.path)}"><i data-ic="${icn[k.label] || 'folder'}" style="color:${colr[k.label] || '#888'}"></i>${esc(k.label)}</button>`).join('')}</div></div>`;
 }
@@ -305,7 +309,7 @@ function tileInner(f) {
 function tile(f, w, h, i, animate) {
   const extra = (f.score !== undefined ? `<span class="score">${(f.score * 100).toFixed(0)}%</span>` : '') + (f.proposed ? `<div class="prop">→ ${esc(f.proposed)}</div>` : '');
   return `<div class="tile ${S.selected.has(f.id) ? 'sel' : ''} ${animate ? 'rise' : ''}" data-id="${f.id}" data-kind="${f.kind}" style="width:${w}px;height:${h}px;${f.kind !== 'audio' && f.dom ? `background:${f.dom};` : ''}${animate ? `--i:${Math.min(i, 40)}` : ''}">
-    <div class="chk" data-chk>${ic('check', '', 2.8)}</div><div class="qa"><button data-qa="reveal" title="Show in File Explorer">${ic('explorer')}</button><button data-qa="similar" title="Find similar">${ic('sparkle')}</button></div>${extra}${tileInner(f)}</div>`;
+    <div class="chk" data-chk>${ic('check', '', 2.8)}</div><div class="qa"><button data-qa="reveal" title="Show in ${FM}">${ic('explorer')}</button><button data-qa="similar" title="Find similar">${ic('sparkle')}</button></div>${extra}${tileInner(f)}</div>`;
 }
 /* masonry: equal-width columns, each tile keeps its own shape; new pages drop into the shortest column */
 function masonry(W) { const gap = P.gap, cn = Math.max(2, Math.round((W + gap) / (P.tile + gap))), w = Math.floor((W - gap * (cn - 1)) / cn); return { gap, cn, w }; }
@@ -468,7 +472,7 @@ const go_similar = id => { const f = S.files.find(x => x.id === id) || F.files.f
 function showCtx(e, id) {
   e.preventDefault();
   const sp = S.projects.slice(0, 6);
-  $('#ctx').innerHTML = `<button data-c="open">${ic('expand')}Open</button><button data-c="reveal">${ic('explorer')}Show in File Explorer</button><button data-c="copy">${ic('copy')}Copy path</button><button data-c="similar">${ic('sparkle')}Find similar</button><hr>
+  $('#ctx').innerHTML = `<button data-c="open">${ic('expand')}Open</button><button data-c="reveal">${ic('explorer')}Show in ${FM}</button><button data-c="copy">${ic('copy')}Copy path</button><button data-c="similar">${ic('sparkle')}Find similar</button><hr>
     ${sp.length ? `<div class="sub">Add to space</div>${sp.map(p => `<button data-c="add" data-p="${p.id}">${glyph(p.id)}${esc(p.name)}</button>`).join('')}` : ''}<button data-c="new">${ic('folderplus')}New space with this</button>`;
   const m = $('#ctx'); m.hidden = false; m.style.left = clamp(e.clientX, 8, innerWidth - 240) + 'px'; m.style.top = clamp(e.clientY, 8, innerHeight - m.offsetHeight - 8) + 'px';
   m.onclick = async ev => {
@@ -626,7 +630,7 @@ function drawInspector(f) {
   box.innerHTML = `
     <div class="ihead"><h1 class="nm d-head">${esc(f.name.replace(/\.[^.]+$/, ''))}</h1>
       <div class="meta">${kicon(f.kind, 14)}<span>${esc(KIND[f.kind]?.label.replace(/s$/, '') || f.kind)} · ${esc(f.ext.slice(1).toUpperCase())}</span><span>${fmtSize(f.size)}</span><span>${ago(f.mtime)}</span></div></div>
-    <div class="is"><div class="quickbtns"><button class="btn dark" id="qbExplorer" title="Show in File Explorer  (E)">${ic('explorer')}<span>Show in Explorer</span></button>
+    <div class="is"><div class="quickbtns"><button class="btn dark" id="qbExplorer" title="Show in ${FM}  (E)">${ic('explorer')}<span>Show in ${FMS}</span></button>
       <button class="btn icon" id="qbOpen" title="Open in a new window">${ic('open')}</button><button class="btn icon" id="qbCopy" title="Copy the full path">${ic('copy')}</button><button class="btn icon" id="qbSim" title="All similar files as search results">${ic('images')}</button></div></div>
     ${f.tags?.length ? `<div class="is"><h5><i data-ic="tag"></i>Tags <span class="cnt">· what is in it</span></h5>
       <div class="tagline">${f.tags.map(t => `<button data-t="${esc(t)}" title="Search “${esc(t)}”  ·  Shift-click to add it to the current search">${esc(t)}</button>`).join('')}</div></div>` : ''}
