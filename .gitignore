@@ -1,0 +1,11 @@
+# your private index: file names, paths, thumbnails, embeddings — never commit
+data/
+# model weights (1.4 GB) — downloaded or bundled separately
+models/
+.venv/
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec
+.claude/

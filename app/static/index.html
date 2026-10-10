@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f1e8ea">
+<title>File Mind</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%23ff5a1f' stroke-width='5'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23ff5a1f' opacity='.35'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<aside id="side">
+  <div class="sidetop">
+    <div class="brand"><span class="mark"></span><span class="word">File Mind</span></div>
+    <div class="duo"><button id="addTop" title="Add a folder to read"><i data-ic="folderplus"></i></button><button id="toggleSide" title="Hide sidebar"><i data-ic="panel"></i></button></div>
+  </div>
+
+  <nav class="grp">
+    <button class="row active" data-view="all"><i data-ic="library"></i><span>Library</span><em id="cAll"></em></button>
+    <button class="row" data-view="unassigned"><i data-ic="inbox"></i><span>Unsorted</span><em id="cUn"></em></button>
+    <button class="row" data-view="renames"><i data-ic="pencil"></i><span>Pending renames</span><em id="cRen"></em></button>
+    <button class="row" data-view="spaces"><i data-ic="layers"></i><span>All spaces</span><em id="cSp"></em></button>
+  </nav>
+
+  <div class="label" data-sec="types"><span>Types</span></div>
+  <nav class="grp" id="types"></nav>
+
+  <div class="label" data-sec="colors"><span>Colors</span><button class="mini-link" id="rainbow" title="Sort everything by color">Rainbow</button></div>
+  <div id="colors"></div>
+  <div id="moods"></div>
+
+  <div class="label" data-sec="sources"><span>Sources</span></div>
+  <nav class="grp" id="sources"></nav>
+  <nav class="grp"><button class="row" id="nameGroups"><i data-ic="type" style="color:#6d5bd0"></i><span>Group by file name…</span></button></nav>
+
+  <div class="label" data-sec="spaces"><span>Spaces</span><button class="plus" id="newProject" title="New space"><i data-ic="plus"></i></button></div>
+  <nav class="grp" id="projects"></nav>
+  <nav class="grp"><button class="row" id="autoGroup"><i data-ic="sparkle" style="color:#e0629f"></i><span>Auto-group by content</span></button></nav>
+
+  <div class="label" data-sec="folders"><span>Folders</span><button class="plus" id="addSide" title="Add a folder"><i data-ic="plus"></i></button></div>
+  <nav class="grp" id="roots"></nav>
+  <nav class="grp"><button class="row addrow" id="addRow"><i data-ic="folderplus"></i><span>Add a folder…</span></button></nav>
+
+  <div class="grow"></div>
+  <div class="local"><i data-ic="lock"></i><span>Runs only on this PC. Nothing is uploaded.</span></div>
+  <div class="foot">
+    <button id="commitBtn" class="pillbtn"><i data-ic="commit"></i><span>Review &amp; commit</span><b id="dot" hidden></b></button>
+    <button id="historyBtn" class="circ" title="History / undo"><i data-ic="history"></i></button>
+  </div>
+</aside>
+
+<main>
+  <div id="toolbar">
+    <div class="tl">
+      <button class="circ" id="showSide" title="Show sidebar" hidden><i data-ic="panel"></i></button>
+      <div class="duo2"><button id="navBack" title="Back  (Alt+←)"><i data-ic="left"></i></button><button id="navFwd" title="Forward  (Alt+→)"><i data-ic="right"></i></button></div>
+    </div>
+    <div class="title" id="title"></div>
+    <div class="tr">
+      <button class="circ" id="focusSearch" title="Search  ( / )"><i data-ic="search"></i></button>
+      <label class="circ" title="Search with an image"><i data-ic="image"></i><input type="file" id="imgq" accept="image/*" hidden></label>
+      <div class="duo2"><button id="autoTop" title="Auto-group by content"><i data-ic="sparkle"></i></button><button id="addToolbar" title="Add a folder"><i data-ic="folderplus"></i></button></div>
+      <button class="circ" id="settingsBtn" title="Customize"><i data-ic="sliders"></i></button>
+    </div>
+  </div>
+
+  <section id="browse">
+    <div id="scroller">
+      <div id="banner" hidden></div>
+      <div class="hero">
+        <div class="overline" id="overline"></div>
+        <form id="searchForm"><i data-ic="search" class="sicon"></i><div id="qtags"></div><input id="q" placeholder="Search by what's in it…" autocomplete="off" spellcheck="false"><button type="button" id="micBtn" class="mic" title="Search by voice — say what you are looking for"><i data-ic="mic"></i></button><kbd>/</kbd></form>
+        <div class="try" id="try"></div>
+      </div>
+      <div id="grid"></div>
+      <div id="empty" hidden></div>
+      <div id="more" hidden><div class="sentinel"></div></div>
+    </div>
+    <div id="dock">
+      <button id="sortBtn" title="Sort"><i data-ic="sort"></i></button>
+      <button id="layoutBtn" title="Switch layout"><i data-ic="columns"></i></button>
+      <span class="sep"></span>
+      <button id="sizeDown" title="Smaller tiles"><i data-ic="minus"></i></button>
+      <button id="sizeUp" title="Bigger tiles"><i data-ic="plus"></i></button>
+      <div id="sortMenu" hidden>
+        <button data-sort="mtime">Newest first</button><button data-sort="name">Name A–Z</button><button data-sort="size">Largest first</button><button data-sort="color">By color (rainbow)</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="viewer" hidden>
+    <div class="focus">
+      <div class="stagewrap">
+        <button class="circ edge l" id="prevItem" title="Previous  ←"><i data-ic="left"></i></button>
+        <button class="circ edge r" id="nextItem" title="Next  →"><i data-ic="right"></i></button>
+        <div id="stage"></div>
+        <div id="viewdock">
+          <div class="pill" id="zoom"><button id="zOut" title="Zoom out"><i data-ic="minus"></i></button><span id="zVal">100%</span><button id="zIn" title="Zoom in"><i data-ic="plus"></i></button></div>
+          <div class="pill" id="volbox"><button id="volBtn" title="Mute / unmute  (M)"><i data-ic="vol"></i></button><input type="range" id="volRange" min="0" max="100" step="1"><span id="volVal">60%</span></div>
+        </div>
+      </div>
+      <aside id="inspector"></aside>
+    </div>
+    <div class="feedhead" id="feedhead"></div>
+    <div id="feed"></div>
+    <div id="feedmore"><div class="sentinel"></div><span class="hint" id="feedmsg"></span></div>
+  </section>
+</main>
+
+<aside id="modal" hidden><button class="pclose circ sm" id="pclose" title="Close  (Esc)"><i data-ic="x"></i></button><div id="modalBox"></div></aside>
+
+<div id="floatbar" hidden>
+  <b id="selCount"></b>
+  <select id="projSelect"></select>
+  <button id="addToProj" class="dark"><i data-ic="plus"></i>Add to space</button>
+  <button id="newFromSel"><i data-ic="folder"></i>New space</button>
+  <button id="renameSel"><i data-ic="pencil"></i>Rename</button>
+  <button id="removeFromProj"><i data-ic="x"></i>Remove</button>
+  <button id="selAll">Select all</button>
+  <button id="selNone" class="circ sm" title="Clear"><i data-ic="x"></i></button>
+</div>
+
+<div id="ctx" hidden></div>
+<div id="toast" hidden></div>
+<script src="icons.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

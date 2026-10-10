@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+python-multipart
+sentence-transformers>=5.0
+transformers
+accelerate
+pillow
+pymupdf
+python-docx
+scikit-learn
+numpy
+soundfile
+librosa

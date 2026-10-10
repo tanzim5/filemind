@@ -1,0 +1,105 @@
+"""Wrapper around google/embeddinggemma-2 (text, image, video, audio -> one 768d space)."""
+import threading
+from pathlib import Path
+
+import numpy as np
+
+from . import extract
+
+import os
+
+# Weights live in ./models so the app is fully self-contained and never touches the network.
+_LOCAL = Path(__file__).resolve().parent.parent / "models" / "embeddinggemma-2"
+if (_LOCAL / "model.safetensors").exists():
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+    MODEL_ID = str(_LOCAL)
+else:
+    MODEL_ID = "google/embeddinggemma-2"   # first-run fallback: downloads once
+_model = None
+_lock = threading.Lock()
+
+
+def get_model():
+    global _model
+    with _lock:
+        if _model is None:
+            import torch
+            from sentence_transformers import SentenceTransformer
+            use_bf16 = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+            dtype = torch.bfloat16 if use_bf16 else torch.float32  # never float16 (NaNs)
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            _model = SentenceTransformer(MODEL_ID, device=device,
+                                         model_kwargs={"torch_dtype": dtype})
+        return _model
+
+
+def _norm(v) -> np.ndarray:
+    v = np.asarray(v, dtype=np.float32).reshape(-1)
+    n = np.linalg.norm(v)
+    return v / n if n > 0 else v
+
+
+def embed_query(text: str) -> np.ndarray:
+    m = get_model()
+    return _norm(m.encode(text, prompt_name="SearchQuery", normalize_embeddings=True))
+
+
+def _prep_image(path: str) -> Path:
+    """Normalise to a plain RGB jpg: handles animated GIFs, CMYK, palette PNGs and huge images."""
+    import hashlib
+    from PIL import Image
+    out = extract.TMP_DIR / f"img_{hashlib.sha1(path.encode('utf-8', 'ignore')).hexdigest()[:12]}.jpg"
+    with Image.open(path) as im:
+        im.seek(0)
+        im = im.convert("RGB")
+        if max(im.size) > 1600:
+            im.thumbnail((1600, 1600))
+        im.save(out, "JPEG", quality=92)
+    return out
+
+
+def embed_image_file(path: str) -> np.ndarray:
+    m = get_model()
+    prepped = _prep_image(path)
+    try:
+        return _norm(m.encode({"text": "<|image|>", "image": [str(prepped)]}, normalize_embeddings=True))
+    finally:
+        prepped.unlink(missing_ok=True)
+
+
+def embed_document(path: Path, kind: str, name: str) -> tuple[np.ndarray, str]:
+    """Returns (vector, mode) where mode is 'content' or 'filename'."""
+    m = get_model()
+
+    if kind == "image":
+        return embed_image_file(str(path)), "content"
+
+    if kind == "video":
+        frames = extract.video_frames(path)
+        try:
+            if frames:
+                text = " ".join("<|image|>" for _ in frames)
+                v = m.encode({"text": text, "image": frames}, normalize_embeddings=True)
+                return _norm(v), "content"
+        finally:
+            extract.cleanup_tmp(path)
+
+    if kind == "audio":
+        clip = extract.audio_clip(path)
+        try:
+            if clip:
+                v = m.encode({"text": "<|audio|>", "audio": clip}, normalize_embeddings=True)
+                return _norm(v), "content"
+        finally:
+            extract.cleanup_tmp(path)
+
+    if kind in ("text", "code", "doc"):
+        text = extract.extract_text(path, kind)
+        if text.strip():
+            doc = f"title: {name} | text: {text}"
+            return _norm(m.encode(doc, normalize_embeddings=True)), "content"
+
+    # Fallback: embed the filename only (zips, installers, empty docs, ...)
+    doc = f"title: {name} | text: {Path(name).stem.replace('_', ' ').replace('-', ' ')}"
+    return _norm(m.encode(doc, normalize_embeddings=True)), "filename"
