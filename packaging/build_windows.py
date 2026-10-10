@@ -27,7 +27,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ffmpeg", required=True, help="folder containing ffmpeg.exe and ffprobe.exe")
     a = ap.parse_args()
-    ff = Path(a.ffmpeg)
+    ff = Path(a.ffmpeg).resolve()
     for exe in ("ffmpeg.exe", "ffprobe.exe"):
         if not (ff / exe).exists():
             sys.exit(f"missing {ff / exe}")
