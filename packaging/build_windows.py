@@ -1,8 +1,8 @@
 """Build the portable Windows app: dist/FileMind/FileMind.exe, zipped as dist/FileMind-Windows-portable.zip.
 
 Run inside a venv that has the CPU build of PyTorch (keeps the zip under GitHub's 2 GB limit):
-    pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-    pip install -r requirements.txt pywebview pyinstaller
+    pip install torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cpu
+    pip install -r packaging/requirements-windows.txt
     python packaging/build_windows.py --ffmpeg C:/path/to/folder/with/ffmpeg.exe+ffprobe.exe
 
 The model is not bundled; FileMind.exe downloads it on first launch into a models/ folder beside itself."""
