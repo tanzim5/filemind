@@ -22,6 +22,12 @@ if sys.stdout is None or sys.stderr is None:                     # windowed exe:
     print(f"--- File Mind started {time.ctime()}")
 os.environ.setdefault("FILEMIND_MODELS", str(HOME / "models"))
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+if (BUNDLE / "runtime.json").exists():                           # NVIDIA build: PyTorch+CUDA is fetched on first
+    os.environ["FILEMIND_RUNTIME_SPEC"] = str(BUNDLE / "runtime.json")    # run into runtime/ (see app/runtime.py)
+    os.environ.setdefault("FILEMIND_RUNTIME", str(HOME / "runtime"))
+    _site = Path(os.environ["FILEMIND_RUNTIME"]) / "site-packages"
+    _site.mkdir(parents=True, exist_ok=True)                     # must exist now, or the import system skips it
+    sys.path.append(str(_site))
 if (BUNDLE / "ffmpeg").is_dir():                                  # ffmpeg + ffprobe shipped inside the app
     os.environ["PATH"] = str(BUNDLE / "ffmpeg") + os.pathsep + os.environ.get("PATH", "")
 
@@ -35,7 +41,7 @@ if os.name == "nt" and FROZEN:                                    # no console w
             super().__init__(*a, **kw)
     subprocess.Popen = _Quiet
 
-PORT = 8765
+PORT = int(sys.argv[sys.argv.index("--port") + 1]) if "--port" in sys.argv else 8765
 
 
 def _ours(port):
@@ -69,14 +75,15 @@ def main():
                 break
             time.sleep(0.1)
     url = f"http://127.0.0.1:{port}"
-    if "--browser" not in sys.argv:
+    if "--browser" not in sys.argv and "--no-window" not in sys.argv:
         try:
             _window(url)
             os._exit(0)                                           # window closed: stop the server too
         except Exception as e:                                    # no pywebview / no GUI toolkit (common on Linux)
             print(f"No app window available ({type(e).__name__}: {e}); opening your browser instead.")
-    import webbrowser
-    webbrowser.open(url)
+    if "--no-window" not in sys.argv:                             # --no-window: just serve (testing, remote use)
+        import webbrowser
+        webbrowser.open(url)
     if serve:
         print(f"File Mind is running at {url}  (press Ctrl+C here to quit)")
         try:

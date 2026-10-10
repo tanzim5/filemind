@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import extract
+from . import extract, runtime
 
 import os
 
@@ -20,6 +20,10 @@ _lock = threading.Lock()
 
 
 def ready() -> bool:
+    return model_ready() and runtime.ready()
+
+
+def model_ready() -> bool:
     return (_LOCAL / "model.safetensors").exists() and (_LOCAL / "modules.json").exists()
 
 
@@ -31,12 +35,21 @@ def get_model():
                 raise RuntimeError("The AI model isn't downloaded yet")
             import torch
             from sentence_transformers import SentenceTransformer
-            use_bf16 = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+            cuda = _cuda_works(torch)
+            use_bf16 = cuda and torch.cuda.is_bf16_supported()
             dtype = torch.bfloat16 if use_bf16 else torch.float32  # never float16 (NaNs)
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+            device = "cuda" if cuda else "cpu"
             _model = SentenceTransformer(MODEL_ID, device=device,
                                          model_kwargs={"torch_dtype": dtype})
         return _model
+
+
+def _cuda_works(torch) -> bool:
+    """CUDA is usable: a GPU is present AND this PyTorch has kernels for it (old cards say available, then fail)."""
+    try:
+        return torch.cuda.is_available() and (torch.ones(1, device="cuda") + 1).item() == 2
+    except Exception:
+        return False
 
 
 def _norm(v) -> np.ndarray:

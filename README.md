@@ -32,13 +32,19 @@ your own computer. No account, no cloud, no uploads.
 
 ## Download (Windows)
 
-1. Download **`FileMind-Windows-portable.zip`** from the [latest release](https://github.com/tanzim5/filemind/releases/latest).
+1. Download one zip from the [latest release](https://github.com/tanzim5/filemind/releases/latest):
+
+   | Download | Pick it if | First launch downloads |
+   |---|---|---|
+   | **`FileMind-Windows-portable.zip`** | You're not sure. Works on every PC. | the AI model (~1.5 GB) |
+   | **`FileMind-Windows-NVIDIA.zip`** | You have an NVIDIA graphics card (GTX 16-series, RTX 20-series or newer) with an up-to-date driver. Reads your library several times faster. | the AI model (~1.5 GB) + GPU support (~2.8 GB) |
+
 2. Unzip it anywhere (Desktop, a USB stick…).
 3. Double-click **`FileMind.exe`**.
 
 Nothing to install: Python, ffmpeg and everything else are inside the folder. The first launch downloads the
-AI model once (about 1.5 GB) into that same folder; after that File Mind works fully offline.
-To remove File Mind, delete the folder.
+rest once into that same folder; after that File Mind works fully offline.
+To remove File Mind, delete the folder. (If the NVIDIA version can't use your card, it quietly runs on the CPU instead.)
 
 <p align="center"><img src="docs/setup.png" alt="First launch: the model downloads once" width="70%"></p>
 

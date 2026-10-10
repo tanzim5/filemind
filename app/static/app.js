@@ -832,8 +832,10 @@ async function firstRun() {
   const gb = n => (n / 1e9).toFixed(2) + ' GB';
   const el = document.body.appendChild(Object.assign(document.createElement('div'), { id: 'setup' }));
   el.innerHTML = `<div class="card"><span class="mark"></span><h1 class="d-head">Getting File Mind ready</h1>
-    <p>File Mind uses Google's EmbeddingGemma model to understand your photos, videos and sounds.
-    It downloads once — about 1.5 GB — and from then on everything runs on this computer, offline. Your files are never uploaded.</p>
+    <p>${m.gpu ? `File Mind downloads two things once: GPU support for your NVIDIA graphics card (PyTorch with CUDA, about 2.8 GB)
+    and Google's EmbeddingGemma model, which understands your photos, videos and sounds (about 1.5 GB).`
+    : `File Mind uses Google's EmbeddingGemma model to understand your photos, videos and sounds. It downloads once — about 1.5 GB.`}
+    From then on everything runs on this computer, offline. Your files are never uploaded.</p>
     <div class="bar"><i></i></div><div class="surow"><span id="suLeft">Starting…</span><span id="suRight"></span></div>
     <button class="btn dark" id="suRetry" hidden>${ic('rotate-cw')}<span>Try again</span></button></div>`;
   let last = null;
@@ -845,8 +847,10 @@ async function firstRun() {
     if (m.ready) break;
     const pct = m.total ? m.done / m.total : 0, now = performance.now();
     el.querySelector('.bar i').style.width = (pct * 100).toFixed(1) + '%';
-    if (m.error) { $('#suLeft').textContent = 'The download stopped. Check your internet connection and try again — it continues where it left off.'; $('#suRight').textContent = ''; $('#suRetry').hidden = false; continue; }
-    if (m.total) {
+    if (m.error) { $('#suLeft').textContent = 'The download stopped. Check your internet connection and try again — it continues where it left off.'; $('#suRight').textContent = /No space|Errno 28/.test(m.error) ? `Not enough free disk space (about ${m.gpu ? 9 : 2} GB needed).` : ''; $('#suRetry').hidden = false; continue; }
+    if (m.stage === 'verify' || m.stage === 'unpack') {
+      $('#suLeft').textContent = m.stage === 'verify' ? 'Checking the download…' : 'Unpacking GPU support — about a minute…'; $('#suRight').textContent = ''; last = null;
+    } else if (m.total) {
       const speed = last ? (m.done - last.done) / ((now - last.t) / 1000) : 0; last = { done: m.done, t: now };
       $('#suLeft').textContent = `${gb(m.done)} of ${gb(m.total)}`;
       $('#suRight').textContent = speed > 1e5 ? `${(speed / 1e6).toFixed(1)} MB/s · about ${Math.max(1, Math.round((m.total - m.done) / speed / 60))} min left` : '';

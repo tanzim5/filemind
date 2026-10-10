@@ -32,20 +32,35 @@ jobs:
           New-Item -ItemType Directory ffbin | Out-Null
           Get-ChildItem ffmpeg-dl -Recurse -Include ffmpeg.exe,ffprobe.exe | Copy-Item -Destination ffbin
 
-      - name: Build
-        run: python packaging/build_windows.py --ffmpeg ffbin
+      - name: Build (CPU, works on every PC)
+        run: python packaging/build_windows.py --ffmpeg ffbin --variant cpu
+
+      - name: Build (NVIDIA, downloads PyTorch with CUDA on first run)
+        run: python packaging/build_windows.py --ffmpeg ffbin --variant nvidia
 
       - uses: actions/upload-artifact@v4
         with:
-          name: FileMind-Windows-portable
-          path: dist/FileMind-Windows-portable.zip
+          name: FileMind-Windows
+          path: dist/*.zip
           compression-level: 0
 
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/FileMind-Windows-portable.zip
+          files: |
+            dist/FileMind-Windows-portable.zip
+            dist/FileMind-Windows-NVIDIA.zip
           body: |
-            **Windows:** download `FileMind-Windows-portable.zip`, unzip it anywhere, and double-click `FileMind.exe`.
-            Nothing to install. The first launch downloads the AI model once (about 1.5 GB); after that File Mind works fully offline.
+            ## Which one?
+
+            | Download | For | First launch downloads |
+            |---|---|---|
+            | **`FileMind-Windows-portable.zip`** | Any Windows 10/11 PC. Pick this if unsure. | The AI model, ~1.5 GB |
+            | **`FileMind-Windows-NVIDIA.zip`** | PCs with an NVIDIA graphics card (GTX 16-series, RTX 20-series or newer). Indexing is many times faster. | GPU support (PyTorch with CUDA, ~2.8 GB) + the AI model, ~1.5 GB |
+
+            Unzip it anywhere and double-click `FileMind.exe`. Nothing to install. After the first launch File Mind works fully offline.
+            The NVIDIA version needs an up-to-date NVIDIA driver; without one it still works, just at CPU speed.
+
+            Windows may say "Windows protected your PC" because the app isn't code-signed: click **More info → Run anyway**.
+            macOS and Linux: [run from source](https://github.com/tanzim5/filemind#run-from-source-macos-linux-windows) with one command.
