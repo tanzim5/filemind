@@ -110,7 +110,8 @@ function bindAddBox(root) {
   inp.onkeydown = e => { if (e.key === 'Enter' && inp.value.trim()) addRoot(inp.value.trim()); };
   $('[data-browse]', root).onclick = async e => {
     const b = e.currentTarget, lab = $('span', b); b.disabled = true; lab.textContent = 'Waiting…';
-    try { const r = await api('/pick_folder', { method: 'POST' }); if (r.path) { inp.value = r.path; addRoot(r.path); } } catch (err) { toast(err.message, 'x', true); }
+    try { const nat = window.pywebview?.api?.pick_folder;   // desktop app: the window's own dialog
+      const r = nat ? { path: await nat() } : await api('/pick_folder', { method: 'POST' }); if (r.path) { inp.value = r.path; addRoot(r.path); } } catch (err) { toast(err.message, 'x', true); }
     b.disabled = false; lab.textContent = 'Browse…';
   };
   $$('[data-path]', root).forEach(b => b.onclick = () => addRoot(b.dataset.path));
@@ -819,7 +820,37 @@ function closeModal() { $('#modal').hidden = true; $('#modal').dataset.kind = ''
 $('#pclose').onclick = closeModal;
 async function refreshAll() { await loadRoots(); await loadProjects(); await loadStats(); await loadFiles(true, true); setNav(); }
 hydrate();
-(async () => { S.known = await api('/known_folders').catch(() => []); await refreshAll(); record(); poll(); })();
+(async () => { await firstRun(); S.known = await api('/known_folders').catch(() => []); await refreshAll(); record(); poll(); })();
+
+/* ---- first run: the AI model is fetched once, then File Mind never needs the internet again */
+async function firstRun() {
+  let m = await api('/model').catch(() => ({ ready: true })); if (m.ready) return;
+  const gb = n => (n / 1e9).toFixed(2) + ' GB';
+  const el = document.body.appendChild(Object.assign(document.createElement('div'), { id: 'setup' }));
+  el.innerHTML = `<div class="card"><span class="mark"></span><h1 class="d-head">Getting File Mind ready</h1>
+    <p>File Mind uses Google's EmbeddingGemma model to understand your photos, videos and sounds.
+    It downloads once — about 1.5 GB — and from then on everything runs on this computer, offline. Your files are never uploaded.</p>
+    <div class="bar"><i></i></div><div class="surow"><span id="suLeft">Starting…</span><span id="suRight"></span></div>
+    <button class="btn dark" id="suRetry" hidden>${ic('rotate-cw')}<span>Try again</span></button></div>`;
+  let last = null;
+  const start = () => { $('#suRetry').hidden = true; api('/model/download', { method: 'POST' }).catch(() => { }); };
+  $('#suRetry').onclick = start; start();
+  while (true) {
+    await new Promise(r => setTimeout(r, 700));
+    m = await api('/model').catch(() => m);
+    if (m.ready) break;
+    const pct = m.total ? m.done / m.total : 0, now = performance.now();
+    el.querySelector('.bar i').style.width = (pct * 100).toFixed(1) + '%';
+    if (m.error) { $('#suLeft').textContent = 'The download stopped. Check your internet connection and try again — it continues where it left off.'; $('#suRight').textContent = ''; $('#suRetry').hidden = false; continue; }
+    if (m.total) {
+      const speed = last ? (m.done - last.done) / ((now - last.t) / 1000) : 0; last = { done: m.done, t: now };
+      $('#suLeft').textContent = `${gb(m.done)} of ${gb(m.total)}`;
+      $('#suRight').textContent = speed > 1e5 ? `${(speed / 1e6).toFixed(1)} MB/s · about ${Math.max(1, Math.round((m.total - m.done) / speed / 60))} min left` : '';
+    }
+  }
+  el.querySelector('.bar i').style.width = '100%'; $('#suLeft').textContent = 'Ready'; $('#suRight').textContent = '';
+  await new Promise(r => setTimeout(r, 500)); el.classList.add('out'); setTimeout(() => el.remove(), 400);
+}
 
 /* ================================================================ motion
    Opening a file: the tile you clicked flies into the stage while everything around it

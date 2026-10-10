@@ -16,6 +16,7 @@ from . import commit as commit_mod
 from . import db, embedder, extract, indexer
 from . import suggest as suggest_mod
 from . import tags as tags_mod
+from . import fetch as fetch_mod
 
 app = FastAPI(title="Local File Brain")
 STATIC = Path(__file__).parent / "static"
@@ -262,6 +263,8 @@ def _warm_dims():
 
 
 def _warm_ideas():
+    if not embedder.ready():          # first run: the model is fetched from the app, then this runs
+        return
     try:
         suggest_mod.ideas()
         embedder.get_model()          # warm, so the first search is instant
@@ -446,6 +449,18 @@ def _interpret(q: str) -> dict:
 
 # --------------------------------------------------------------- voice: the spoken clip itself is the query
 _voice: dict[str, np.ndarray] = {}
+
+
+@app.get("/api/model")
+def model_status():
+    return fetch_mod.status()
+
+
+@app.post("/api/model/download")
+def model_download():
+    import threading
+    fetch_mod.start(on_done=lambda: threading.Thread(target=_warm_ideas, daemon=True).start())
+    return fetch_mod.status()
 
 
 @app.post("/api/voice")

@@ -8,22 +8,27 @@ from . import extract
 
 import os
 
-# Weights live in ./models so the app is fully self-contained and never touches the network.
-_LOCAL = Path(__file__).resolve().parent.parent / "models" / "embeddinggemma-2"
-if (_LOCAL / "model.safetensors").exists():
-    os.environ.setdefault("HF_HUB_OFFLINE", "1")
-    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
-    MODEL_ID = str(_LOCAL)
-else:
-    MODEL_ID = "google/embeddinggemma-2"   # first-run fallback: downloads once
+# Weights live in ./models (or FILEMIND_MODELS, set by the portable app) so File Mind is fully
+# self-contained. They are fetched once by fetch.py; after that nothing touches the network.
+_LOCAL = Path(os.environ.get("FILEMIND_MODELS") or Path(__file__).resolve().parent.parent / "models") / "embeddinggemma-2"
+MODEL_ID = str(_LOCAL)
+REPO = "google/embeddinggemma-2"
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 _model = None
 _lock = threading.Lock()
+
+
+def ready() -> bool:
+    return (_LOCAL / "model.safetensors").exists() and (_LOCAL / "modules.json").exists()
 
 
 def get_model():
     global _model
     with _lock:
         if _model is None:
+            if not ready():
+                raise RuntimeError("The AI model isn't downloaded yet")
             import torch
             from sentence_transformers import SentenceTransformer
             use_bf16 = torch.cuda.is_available() and torch.cuda.is_bf16_supported()

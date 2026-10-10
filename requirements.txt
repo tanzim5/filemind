@@ -2,6 +2,7 @@ fastapi
 uvicorn[standard]
 python-multipart
 sentence-transformers>=5.0
+torchvision
 transformers
 accelerate
 pillow
