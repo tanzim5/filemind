@@ -4,6 +4,7 @@ import os
 import platform
 import sys
 import threading
+import time
 from pathlib import Path
 
 import numpy as np
@@ -107,6 +108,33 @@ def embed_image_file(path: str) -> np.ndarray:
         prepped.unlink(missing_ok=True)
 
 
+class GPUError(RuntimeError):
+    """The graphics card reported an error that did not go away when retried."""
+
+
+def is_gpu_error(e: BaseException) -> bool:
+    t = f"{type(e).__name__} {e}".lower()
+    return "cuda" in t or "cublas" in t or "cudnn" in t or "out of memory" in t
+
+
+def _encode(m, *a, **kw):
+    """model.encode, retried once if the GPU hiccups (a failed CUDA call can be transient). A second failure raises
+    GPUError, so a broken GPU is reported once instead of being blamed on every file."""
+    try:
+        return m.encode(*a, **kw)
+    except Exception as e:
+        if not is_gpu_error(e):
+            raise
+        print(f"File Mind: GPU error, retrying once: {e}", flush=True)
+        try:
+            import torch
+            time.sleep(2)
+            torch.cuda.empty_cache()
+            return m.encode(*a, **kw)
+        except Exception as e2:
+            raise GPUError(str(e2)) from e2
+
+
 def prepare(path: Path, kind: str, name: str) -> dict:
     """All the CPU work for one file (decoding, resizing, ffmpeg, reading text). Safe to run on a worker thread,
     so the model is never left waiting for the next file."""
@@ -135,18 +163,18 @@ def embed_prepared(p: dict) -> tuple[np.ndarray, str]:
     name, kind = p["name"], p["kind"]
     try:
         if kind == "image":
-            return _norm(m.encode({"text": "<|image|>", "image": [p["image"]]}, normalize_embeddings=True)), "content"
+            return _norm(_encode(m, {"text": "<|image|>", "image": [p["image"]]}, normalize_embeddings=True)), "content"
         if kind == "video" and p.get("frames"):
             text = " ".join("<|image|>" for _ in p["frames"])
-            return _norm(m.encode({"text": text, "image": p["frames"]}, normalize_embeddings=True)), "content"
+            return _norm(_encode(m, {"text": text, "image": p["frames"]}, normalize_embeddings=True)), "content"
         if kind == "audio" and p.get("clip"):
-            return _norm(m.encode({"text": "<|audio|>", "audio": p["clip"]}, normalize_embeddings=True)), "content"
+            return _norm(_encode(m, {"text": "<|audio|>", "audio": p["clip"]}, normalize_embeddings=True)), "content"
         if p.get("text", "").strip():
             doc = f"title: {name} | text: {p['text']}"
-            return _norm(m.encode(doc, normalize_embeddings=True)), "content"
+            return _norm(_encode(m, doc, normalize_embeddings=True)), "content"
         # Fallback: embed the filename only (zips, installers, empty docs, ...)
         doc = f"title: {name} | text: {Path(name).stem.replace('_', ' ').replace('-', ' ')}"
-        return _norm(m.encode(doc, normalize_embeddings=True)), "filename"
+        return _norm(_encode(m, doc, normalize_embeddings=True)), "filename"
     finally:
         discard(p)
 
@@ -157,8 +185,8 @@ def embed_images(preps: list[dict]) -> list[tuple[np.ndarray, str]]:
     try:
         items = [{"text": "<|image|>", "image": [p["image"]]} for p in preps]
         if BACKEND == "mlx":                                       # the MLX engine takes one multimodal input at a time
-            return [(_norm(m.encode(i, normalize_embeddings=True)), "content") for i in items]
-        v = np.asarray(m.encode(items, batch_size=len(items), normalize_embeddings=True))
+            return [(_norm(_encode(m, i, normalize_embeddings=True)), "content") for i in items]
+        v = np.asarray(_encode(m, items, batch_size=len(items), normalize_embeddings=True))
         return [(_norm(x), "content") for x in v]
     finally:
         for p in preps:

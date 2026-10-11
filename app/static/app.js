@@ -187,9 +187,9 @@ function drawSources() {
 $('#sources').onclick = e => { if (e.target.closest('#srcMore')) { S.srcAll = !S.srcAll; return drawSources(); } const b = e.target.closest('[data-source]'); if (b) go({ source: S.source === b.dataset.source ? null : b.dataset.source }, { keepFilters: true, keepKind: true }); };
 let polling = false;
 async function poll() {
-  if (polling) return; polling = true; let last = 0;
+  if (polling) return; polling = true; let last = 0, fin = null;
   while (true) {
-    const s = await api('/status'), b = $('#banner');
+    const s = await api('/status'), b = $('#banner'); fin = s;
     const busy = s.running && ['loading', 'embedding'].includes(s.phase);      // a quick re-scan stays silent
     if (busy) {
       const pct = s.total ? Math.round(100 * s.done / s.total) : 0, loading = ['scanning', 'loading'].includes(s.phase);
@@ -202,7 +202,7 @@ async function poll() {
     if (!s.running) break;
     await new Promise(r => setTimeout(r, 1000));
   }
-  polling = false; $('#banner').hidden = true; await loadRoots(); await loadStats(); if (!S.searching && !S.open) await loadFiles(true, true);
+  polling = false; $('#banner').hidden = true; if (fin && fin.phase === 'error' && fin.message) toast(fin.message, 'x', true); await loadRoots(); await loadStats(); if (!S.searching && !S.open) await loadFiles(true, true);
 }
 async function loadStats() {
   const [s, src, col] = await Promise.all([api('/stats'), api('/sources'), api('/colors')]); S.stats = s; S.sources = src.sources; S.colors = col;

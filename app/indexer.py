@@ -95,6 +95,9 @@ def _run(root_id: int, root: str):
     try:
         state.update(phase="scanning", message="Scanning folder…", done=0, errors=0, total=0)
         scan(root_id, root)
+        c.execute("UPDATE files SET status='pending', error=NULL WHERE root_id=? AND status='error' AND "
+                  "(error LIKE '%CUDA%' OR error LIKE '%out of memory%')", (root_id,))   # blamed on the GPU, not the file
+        c.commit()
         pending = c.execute(
             "SELECT id, path, name, kind FROM files WHERE root_id=? AND status='pending' "
             "ORDER BY CASE kind WHEN 'image' THEN 0 WHEN 'audio' THEN 1 ELSE 2 END, id",
@@ -158,6 +161,8 @@ def _run(root_id: int, root: str):
                 if len(ready) > 1:
                     try:
                         results = embedder.embed_images([x[2] for x in ready])
+                    except embedder.GPUError:
+                        raise
                     except Exception:
                         traceback.print_exc()             # fall back to one at a time so one bad image can't sink the rest
                         results = []
@@ -168,6 +173,8 @@ def _run(root_id: int, root: str):
                     for r, thumb, prep in ready:
                         try:
                             results.append(embedder.embed_prepared(prep))
+                        except embedder.GPUError:
+                            raise
                         except Exception as e:
                             traceback.print_exc()
                             results.append(e)
@@ -185,18 +192,26 @@ def _run(root_id: int, root: str):
                 if state["done"] // 20 != (state["done"] - len(group)) // 20:
                     c.commit()
                     invalidate()
+        except embedder.GPUError as e:                    # the files stay 'pending': nothing is blamed on them
+            print(f"File Mind: stopping, the GPU keeps failing: {e}", flush=True)
+            state.update(phase="error", stop=True, message=(
+                "The graphics card reported an error (" + str(e)[:80] + "). Your progress is saved. "
+                "Close File Mind completely and open it again to continue."))
         finally:
             pool.shutdown(wait=True, cancel_futures=True)
             for _, fut in ahead:                       # prepared but never embedded (stopped): drop their temp files
                 if fut.done() and not fut.cancelled() and not fut.exception() and fut.result():
                     embedder.discard(fut.result()[1])
-        if state["stop"]:
+        if state["phase"] == "error":
+            pass
+        elif state["stop"]:
             state["message"] = "Stopped. Progress is saved; press Index to resume."
-        if not state["stop"]:
+        else:
             state["message"] = "Done."
         c.commit()
         invalidate()
-        state["phase"] = "idle"
+        if state["phase"] != "error":
+            state["phase"] = "idle"
     except Exception as e:
         traceback.print_exc()
         state.update(phase="error", message=f"Failed: {e}")
