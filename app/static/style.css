@@ -554,14 +554,7 @@ body.head-sans #setup h1{font-style:normal;font-size:34px}
 #setup .surow{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--ink3);font-variant-numeric:tabular-nums}
 #setup .btn{align-self:flex-start}
 
-.made{display:flex;align-items:center;justify-content:space-between;margin:0 4px 6px}
-.made .row{width:auto;padding:6px 8px}
-.xlink{display:flex;gap:6px;align-items:center;color:var(--ink3);font-size:12px;text-decoration:none;padding:6px 8px;border-radius:8px}
-.xlink:hover{color:var(--ink);background:var(--hover,rgba(128,128,128,.12))}
-.about{text-align:center;padding:8px 4px}
-.about img{width:72px;height:72px;border-radius:18px}
-.about h2{font-family:'Instrument Serif',serif;font-weight:400;font-size:30px;margin:12px 0 2px}
-.about .sub{color:var(--ink3);font-size:12.5px}
-.about p{color:var(--ink2,var(--ink));font-size:13.5px;line-height:1.55;margin:14px 0}
-.about .xbtn{display:inline-flex;gap:8px;align-items:center;padding:9px 16px;border-radius:999px;background:var(--ink);color:var(--bg,#fff);text-decoration:none;font-size:13px;font-weight:500}
-.about .fine{color:var(--ink3);font-size:11.5px;line-height:1.5;margin-top:18px}
+.foot .pillbtn{height:34px;padding-inline:12px;font-size:12.5px;gap:6px}
+.foot{gap:6px}
+.foot .pillbtn span{white-space:nowrap}
+.foot a.circ{display:grid;place-items:center;text-decoration:none;color:inherit}

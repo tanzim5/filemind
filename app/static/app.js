@@ -831,14 +831,8 @@ function modal(html, opt = {}) {
 }
 function closeModal() { $('#modal').hidden = true; $('#modal').dataset.kind = ''; }
 $('#pclose').onclick = closeModal;
-const X_URL = 'https://x.com/tanzim31';
 const openExternal = u => { const a = window.pywebview?.api?.open_url; a ? a(u) : window.open(u, '_blank', 'noopener'); };
 document.addEventListener('click', e => { const a = e.target.closest?.('a[href^="http"]'); if (a && window.pywebview?.api?.open_url) { e.preventDefault(); openExternal(a.href); } });
-$('#aboutBtn').onclick = () => modal(`<div class="about"><img src="icon.png" alt="">
-  <h2>File Mind</h2><div class="sub">Find any file by describing it</div>
-  <p>Made by <b>Tanzim</b>, as a personal project: a search that understands your photos, videos and sounds, and never leaves your computer.</p>
-  <a class="xbtn" href="${X_URL}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>Follow @tanzim31</a>
-  <div class="fine">© ${new Date().getFullYear()} Tanzim. Everything runs on this PC; nothing is uploaded.<br>Powered by Google's EmbeddingGemma 2 (Apache-2.0). Fonts: Inter and Instrument Serif (SIL OFL). Includes FFmpeg.</div></div>`, { w: 400 });
 async function refreshAll() { await loadRoots(); await loadProjects(); await loadStats(); await loadFiles(true, true); setNav(); }
 hydrate();
 (async () => { await firstRun(); S.known = await api('/known_folders').catch(() => []); await refreshAll(); record(); poll(); })();

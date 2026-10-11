@@ -155,7 +155,7 @@ builds the Windows zips and the Mac app automatically for every `v*` tag, and te
 
 ## About
 
-Made by **Tanzim** — [@tanzim31 on X](https://x.com/tanzim31). The same card is in the app (sidebar → About).
+Made by **Tanzim** — [@tanzim31 on X](https://x.com/tanzim31).
 
 ## Licence
 
