@@ -153,6 +153,10 @@ MLX, set `FILEMIND_BACKEND=torch` (it then downloads the original 1.5 GB model).
 To build the apps yourself, see `packaging/build_windows.py` and `packaging/build_macos.py`. GitHub Actions
 builds the Windows zips and the Mac app automatically for every `v*` tag, and tests each one end to end.
 
+## About
+
+Made by **Tanzim** — [@tanzim31 on X](https://x.com/tanzim31). The same card is in the app (sidebar → About).
+
 ## Licence
 
 The EmbeddingGemma 2 weights are Apache-2.0. The Windows and Mac apps bundle [FFmpeg](https://ffmpeg.org) (LGPL/GPL).

@@ -106,6 +106,11 @@ def _window(url):
             r = win.create_file_dialog(webview.FileDialog.FOLDER)
             return r[0] if r else None
 
+        def open_url(self, u):
+            if str(u).startswith("https://"):
+                import webbrowser
+                webbrowser.open(u)
+
     png = BUNDLE / "app" / "static" / "icon.png"
     ico = BUNDLE / "app" / "static" / "favicon.ico"
     if os.name == "nt":                                           # own taskbar group, not "python.exe"

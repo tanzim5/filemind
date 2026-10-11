@@ -445,6 +445,14 @@ const hoverPreview = e => {
   hv.timer = setTimeout(() => { const v = document.createElement('video'); v.className = 'hv'; v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'auto'; v.src = '/api/file/' + t.dataset.id;
     t.insertBefore(v, t.querySelector('.chk')); v.play().then(() => v.classList.add('on')).catch(() => { }); hv.vid = v; }, 420);
 };
+/* ---- warm the full-size picture while the pointer rests on a tile, so opening it doesn't wait for the download */
+const warmed = new Map(); let warmTimer;
+const warmFile = e => {
+  clearTimeout(warmTimer); const t = e.target.closest?.('.tile[data-kind="image"]'); if (!t || warmed.has(t.dataset.id)) return;
+  warmTimer = setTimeout(() => { const im = new Image(); im.decoding = 'async'; im.src = '/api/file/' + t.dataset.id; warmed.set(t.dataset.id, im);   // keep a reference so it isn't cancelled
+    if (warmed.size > 40) warmed.delete(warmed.keys().next().value); }, 90);
+};
+['#grid', '#feed'].forEach(s => { $(s).addEventListener('mouseover', warmFile); $(s).addEventListener('pointerdown', warmFile); });
 ['#grid', '#feed'].forEach(s => { $(s).addEventListener('mouseover', hoverPreview); $(s).addEventListener('mouseleave', stopHover); });
 
 /* ---- selection + clicks */
@@ -575,7 +583,8 @@ async function openViewer(id, opt = {}) {
   const cur = H.stack[H.i]; if (cur && !H.busy) cur.scroll =!$('#browse').hidden ? $('#scroller').scrollTop : $('#viewer').scrollTop;   // remember where we were
   const from = opt.rec == null ? grabTile(id) : null;     // a click: remember the tile so it can fly into place
   if (S.open) stopMedia();
-  S.zoom = 1; viewerUI(true); S.open = id; S.selected.clear(); $('#floatbar').hidden = true;
+  S.zoom = 1; viewerUI(true); S.open = id; $('#viewer').style.animation = from ? 'none' : '';   // a flying tile replaces the fade-in
+ S.selected.clear(); $('#floatbar').hidden = true;
   if (opt.rec === 'replace') record(true); else if (opt.rec == null || opt.rec === 'push') record();
   $('#viewer').scrollTo({ top: 0, behavior: opt.smooth && !from ? 'smooth' : 'auto' });
   if (from) morphIn(from, buildStage(id, from.kind, from.ar));
@@ -822,6 +831,14 @@ function modal(html, opt = {}) {
 }
 function closeModal() { $('#modal').hidden = true; $('#modal').dataset.kind = ''; }
 $('#pclose').onclick = closeModal;
+const X_URL = 'https://x.com/tanzim31';
+const openExternal = u => { const a = window.pywebview?.api?.open_url; a ? a(u) : window.open(u, '_blank', 'noopener'); };
+document.addEventListener('click', e => { const a = e.target.closest?.('a[href^="http"]'); if (a && window.pywebview?.api?.open_url) { e.preventDefault(); openExternal(a.href); } });
+$('#aboutBtn').onclick = () => modal(`<div class="about"><img src="icon.png" alt="">
+  <h2>File Mind</h2><div class="sub">Find any file by describing it</div>
+  <p>Made by <b>Tanzim</b>, as a personal project: a search that understands your photos, videos and sounds, and never leaves your computer.</p>
+  <a class="xbtn" href="${X_URL}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>Follow @tanzim31</a>
+  <div class="fine">© ${new Date().getFullYear()} Tanzim. Everything runs on this PC; nothing is uploaded.<br>Powered by Google's EmbeddingGemma 2 (Apache-2.0). Fonts: Inter and Instrument Serif (SIL OFL). Includes FFmpeg.</div></div>`, { w: 400 });
 async function refreshAll() { await loadRoots(); await loadProjects(); await loadStats(); await loadFiles(true, true); setNav(); }
 hydrate();
 (async () => { await firstRun(); S.known = await api('/known_folders').catch(() => []); await refreshAll(); record(); poll(); })();
@@ -887,7 +904,7 @@ function grabTile(id) {
     const oi = o.querySelector('img.im'); others.push({ r: q, src: oi?.naturalWidth ? oi.src : '', bg: getComputedStyle(o).backgroundColor });
   }
   const c = (box === '#grid' ? $('#scroller') : $('#viewer')).getBoundingClientRect();
-  return { id, r, src: im.src, kind: t.dataset.kind, ar: r.width / r.height, others, clip: `inset(${c.top}px ${innerWidth - c.right}px ${innerHeight - c.bottom}px ${c.left}px)` };
+  return { id, r, src: im.src, kind: t.dataset.kind, ar: im.naturalWidth / im.naturalHeight, others, clip: `inset(${c.top}px ${innerWidth - c.right}px ${innerHeight - c.bottom}px ${c.left}px)` };
 }
 function morphIn(from, media) {
   const layer = fx(), rad = parseFloat(getComputedStyle(document.body).getPropertyValue('--rad')) || 10;
@@ -910,7 +927,7 @@ function morphIn(from, media) {
   const ready = media.tagName === 'IMG' ? (media.complete ? Promise.resolve() : media.decode().catch(() => { })) : Promise.resolve();
   const wait = ms => new Promise(r => setTimeout(r, ms));
   Promise.all([Promise.race([a.finished, wait(800)]), Promise.race([ready, wait(1500)])]).then(() => {
-    media.classList.remove('arriving');
+    media.classList.add('landed'); media.classList.remove('arriving');   // 'landed' = no pop-in, or the file dips to transparent as the flyer fades
     settle(g.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, fill: 'forwards' }), 160, () => g.remove());
   });
 }

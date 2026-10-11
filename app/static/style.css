@@ -298,6 +298,7 @@ body.t-flat .tile:hover{transform:none;box-shadow:none;filter:brightness(1.04)}
 .stagewrap{position:relative;background:var(--well);border-radius:20px;min-height:min(72vh,720px);display:grid;place-items:center;overflow:hidden}
 #stage{display:grid;place-items:center;padding:28px 70px 80px;width:100%;min-height:inherit}
 #stage img.arriving,#stage video.arriving{opacity:0;animation:none}
+#stage img.landed,#stage video.landed{animation:none}
 #stage img,#stage video{max-width:100%;max-height:calc(100vh - 230px);display:block;border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,.08),0 24px 60px -20px rgba(0,0,0,.45);transition:transform .2s var(--ease);animation:pop .3s var(--ease)}
 #stage audio{width:min(460px,90%)}
 .edge{position:absolute;top:50%;transform:translateY(-50%);z-index:3}
@@ -552,3 +553,15 @@ body.head-sans #setup h1{font-style:normal;font-size:34px}
 #setup .bar i{display:block;height:100%;width:0;background:var(--accent);border-radius:inherit;transition:width .6s var(--ease)}
 #setup .surow{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--ink3);font-variant-numeric:tabular-nums}
 #setup .btn{align-self:flex-start}
+
+.made{display:flex;align-items:center;justify-content:space-between;margin:0 4px 6px}
+.made .row{width:auto;padding:6px 8px}
+.xlink{display:flex;gap:6px;align-items:center;color:var(--ink3);font-size:12px;text-decoration:none;padding:6px 8px;border-radius:8px}
+.xlink:hover{color:var(--ink);background:var(--hover,rgba(128,128,128,.12))}
+.about{text-align:center;padding:8px 4px}
+.about img{width:72px;height:72px;border-radius:18px}
+.about h2{font-family:'Instrument Serif',serif;font-weight:400;font-size:30px;margin:12px 0 2px}
+.about .sub{color:var(--ink3);font-size:12.5px}
+.about p{color:var(--ink2,var(--ink));font-size:13.5px;line-height:1.55;margin:14px 0}
+.about .xbtn{display:inline-flex;gap:8px;align-items:center;padding:9px 16px;border-radius:999px;background:var(--ink);color:var(--bg,#fff);text-decoration:none;font-size:13px;font-weight:500}
+.about .fine{color:var(--ink3);font-size:11.5px;line-height:1.5;margin-top:18px}
