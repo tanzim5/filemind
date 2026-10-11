@@ -4,11 +4,25 @@
 #   ./run.sh --browser   always use your browser
 set -e
 cd "$(dirname "$0")"
-PY="${PYTHON:-python3}"
+
+if [ "$(uname -s)" = Darwin ]; then
+  [ "$(uname -m)" = arm64 ] || { echo "File Mind on a Mac needs Apple Silicon (M1 or newer): the AI libraries it uses have no Intel Mac builds."; exit 1; }
+  [ "$(sw_vers -productVersion | cut -d. -f1)" -ge 14 ] || { echo "File Mind on a Mac needs macOS 14 (Sonoma) or newer."; exit 1; }
+fi
+
+# Prefer a Python the AI libraries have wheels for: 3.12 is the tested one, then 3.13, 3.11, 3.10.
+PY="${PYTHON:-}"
+if [ -z "$PY" ]; then
+  for c in python3.12 python3.13 python3.11 python3.10 python3; do
+    command -v "$c" >/dev/null 2>&1 && { PY="$c"; break; }
+  done
+fi
+PY="${PY:-python3}"
 
 if [ ! -f .venv/.ready ]; then
   command -v "$PY" >/dev/null 2>&1 || { echo "File Mind needs Python 3.10 or newer: https://www.python.org/downloads/"; exit 1; }
   "$PY" -c 'import sys; sys.exit(sys.version_info < (3, 10))' || { echo "File Mind needs Python 3.10 or newer (found $("$PY" --version 2>&1))."; exit 1; }
+  case "$("$PY" -c 'import sys; print(sys.version_info[1])')" in 14|15|16) echo "Note: Python 3.14+ may lack wheels for some AI libraries; if setup fails, install Python 3.12 and run: PYTHON=python3.12 ./run.sh";; esac
   echo "First run: setting up File Mind. This downloads a few GB of Python packages and takes a few minutes."
   "$PY" -m venv .venv
   .venv/bin/python -m pip install --upgrade pip

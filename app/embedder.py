@@ -1,4 +1,8 @@
 """Wrapper around google/embeddinggemma-2 (text, image, video, audio -> one 768d space)."""
+import importlib.util
+import os
+import platform
+import sys
 import threading
 from pathlib import Path
 
@@ -6,13 +10,18 @@ import numpy as np
 
 from . import extract, runtime
 
-import os
+# Which engine runs the model: "mlx" on Apple Silicon (GPU, 5-bit weights), otherwise "torch" (CUDA if present, else
+# CPU). FILEMIND_BACKEND=torch forces PyTorch on a Mac.
+BACKEND = (os.environ.get("FILEMIND_BACKEND") or
+           ("mlx" if sys.platform == "darwin" and platform.machine() == "arm64"
+            and (getattr(sys, "frozen", False) or importlib.util.find_spec("mlx_vlm") is not None) else "torch"))
 
 # Weights live in ./models (or FILEMIND_MODELS, set by the portable app) so File Mind is fully
 # self-contained. They are fetched once by fetch.py; after that nothing touches the network.
-_LOCAL = Path(os.environ.get("FILEMIND_MODELS") or Path(__file__).resolve().parent.parent / "models") / "embeddinggemma-2"
+_MODELS = Path(os.environ.get("FILEMIND_MODELS") or Path(__file__).resolve().parent.parent / "models")
+_LOCAL = _MODELS / ("embeddinggemma-2-mlx" if BACKEND == "mlx" else "embeddinggemma-2")
 MODEL_ID = str(_LOCAL)
-REPO = "google/embeddinggemma-2"
+REPO = "mlx-community/embeddinggemma-2-5bit" if BACKEND == "mlx" else "google/embeddinggemma-2"
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 _model = None
@@ -33,6 +42,14 @@ def get_model():
         if _model is None:
             if not ready():
                 raise RuntimeError("The AI model isn't downloaded yet")
+            if BACKEND == "mlx":
+                from .mlx_backend import MLXEmbedder
+                try:
+                    _model = MLXEmbedder(MODEL_ID)
+                except Exception as e:
+                    raise RuntimeError(f"Could not start the Apple GPU (MLX) engine: {e}. "
+                                       "Set FILEMIND_BACKEND=torch to use PyTorch instead.") from e
+                return _model
             import torch
             from sentence_transformers import SentenceTransformer
             cuda = _cuda_works(torch)

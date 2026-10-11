@@ -1,5 +1,6 @@
 """File classification, text extraction and thumbnails."""
 import hashlib
+import os
 import subprocess
 from pathlib import Path
 
@@ -22,7 +23,7 @@ TEXT = {".txt", ".md", ".csv", ".log", ".rtf", ".srt", ".vtt", ".tsv"}
 DOC = {".pdf", ".docx"}
 
 MAX_TEXT_CHARS = 6000          # ~1.5k tokens, well inside the 8k window
-VIDEO_FRAMES = 8               # frames sampled per video
+VIDEO_FRAMES = int(os.environ.get("FILEMIND_VIDEO_FRAMES") or 8)               # frames sampled per video
 AUDIO_SECONDS = 120            # audio clip length embedded
 
 

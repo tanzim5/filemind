@@ -12,11 +12,15 @@ import urllib.request
 from pathlib import Path
 
 FROZEN = getattr(sys, "frozen", False)
-HOME = Path(sys.executable).parent if FROZEN else Path(__file__).resolve().parent
+if FROZEN and sys.platform == "darwin":                           # inside FileMind.app: keep user data outside the bundle
+    HOME = Path.home() / "Library" / "Application Support" / "File Mind"
+    HOME.mkdir(parents=True, exist_ok=True)
+else:
+    HOME = Path(sys.executable).parent if FROZEN else Path(__file__).resolve().parent
 BUNDLE = Path(getattr(sys, "_MEIPASS", HOME))
 
 os.environ.setdefault("FILEMIND_DATA", str(HOME / "data"))
-if sys.stdout is None or sys.stderr is None:                     # windowed exe: no console, so log to a file
+if sys.stdout is None or sys.stderr is None or (FROZEN and not sys.stdout.isatty()):   # windowed app: log to a file
     Path(os.environ["FILEMIND_DATA"]).mkdir(parents=True, exist_ok=True)
     sys.stdout = sys.stderr = open(Path(os.environ["FILEMIND_DATA"]) / "filemind.log", "a", encoding="utf-8", buffering=1)
     print(f"--- File Mind started {time.ctime()}")
@@ -102,9 +106,40 @@ def _window(url):
             r = win.create_file_dialog(webview.FileDialog.FOLDER)
             return r[0] if r else None
 
+    png = BUNDLE / "app" / "static" / "icon.png"
+    ico = BUNDLE / "app" / "static" / "favicon.ico"
+    if os.name == "nt":                                           # own taskbar group, not "python.exe"
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("tanzim.FileMind")
+        except Exception:
+            pass
     win = webview.create_window("File Mind", url, width=1480, height=940, min_size=(900, 600),
-                                background_color="#f5f6f9", js_api=Api())
-    webview.start(private_mode=False, storage_path=str(Path(os.environ["FILEMIND_DATA"]) / "webview"))
+                                background_color="#f5f6f9", js_api=Api(), minimized="--hidden" in sys.argv)
+    win.events.shown += lambda: _set_icon(win, png, ico)
+    webview.start(private_mode=False, storage_path=str(Path(os.environ["FILEMIND_DATA"]) / "webview"),
+                  icon=str(png) if sys.platform.startswith("linux") else None)
+
+
+def _set_icon(win, png, ico):
+    """Window/taskbar/Dock icon. Without this a source checkout shows Python's icon (the frozen exe has its own)."""
+    try:
+        if os.name == "nt":
+            import ctypes
+            u = ctypes.windll.user32
+            u.LoadImageW.restype = ctypes.c_void_p
+            u.SendMessageW.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_void_p, ctypes.c_void_p]
+            hwnd = int(win.native.Handle.ToInt64())
+            for which, size in ((1, 32), (0, 16)):                # ICON_BIG, ICON_SMALL
+                h = u.LoadImageW(None, str(ico), 1, size, size, 0x10)   # IMAGE_ICON, LR_LOADFROMFILE
+                u.SendMessageW(hwnd, 0x80, which, h)              # WM_SETICON
+        elif sys.platform == "darwin":
+            from AppKit import NSApplication, NSImage
+            from PyObjCTools import AppHelper
+            AppHelper.callAfter(lambda: NSApplication.sharedApplication().setApplicationIconImage_(
+                NSImage.alloc().initByReferencingFile_(str(png))))
+    except Exception as e:
+        print(f"Could not set the window icon: {type(e).__name__}: {e}")
 
 
 if __name__ == "__main__":

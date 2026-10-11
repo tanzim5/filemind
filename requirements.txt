@@ -13,3 +13,7 @@ numpy
 soundfile
 librosa
 pywebview; sys_platform != "linux"
+# Apple Silicon Macs run the model on the GPU through MLX (5-bit weights) instead of the slow PyTorch CPU route.
+# mlx-vlm needs the commit that adds EmbeddingGemma 2 (not on PyPI yet); the zip archive means no git is required.
+mlx>=0.32.3; sys_platform == "darwin" and platform_machine == "arm64"
+mlx-vlm @ https://github.com/Blaizzy/mlx-vlm/archive/3d87e88402f307efbf68e568971aa887ee7d9ed0.zip ; sys_platform == "darwin" and platform_machine == "arm64"
