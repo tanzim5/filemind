@@ -4,8 +4,11 @@
   <a href="https://github.com/tanzim5/filemind/releases/latest"><b>⬇ Download for Windows &amp; Mac</b></a> ·
   <a href="#what-it-does">What it does</a> ·
   <a href="#privacy">Privacy</a> ·
-  <a href="#run-from-source-macos-linux-windows">Run from source</a>
+  <a href="#run-from-source-macos-linux-windows">Run from source</a> ·
+  <a href="https://x.com/tanzim31">Follow @tanzim31 on X</a>
 </p>
+
+<p align="center"><sub>Made by <b>Tanzim</b> · <a href="https://x.com/tanzim31">@tanzim31</a> on X</sub></p>
 
 ---
 
@@ -153,11 +156,12 @@ MLX, set `FILEMIND_BACKEND=torch` (it then downloads the original 1.5 GB model).
 To build the apps yourself, see `packaging/build_windows.py` and `packaging/build_macos.py`. GitHub Actions
 builds the Windows zips and the Mac app automatically for every `v*` tag, and tests each one end to end.
 
-## About
-
-Made by **Tanzim** — [@tanzim31 on X](https://x.com/tanzim31).
-
 ## Licence
 
 The EmbeddingGemma 2 weights are Apache-2.0. The Windows and Mac apps bundle [FFmpeg](https://ffmpeg.org) (LGPL/GPL).
 Interface fonts: Inter and Instrument Serif (SIL OFL).
+
+---
+
+<p align="center">Made with care by <b>Tanzim</b> — questions, ideas, or something you found with it?<br>
+<a href="https://x.com/tanzim31"><b>Say hi on X → @tanzim31</b></a></p>

@@ -2,7 +2,7 @@ name: Release builds
 
 on:
   push:
-    tags: ["v*"]          # git tag v0.3.0 && git push --tags  -> builds everything and publishes a release
+    tags: ["v*"]          # git tag v0.4.0 && git push --tags  -> builds everything and publishes a release
   workflow_dispatch:      # or run it by hand from the Actions tab (download from the run's artifacts)
 
 permissions:
@@ -119,4 +119,4 @@ jobs:
 
             **Mac:** unzip, drag `FileMind.app` to Applications, and open it. The app isn't notarized by Apple, so the first time macOS will say it can't verify it: open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. (Or run `xattr -dr com.apple.quarantine /Applications/FileMind.app` once.) Your library index and the model live in `~/Library/Application Support/File Mind`.
 
-            After the first launch File Mind works fully offline. Intel Macs and Linux: [run from source](https://github.com/tanzim5/filemind#run-from-source-macos-linux-windows).
+            After the first launch File Mind works fully offline. Made by [Tanzim](https://x.com/tanzim31). Intel Macs and Linux: [run from source](https://github.com/tanzim5/filemind#run-from-source-macos-linux-windows).
