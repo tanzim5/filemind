@@ -25,6 +25,7 @@ REPO = "mlx-community/embeddinggemma-2-5bit" if BACKEND == "mlx" else "google/em
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 _model = None
+DEVICE = ""            # what the model runs on, once loaded: shown in the app
 _lock = threading.Lock()
 
 
@@ -37,7 +38,7 @@ def model_ready() -> bool:
 
 
 def get_model():
-    global _model
+    global _model, DEVICE
     with _lock:
         if _model is None:
             if not ready():
@@ -46,6 +47,7 @@ def get_model():
                 from .mlx_backend import MLXEmbedder
                 try:
                     _model = MLXEmbedder(MODEL_ID)
+                    DEVICE = "Apple GPU (MLX)"
                 except Exception as e:
                     raise RuntimeError(f"Could not start the Apple GPU (MLX) engine: {e}. "
                                        "Set FILEMIND_BACKEND=torch to use PyTorch instead.") from e
@@ -56,6 +58,8 @@ def get_model():
             use_bf16 = cuda and torch.cuda.is_bf16_supported()
             dtype = torch.bfloat16 if use_bf16 else torch.float32  # never float16 (NaNs)
             device = "cuda" if cuda else "cpu"
+            DEVICE = f"{torch.cuda.get_device_name(0)} (CUDA)" if cuda else "CPU"
+            print(f"File Mind: the model runs on {DEVICE}", flush=True)
             _model = SentenceTransformer(MODEL_ID, device=device,
                                          model_kwargs={"torch_dtype": dtype})
         return _model
@@ -103,38 +107,63 @@ def embed_image_file(path: str) -> np.ndarray:
         prepped.unlink(missing_ok=True)
 
 
-def embed_document(path: Path, kind: str, name: str) -> tuple[np.ndarray, str]:
-    """Returns (vector, mode) where mode is 'content' or 'filename'."""
-    m = get_model()
-
+def prepare(path: Path, kind: str, name: str) -> dict:
+    """All the CPU work for one file (decoding, resizing, ffmpeg, reading text). Safe to run on a worker thread,
+    so the model is never left waiting for the next file."""
+    p = {"path": path, "kind": kind, "name": name}
     if kind == "image":
-        return embed_image_file(str(path)), "content"
+        p["image"] = str(_prep_image(str(path)))
+    elif kind == "video":
+        p["frames"] = extract.video_frames(path)
+    elif kind == "audio":
+        p["clip"] = extract.audio_clip(path)
+    elif kind in ("text", "code", "doc"):
+        p["text"] = extract.extract_text(path, kind)
+    return p
 
-    if kind == "video":
-        frames = extract.video_frames(path)
-        try:
-            if frames:
-                text = " ".join("<|image|>" for _ in frames)
-                v = m.encode({"text": text, "image": frames}, normalize_embeddings=True)
-                return _norm(v), "content"
-        finally:
-            extract.cleanup_tmp(path)
 
-    if kind == "audio":
-        clip = extract.audio_clip(path)
-        try:
-            if clip:
-                v = m.encode({"text": "<|audio|>", "audio": clip}, normalize_embeddings=True)
-                return _norm(v), "content"
-        finally:
-            extract.cleanup_tmp(path)
+def discard(p: dict):
+    """Drop a prepared file's temporary files (when it will not be embedded after all)."""
+    if p.get("image"):
+        Path(p["image"]).unlink(missing_ok=True)
+    extract.cleanup_tmp(p["path"])
 
-    if kind in ("text", "code", "doc"):
-        text = extract.extract_text(path, kind)
-        if text.strip():
-            doc = f"title: {name} | text: {text}"
+
+def embed_prepared(p: dict) -> tuple[np.ndarray, str]:
+    """Runs the model on a prepared file. Returns (vector, mode) where mode is 'content' or 'filename'."""
+    m = get_model()
+    name, kind = p["name"], p["kind"]
+    try:
+        if kind == "image":
+            return _norm(m.encode({"text": "<|image|>", "image": [p["image"]]}, normalize_embeddings=True)), "content"
+        if kind == "video" and p.get("frames"):
+            text = " ".join("<|image|>" for _ in p["frames"])
+            return _norm(m.encode({"text": text, "image": p["frames"]}, normalize_embeddings=True)), "content"
+        if kind == "audio" and p.get("clip"):
+            return _norm(m.encode({"text": "<|audio|>", "audio": p["clip"]}, normalize_embeddings=True)), "content"
+        if p.get("text", "").strip():
+            doc = f"title: {name} | text: {p['text']}"
             return _norm(m.encode(doc, normalize_embeddings=True)), "content"
+        # Fallback: embed the filename only (zips, installers, empty docs, ...)
+        doc = f"title: {name} | text: {Path(name).stem.replace('_', ' ').replace('-', ' ')}"
+        return _norm(m.encode(doc, normalize_embeddings=True)), "filename"
+    finally:
+        discard(p)
 
-    # Fallback: embed the filename only (zips, installers, empty docs, ...)
-    doc = f"title: {name} | text: {Path(name).stem.replace('_', ' ').replace('-', ' ')}"
-    return _norm(m.encode(doc, normalize_embeddings=True)), "filename"
+
+def embed_images(preps: list[dict]) -> list[tuple[np.ndarray, str]]:
+    """Several prepared images through the model in one go: much better use of a GPU than one at a time."""
+    m = get_model()
+    try:
+        items = [{"text": "<|image|>", "image": [p["image"]]} for p in preps]
+        if BACKEND == "mlx":                                       # the MLX engine takes one multimodal input at a time
+            return [(_norm(m.encode(i, normalize_embeddings=True)), "content") for i in items]
+        v = np.asarray(m.encode(items, batch_size=len(items), normalize_embeddings=True))
+        return [(_norm(x), "content") for x in v]
+    finally:
+        for p in preps:
+            discard(p)
+
+
+def embed_document(path: Path, kind: str, name: str) -> tuple[np.ndarray, str]:
+    return embed_prepared(prepare(path, kind, name))

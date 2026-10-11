@@ -1,13 +1,15 @@
 """Folder scanning + background embedding job."""
+import collections
 import os
 import threading
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
 
-from . import colors, embedder, extract
+from . import colors, embedder, extract, runtime
 from .db import conn
 
 SKIP_DIRS = {"node_modules", ".git", "__pycache__", "$RECYCLE.BIN", "System Volume Information",
@@ -21,7 +23,7 @@ MIN_BYTES = 4096                              # skip empty / stub files
 state = {
     "running": False, "stop": False, "root_id": None, "root": None,
     "phase": "idle", "total": 0, "done": 0, "errors": 0, "current": "", "started": 0.0,
-    "message": "",
+    "message": "", "device": "",
 }
 _thread: threading.Thread | None = None
 
@@ -111,35 +113,86 @@ def _run(root_id: int, root: str):
             return
         state.update(phase="loading", total=len(pending), message="Loading the embedding model…")
         embedder.get_model()
-        state.update(phase="embedding", message="Embedding files…")
-        for i, r in enumerate(pending):
-            if state["stop"]:
-                state["message"] = "Stopped. Progress is saved; press Index to resume."
-                break
-            state["current"] = r["name"]
+        state.update(phase="embedding", device=embedder.DEVICE, message=f"Embedding files on {embedder.DEVICE or 'this computer'}…")
+        if runtime.WHEELS and embedder.DEVICE == "CPU":
+            print("File Mind: NVIDIA edition, but CUDA is not usable on this PC (driver or GPU too old?); using the CPU", flush=True)
+        # CPU work (decoding, thumbnails, ffmpeg) runs on a few worker threads, a handful of files ahead of the model,
+        # so the GPU is never left waiting. Database writes stay on this thread.
+        def work(r):
             p = Path(r["path"])
-            try:
-                if not p.exists():
-                    c.execute("DELETE FROM files WHERE id=?", (r["id"],))
+            if not p.exists():
+                return None
+            thumb = extract.make_thumb(p, r["kind"])
+            if r["kind"] in ("image", "video") and not thumb:
+                raise ValueError("Could not be decoded (corrupt or unsupported)")   # hidden from the library
+            return thumb, embedder.prepare(p, r["kind"], r["name"])
+
+        ahead = collections.deque()
+        nxt = 0
+        pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix="prep")
+        try:
+            while (nxt < len(pending) or ahead) and not state["stop"]:
+                while nxt < len(pending) and len(ahead) < 16:
+                    ahead.append((pending[nxt], pool.submit(work, pending[nxt])))
+                    nxt += 1
+                # take the next file, plus the images right behind it (up to 8): they go through the model together
+                group = [ahead.popleft()]
+                while ahead and group[0][0]["kind"] == "image" and ahead[0][0]["kind"] == "image" and len(group) < 8:
+                    group.append(ahead.popleft())
+                ready = []                                # (row, thumb, prepared)
+                for r, fut in group:
+                    state["current"] = r["name"]
+                    try:
+                        got = fut.result()
+                        if got is None:
+                            c.execute("DELETE FROM files WHERE id=?", (r["id"],))
+                            state["done"] += 1
+                        else:
+                            ready.append((r, *got))
+                    except Exception as e:                # keep going; one bad file must not kill the job
+                        traceback.print_exc()
+                        c.execute("UPDATE files SET status='error', error=? WHERE id=?", (str(e)[:300], r["id"]))
+                        state["errors"] += 1
+                        state["done"] += 1
+                results = []                              # one (vector, mode) or an Exception per ready file
+                if len(ready) > 1:
+                    try:
+                        results = embedder.embed_images([x[2] for x in ready])
+                    except Exception:
+                        traceback.print_exc()             # fall back to one at a time so one bad image can't sink the rest
+                        results = []
+                        for x in ready:
+                            embedder.discard(x[2])
+                        ready = [(r, t, embedder.prepare(Path(r["path"]), r["kind"], r["name"])) for r, t, _ in ready]
+                if not results:
+                    for r, thumb, prep in ready:
+                        try:
+                            results.append(embedder.embed_prepared(prep))
+                        except Exception as e:
+                            traceback.print_exc()
+                            results.append(e)
+                for (r, thumb, _), res in zip(ready, results):
+                    if isinstance(res, Exception):
+                        c.execute("UPDATE files SET status='error', error=? WHERE id=?", (str(res)[:300], r["id"]))
+                        state["errors"] += 1
+                    else:
+                        vec, mode = res
+                        dom = extract.dominant_color(thumb) if thumb else None
+                        pal = _pal(thumb)
+                        c.execute("UPDATE files SET vec=?, embed_mode=?, thumb=?, dom=?, pal=?, status='done', error=NULL WHERE id=?",
+                                  (vec.astype(np.float32).tobytes(), mode, thumb, dom, pal, r["id"]))
                     state["done"] += 1
-                    continue
-                thumb = extract.make_thumb(p, r["kind"])
-                if r["kind"] in ("image", "video") and not thumb:
-                    raise ValueError("Could not be decoded (corrupt or unsupported)")   # hidden from the library
-                vec, mode = embedder.embed_document(p, r["kind"], r["name"])
-                dom = extract.dominant_color(thumb) if thumb else None
-                pal = _pal(thumb)
-                c.execute("UPDATE files SET vec=?, embed_mode=?, thumb=?, dom=?, pal=?, status='done', error=NULL WHERE id=?",
-                          (vec.astype(np.float32).tobytes(), mode, thumb, dom, pal, r["id"]))
-            except Exception as e:  # keep going; one bad file must not kill the job
-                traceback.print_exc()
-                c.execute("UPDATE files SET status='error', error=? WHERE id=?", (str(e)[:300], r["id"]))
-                state["errors"] += 1
-            state["done"] += 1
-            if state["done"] % 20 == 0:
-                c.commit()
-                invalidate()
-        else:
+                if state["done"] // 20 != (state["done"] - len(group)) // 20:
+                    c.commit()
+                    invalidate()
+        finally:
+            pool.shutdown(wait=True, cancel_futures=True)
+            for _, fut in ahead:                       # prepared but never embedded (stopped): drop their temp files
+                if fut.done() and not fut.cancelled() and not fut.exception() and fut.result():
+                    embedder.discard(fut.result()[1])
+        if state["stop"]:
+            state["message"] = "Stopped. Progress is saved; press Index to resume."
+        if not state["stop"]:
             state["message"] = "Done."
         c.commit()
         invalidate()

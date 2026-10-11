@@ -23,7 +23,7 @@ _lock = threading.Lock()
 
 
 def status():
-    return {"ready": embedder.ready(), "gpu": bool(runtime.WHEELS), **state}
+    return {"ready": embedder.ready(), "gpu": bool(runtime.WHEELS), "device": embedder.DEVICE, **state}
 
 
 def start(on_done=None):

@@ -558,3 +558,4 @@ body.head-sans #setup h1{font-style:normal;font-size:34px}
 .foot{gap:6px}
 .foot .pillbtn span{white-space:nowrap}
 .foot a.circ{display:grid;place-items:center;text-decoration:none;color:inherit}
+.dev{color:var(--ink3);font-weight:500}

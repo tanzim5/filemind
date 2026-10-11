@@ -194,7 +194,7 @@ async function poll() {
     if (busy) {
       const pct = s.total ? Math.round(100 * s.done / s.total) : 0, loading = ['scanning', 'loading'].includes(s.phase);
       b.hidden = false;
-      b.innerHTML = `<div class="spin"><i data-ic="loader"></i></div><div class="tx"><div><b>${loading ? esc(s.message) : 'Reading your files'}</b>${loading ? '' : ` — ${s.done.toLocaleString()} of ${s.total.toLocaleString()}`}${s.errors ? ` · ${s.errors} unreadable skipped` : ''}</div>
+      b.innerHTML = `<div class="spin"><i data-ic="loader"></i></div><div class="tx"><div><b>${loading ? esc(s.message) : 'Reading your files'}</b>${!loading && s.device ? `<span class="dev"> on ${esc(s.device)}</span>` : ''}${loading ? '' : ` — ${s.done.toLocaleString()} of ${s.total.toLocaleString()}`}${s.errors ? ` · ${s.errors} unreadable skipped` : ''}</div>
         <div class="track"><div id="barFill" style="width:${loading ? 5 : pct}%"></div></div><div class="sm">${s.current ? esc(s.current) : 'This happens on your PC. You can already search what has been read.'}</div></div><button id="stopBtn">Pause</button>`;
       hydrate(b); $('#stopBtn').onclick = () => api('/index/stop', { method: 'POST' });
     } else b.hidden = true;
