@@ -2,6 +2,7 @@
 import hashlib
 import os
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from PIL import Image
@@ -140,16 +141,20 @@ def video_frames(path: Path, n: int = VIDEO_FRAMES) -> list[str]:
         dur = 0
     if dur <= 0:
         dur = 1
-    frames = []
-    for i in range(n):
+    def grab(i):                                  # frames are independent, so fetch several at once
         t = dur * (i + 0.5) / n
         f = d / f"{i}.jpg"
-        subprocess.run(
-            ["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{t:.2f}", "-i", str(path),
-             "-frames:v", "1", "-vf", "scale=-2:448", str(f)],
-            capture_output=True, timeout=60)
-        if f.exists():
-            frames.append(str(f))
+        try:
+            subprocess.run(
+                ["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{t:.2f}", "-i", str(path),
+                 "-frames:v", "1", "-vf", "scale=-2:448", str(f)],
+                capture_output=True, timeout=60)
+        except Exception:
+            pass
+        return str(f) if f.exists() else None
+
+    with ThreadPoolExecutor(max_workers=min(4, n)) as ex:
+        frames = [f for f in ex.map(grab, range(n)) if f]
     return frames
 
 
