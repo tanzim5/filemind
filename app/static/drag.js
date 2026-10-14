@@ -1,9 +1,12 @@
 /* Desktop: real shell file drops. Browser: download drag where supported. */
-let nativeFileDrag = false, dragGesture = null, dragBusy = false, suppressDragClick = false;
+let nativeFileDrag = false, dragGesture = null, dragBusy = false, suppressDragClick = false, browserDragNotice = false;
 async function connectFileDrag() {
   try { nativeFileDrag = !!(await window.pywebview?.api.drag_capabilities())?.native_files; }
   catch { nativeFileDrag = false; }
   document.documentElement.classList.toggle('native-file-drag', nativeFileDrag);
+  const handle = $('#dragFile');
+  if (handle.querySelector) handle.querySelector('span').textContent = nativeFileDrag ? 'Drag file' : 'Drag download';
+  handle.title = nativeFileDrag ? 'Drag the original file into another app' : 'Open the desktop app to drag an original into Adobe apps';
 }
 window.addEventListener('pywebviewready', connectFileDrag);
 connectFileDrag();
@@ -50,6 +53,10 @@ document.addEventListener('dragstart', e => {
   const source = dragSource(e.target, e.clientY);
   if (!source) return;
   if (nativeFileDrag) { e.preventDefault(); return; }
+  if (!browserDragNotice) {
+    browserDragNotice = true;
+    toast('For Photoshop or Media Encoder, open File Mind in its desktop window. Browser drags can only download files.', 'move');
+  }
   const f = S.files.find(f => f.id === source.id) || F.files.find(f => f.id === source.id) || (S.cur?.id === source.id ? S.cur : null);
   if (!f || !e.dataTransfer) { e.preventDefault(); return; }
   // Remove Chromium's default image/video-frame payload. Browser DownloadURL is
@@ -66,4 +73,4 @@ document.addEventListener('dragstart', e => {
 }, true);
 $('#dragFile').addEventListener('click', () => toast(nativeFileDrag
   ? 'Hold and drag this button into another app'
-  : 'Use the Windows desktop app to drag original files into other apps', 'move'));
+  : 'Open the File Mind desktop window to drag originals into Adobe apps', 'move'));
