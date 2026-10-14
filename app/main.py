@@ -7,6 +7,7 @@ import time
 from collections import Counter
 from functools import lru_cache
 from pathlib import Path
+from send2trash import send2trash
 
 import numpy as np
 from fastapi import Body, FastAPI, File, HTTPException, UploadFile
@@ -83,7 +84,7 @@ Add-Type -AssemblyName System.Windows.Forms
 $owner = New-Object System.Windows.Forms.Form -Property @{TopMost=$true; ShowInTaskbar=$false; Opacity=0; StartPosition='CenterScreen'; Width=1; Height=1}
 $owner.Show()
 $d = New-Object System.Windows.Forms.FolderBrowserDialog
-$d.Description = 'Choose a folder for File Mind to read (it is only read, never changed)'
+$d.Description = 'Choose a folder'
 $d.ShowNewFolderButton = $false
 if ($d.ShowDialog($owner) -eq 'OK') { [Console]::Out.Write($d.SelectedPath) }
 $owner.Dispose()
@@ -93,7 +94,7 @@ $owner.Dispose()
 @app.post("/api/pick_folder")
 def pick_folder():
     """Opens the system folder picker on this PC (the app is local) and returns the chosen path."""
-    title = "Choose a folder for File Mind to read (it is only read, never changed)"
+    title = "Choose a folder"
     if os.name == "nt":
         cmds = [["powershell", "-NoProfile", "-STA", "-Command", _PICK_PS]]
     elif sys.platform == "darwin":
@@ -662,6 +663,40 @@ def open_file(fid: int):
     if not r or not os.path.exists(r["path"]):
         raise HTTPException(404)
     return FileResponse(r["path"])
+
+
+@app.post("/api/file_actions")
+def file_actions(body: dict = Body(...)):
+    """Apply a deliberate file action to indexed originals; never overwrite a destination."""
+    action = body.get("action")
+    ids = body.get("file_ids")
+    if action not in {"copy", "move", "delete"} or not isinstance(ids, list) or not ids or len(ids) > 500 or any(type(i) is not int for i in ids):
+        raise HTTPException(400, "Choose files and a valid action.")
+    ids = list(dict.fromkeys(ids))
+    c = db.conn()
+    files = [c.execute("SELECT id, path FROM files WHERE id=?", (fid,)).fetchone() for fid in ids]
+    if any(r is None or not Path(r["path"]).is_file() for r in files):
+        raise HTTPException(404, "One or more files are no longer at their indexed locations.")
+    if action == "delete":
+        done = 0
+        for r in files:
+            try:
+                send2trash(r["path"])
+            except OSError as exc:
+                raise HTTPException(500, f"Moved {done} files to Trash; the next file failed: {exc}") from exc
+            c.execute("DELETE FROM project_files WHERE file_id=?", (r["id"],))
+            c.execute("DELETE FROM proposed_names WHERE file_id=?", (r["id"],))
+            c.execute("DELETE FROM files WHERE id=?", (r["id"],))
+            c.commit()
+            done += 1
+        return {"done": done, "action": action}
+    destination = Path(str(body.get("destination") or "")).expanduser()
+    if not destination.is_dir():
+        raise HTTPException(400, "Choose an existing destination folder.")
+    ops = [{"old": r["path"], "new": str(destination / Path(r["path"]).name), "file_id": r["id"]} for r in files]
+    if len({os.path.normcase(op["new"]) for op in ops}) != len(ops) or any(os.path.exists(op["new"]) for op in ops):
+        raise HTTPException(409, "A file with that name already exists in the destination. Nothing was changed.")
+    return commit_mod.run(ops, action)
 
 
 @app.post("/api/reveal/{fid}")

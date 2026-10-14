@@ -19,7 +19,7 @@ const IC = { library: 'layout-grid', inbox: 'inbox', pencil: 'pencil-line', plus
   columns: 'columns-3', rows: 'rows-3', lock: 'lock', loader: 'loader-circle', eye: 'eye', move: 'folder-input', history: 'history', commit: 'git-commit-horizontal', left: 'chevron-left', right: 'chevron-right',
   check: 'check', palette: 'palette', pipette: 'pipette', tag: 'tag', type: 'type', vol: 'volume-2', vol1: 'volume-1', mute: 'volume-x', expand: 'maximize-2', scan: 'scan-search', wand: 'wand-sparkles',
   layers: 'layers', hash: 'hash', star: 'star', dots: 'ellipsis', link: 'link', shapes: 'shapes', images: 'images', sort: 'arrow-up-down', minus: 'minus',
-  quote: 'quote', calendar: 'calendar', user: 'user', down: 'arrow-down', mood: 'moon-star', redo: 'rotate-cw' };
+  quote: 'quote', calendar: 'calendar', user: 'user', down: 'arrow-down', mood: 'moon-star', redo: 'rotate-cw', trash: 'trash-2' };
 const ic = (n, extra = '', sw = 1.75) => `<svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="${n === 'play' || n === 'pause' ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" ${extra}>${LUCIDE[IC[n] || n] || ''}</svg>`;
 const hydrate = (root = document) => root.querySelectorAll('i[data-ic]').forEach(i => { if (!i.firstChild) i.innerHTML = ic(i.dataset.ic); });
 const KIND = { image: { icon: 'image', color: '#4a8be0', label: 'Images' }, video: { icon: 'video', color: '#8e5bd0', label: 'Videos' }, audio: { icon: 'music', color: '#e0629f', label: 'Audio' } };
@@ -37,18 +37,22 @@ const glyph = id => {
 /* ================================================================ state */
 /* user settings (Customize) — kept in this browser only */
 const PDEF = { tile: 300, gap: 12, rad: 10, names: false, hover: true, accent: '#ff5a1f', layout: 'cols', theme: 'ink', tstyle: 'lift', head: 'serif', ideas: true,
-  sideOrder: ['types', 'colors', 'sources', 'filters', 'spaces', 'folders'], sideHidden: [], navOrder: ['all', 'discover', 'unassigned', 'renames', 'spaces'], navHidden: ['unassigned', 'renames', 'spaces'], sideExpanded: [] };
+  sideOrder: ['types', 'colors', 'sources', 'spaces', 'folders', 'filters'], sideHidden: [], navOrder: ['all', 'discover', 'unassigned', 'renames', 'spaces'], navHidden: ['unassigned', 'renames', 'spaces'], sideExpanded: [] };
 const THEMES = [['blush', 'Blush', '#f5f6f9', 'linear-gradient(180deg,#f1e8ea,#e8e2ea)'], ['paper', 'Paper', '#fbfaf8', '#f3f1ec'], ['mist', 'Mist', '#f6f8fb', 'linear-gradient(180deg,#e8eef7,#e1e8f3)'],
   ['sage', 'Sage', '#f7f8f4', 'linear-gradient(180deg,#e8eee2,#dfe8da)'], ['sand', 'Sand', '#faf7f1', 'linear-gradient(180deg,#f3eadc,#ece0cc)'], ['lilac', 'Lilac', '#f8f7fc', 'linear-gradient(180deg,#eeeaf8,#e5dff3)'],
   ['peach', 'Peach', '#fdf8f5', 'linear-gradient(180deg,#fbe8dd,#f5dfe0)'], ['studio', 'Studio', '#ffffff', '#f5f5f6'],
   ['night', 'Night', '#16171d', '#111217'], ['ink', 'Ink', '#0b0b0d', '#000000']];
 const P = (() => { try { return { ...PDEF, ...JSON.parse(store.get('prefs', '{}')) }; } catch { return { ...PDEF }; } })();
-if (P.sidebarRevision !== 2) {
+if (!P.sidebarRevision || P.sidebarRevision < 2) {
   P.navHidden = [...new Set([...(P.navHidden || []), 'unassigned', 'renames', 'spaces'])];
   const order = [...new Set([...(P.sideOrder || []), ...PDEF.sideOrder])].filter(key => key !== 'sources');
   order.splice(Math.max(0, order.indexOf('filters')), 0, 'sources');
   P.sideOrder = order;
   P.sidebarRevision = 2;
+}
+if (P.sidebarRevision < 3) {
+  P.sideOrder = [...new Set([...(P.sideOrder || []), ...PDEF.sideOrder])].filter(k => !['spaces', 'folders', 'filters'].includes(k)).concat(['spaces', 'folders', 'filters']);
+  P.sidebarRevision = 3;
 }
 function applyPrefs() {
   const d = document.documentElement, r = d.style; r.setProperty('--gap', P.gap + 'px'); r.setProperty('--rad', P.rad + 'px'); r.setProperty('--accent', P.accent);
@@ -201,33 +205,24 @@ $('#moods').hidden = true;
 function drawFilterStatus() {
   const n = Object.values(S.filters).filter(Boolean).length;
   $('#filterOpen').textContent = n ? `${n} active` : 'Set filters';
-  $('#filterStatus').innerHTML = n ? `<button class="row" id="activeFilters"><i data-ic="calendar"></i><span>Date &amp; size filters</span><em>${n}</em></button><button class="row filter-clear" id="clearFilters"><i data-ic="x"></i><span>Clear filters</span></button>` : '<div class="hintrow">Date and file size</div>';
-  hydrate($('#filterStatus'));
-  $('#activeFilters')?.addEventListener('click', openFilters);
-  $('#clearFilters')?.addEventListener('click', () => { S.filters = {}; drawFilterStatus(); loadFiles(true); record(); });
-}
-function openFilters() {
-  const f = S.filters;
+  $('#clearFilters').hidden = !n;
   const date = t => t ? new Date(t * 1000).toISOString().slice(0, 10) : '';
-  modal(`<div class="mh"><h3>Filter files</h3><p>Narrow this view by date or file size.</p></div><div class="mb filter-form">
-    <label>From date<input name="from" type="date" value="${date(f.after)}"></label>
-    <label>Through date<input name="through" type="date" value="${date(f.before ? f.before - 86400 : null)}"></label>
-    <label>Minimum size (MB)<input name="min" type="number" min="0" step="0.1" value="${f.min_size ? f.min_size / 1e6 : ''}"></label>
-    <label>Maximum size (MB)<input name="max" type="number" min="0" step="0.1" value="${f.max_size ? f.max_size / 1e6 : ''}"></label>
-    <button class="btn dark wide" id="applyFilters">Apply filters</button><button class="btn ghost wide" id="resetFilters">Clear filters</button></div>`);
-  $('#applyFilters').onclick = () => {
-    const val = n => $(`.filter-form [name="${n}"]`).value;
-    const epoch = s => s ? Math.floor(new Date(s + 'T00:00:00').getTime() / 1000) : null;
-    const after = epoch(val('from')), through = epoch(val('through'));
-    if (after && through && through < after) return toast('The end date must follow the start date', 'x', true);
-    const min = val('min'), max = val('max');
-    if (min && max && +max < +min) return toast('Maximum size must be larger than minimum', 'x', true);
-    S.filters = { after, before: through ? through + 86400 : null, min_size: min ? Math.round(+min * 1e6) : null, max_size: max ? Math.round(+max * 1e6) : null };
-    closeModal(); drawFilterStatus(); record(); loadFiles(true);
-  };
-  $('#resetFilters').onclick = () => { S.filters = {}; closeModal(); drawFilterStatus(); record(); loadFiles(true); };
+  const values = { from: date(S.filters.after), through: date(S.filters.before ? S.filters.before - 86400 : null), min: S.filters.min_size ? S.filters.min_size / 1e6 : '', max: S.filters.max_size ? S.filters.max_size / 1e6 : '' };
+  Object.entries(values).forEach(([key, value]) => { $(`#filterFields [name="${key}"]`).value = value; });
+  $('#filterFields').hidden = !sideExpanded('filters');
 }
-$('#filterOpen').onclick = openFilters;
+$('#filterOpen').onclick = () => $('.label[data-sec="filters"]').click();
+$('#filterFields').addEventListener('change', () => {
+  const val = n => $(`#filterFields [name="${n}"]`).value;
+  const epoch = s => s ? Math.floor(new Date(s + 'T00:00:00').getTime() / 1000) : null;
+  const after = epoch(val('from')), through = epoch(val('through'));
+  if (after && through && through < after) return toast('The end date must follow the start date', 'x', true);
+  const min = val('min'), max = val('max');
+  if (min && max && +max < +min) return toast('Maximum size must be larger than minimum', 'x', true);
+  S.filters = { after, before: through ? through + 86400 : null, min_size: min ? Math.round(+min * 1e6) : null, max_size: max ? Math.round(+max * 1e6) : null };
+  drawFilterStatus(); record(); loadFiles(true);
+});
+$('#clearFilters').onclick = () => { S.filters = {}; drawFilterStatus(); record(); loadFiles(true); };
 drawFilterStatus();
 let polling = false;
 async function poll() {
@@ -289,11 +284,11 @@ function applySidebar() {
   $('[data-more="colors"]').textContent = sideExpanded('colors') ? 'Show fewer colors' : 'Show all colors';
 }
 $$('.label[data-sec]').forEach(l => l.onclick = e => {
-  if (e.target.closest('button') || !['colors', 'sources', 'spaces', 'folders'].includes(l.dataset.sec)) return;
+  if (e.target.closest('button') || !['colors', 'sources', 'spaces', 'folders', 'filters'].includes(l.dataset.sec)) return;
   const sec = l.dataset.sec, current = new Set(P.sideExpanded || []);
   if (current.has(sec)) current.delete(sec); else current.add(sec);
   P.sideExpanded = [...current]; applyPrefs(); applySidebar();
-  if (sec === 'sources') drawSources(); if (sec === 'spaces') { S.spAll = sideExpanded(sec); drawProjects(); } if (sec === 'folders') loadRoots();
+  if (sec === 'sources') drawSources(); if (sec === 'spaces') { S.spAll = sideExpanded(sec); drawProjects(); } if (sec === 'folders') loadRoots(); if (sec === 'filters') drawFilterStatus();
 });
 $('[data-more="colors"]').onclick = () => $('.label[data-sec="colors"]').click();
 applySidebar();
@@ -604,15 +599,38 @@ const go_similar = id => { const f = S.files.find(x => x.id === id) || F.files.f
 /* ---- right-click menu */
 function showCtx(e, id) {
   e.preventDefault();
-  const sp = S.projects.slice(0, 6);
-  $('#ctx').innerHTML = `<button data-c="open">${ic('expand')}Open</button><button data-c="reveal">${ic('explorer')}Show in ${FM}</button><button data-c="copy">${ic('copy')}Copy path</button><button data-c="similar">${ic('sparkle')}Find similar</button><hr>
-    ${sp.length ? `<div class="sub">Add to space</div>${sp.map(p => `<button data-c="add" data-p="${p.id}">${glyph(p.id)}${esc(p.name)}</button>`).join('')}` : ''}<button data-c="new">${ic('folderplus')}New space with this</button>`;
-  const m = $('#ctx'); m.hidden = false; m.style.left = clamp(e.clientX, 8, innerWidth - 240) + 'px'; m.style.top = clamp(e.clientY, 8, innerHeight - m.offsetHeight - 8) + 'px';
+  const ids = S.selected.has(id) ? [...S.selected] : [id];
+  const m = $('#ctx');
+  m.innerHTML = `<button data-c="open">${ic('expand')}Open</button><button data-c="reveal">${ic('explorer')}Show in ${FM}</button><button data-c="path">${ic('copy')}Copy path</button><button data-c="similar">${ic('sparkle')}Find similar</button><hr>
+    <button data-c="copy">${ic('copy')}Copy ${ids.length > 1 ? `${ids.length} files` : 'file'} to…</button><button data-c="move">${ic('move')}Move ${ids.length > 1 ? `${ids.length} files` : 'file'} to…</button><button data-c="delete" class="danger">${ic('trash')}Move to Trash</button><hr>
+    <button data-c="spaces" aria-expanded="false">${ic('layers')}Add to space ${ic('right')}</button>
+    <div class="ctx-submenu" hidden><input id="ctxSpaceSearch" placeholder="Find a space…" aria-label="Find a space"><div class="ctx-space-list"></div><button data-c="new">${ic('folderplus')}New space…</button></div>`;
+  const spaceList = q => { $('.ctx-space-list', m).innerHTML = S.projects.filter(p => p.name.toLowerCase().includes(q.toLowerCase())).map(p => `<button data-c="add" data-p="${p.id}"><span class="ring" style="--c:${HUES[p.id % HUES.length]}"></span><span>${esc(p.name)}</span></button>`).join('') || '<div class="ctx-empty">No matching spaces</div>'; };
+  spaceList(''); $('#ctxSpaceSearch', m).oninput = ev => spaceList(ev.target.value);
+  m.hidden = false; m.style.left = clamp(e.clientX, 8, innerWidth - 250) + 'px'; m.style.top = clamp(e.clientY, 8, innerHeight - m.offsetHeight - 8) + 'px';
   m.onclick = async ev => {
-    const b = ev.target.closest('[data-c]'); if (!b) return; m.hidden = true; const c = b.dataset.c;
-    if (c === 'open') { S.ctx = $('#viewer').hidden ? null : F.files.slice(); openViewer(id); } if (c === 'reveal') reveal(id); if (c === 'copy') { const i = await api(`/info/${id}`); copyText(i.path); } if (c === 'similar') go_similar(id);
-    if (c === 'add') { await api(`/projects/${b.dataset.p}/add`, { method: 'POST', body: { file_ids: [id] } }); toast('Added to space'); await loadProjects(); await loadStats(); }
-    if (c === 'new') { const n = prompt('Name your new space:'); if (n) { await api('/projects', { method: 'POST', body: { name: n, file_ids: [id] } }); await refreshAll(); toast('Space created'); } }
+    const b = ev.target.closest('[data-c]'); if (!b) return; const c = b.dataset.c;
+    if (c === 'spaces') { const sub = $('.ctx-submenu', m); sub.hidden = !sub.hidden; b.setAttribute('aria-expanded', String(!sub.hidden)); m.style.top = clamp(parseFloat(m.style.top), 8, innerHeight - m.offsetHeight - 8) + 'px'; if (!sub.hidden) $('#ctxSpaceSearch', m).focus(); return; }
+    m.hidden = true;
+    try {
+      if (c === 'open') { S.ctx = $('#viewer').hidden ? null : F.files.slice(); openViewer(id); }
+      if (c === 'reveal') reveal(id);
+      if (c === 'path') { const i = await api(`/info/${id}`); copyText(i.path); }
+      if (c === 'similar') go_similar(id);
+      if (c === 'add') { await api(`/projects/${b.dataset.p}/add`, { method: 'POST', body: { file_ids: ids } }); toast('Added to space'); await loadProjects(); await loadStats(); }
+      if (c === 'new') { const n = prompt('Name your new space:'); if (n) { await api('/projects', { method: 'POST', body: { name: n, file_ids: ids } }); await refreshAll(); toast('Space created'); } }
+      if (['copy', 'move', 'delete'].includes(c)) {
+        if (c === 'delete' && !confirm(`Move ${ids.length} ${ids.length === 1 ? 'file' : 'files'} to the system Trash?`)) return;
+        let destination;
+        if (c !== 'delete') { const picked = await api('/pick_folder', { method: 'POST' }); destination = picked.path; if (!destination) return; }
+        const result = await api('/file_actions', { method: 'POST', body: { action: c, file_ids: ids, destination } });
+        if (result.failed) throw new Error(`${result.done} completed; ${result.failed} failed. ${result.errors?.[0] || ''}`);
+        toast(`${result.done} ${result.done === 1 ? 'file' : 'files'} ${c === 'delete' ? 'moved to Trash' : c === 'copy' ? 'copied' : 'moved'}`);
+        S.selected.clear(); refreshSel(); if (S.open && ids.includes(S.open)) viewerUI(false);
+        if (S.searching) { if (c !== 'copy') { S.files = S.files.filter(f => !ids.includes(f.id)); S.total = Math.max(0, S.total - ids.length); render(); } await loadStats(); await loadProjects(); }
+        else await refreshAll();
+      }
+    } catch (err) { toast(err.message, 'x', true); }
   }; hydrate(m);
 }
 ['#grid', '#feed'].forEach(s => $(s).addEventListener('contextmenu', e => { const t = e.target.closest('.tile'); if (t) showCtx(e, +t.dataset.id); }));

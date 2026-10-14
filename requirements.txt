@@ -1,6 +1,7 @@
 fastapi
 uvicorn[standard]
 python-multipart
+Send2Trash>=1.8,<2
 sentence-transformers>=5.0
 torchvision
 transformers
