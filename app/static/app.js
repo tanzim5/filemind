@@ -207,7 +207,8 @@ function drawFilterStatus() {
   $('#filterOpen').textContent = n ? `${n} active` : 'Set filters';
   $('#clearFilters').hidden = !n;
   const date = t => t ? new Date(t * 1000).toISOString().slice(0, 10) : '';
-  const values = { from: date(S.filters.after), through: date(S.filters.before ? S.filters.before - 86400 : null), min: S.filters.min_size ? S.filters.min_size / 1e6 : '', max: S.filters.max_size ? S.filters.max_size / 1e6 : '' };
+  const values = { from: date(S.filters.after), through: date(S.filters.before ? S.filters.before - 86400 : null), min: S.filters.min_size ? S.filters.min_size / 1e6 : '', max: S.filters.max_size ? S.filters.max_size / 1e6 : '',
+    min_width: S.filters.min_width ?? '', min_height: S.filters.min_height ?? '', min_duration: S.filters.min_duration ?? '', max_duration: S.filters.max_duration ?? '', min_fps: S.filters.min_fps ?? '', aspect: S.filters.aspect || '', codec: S.filters.codec || '' };
   Object.entries(values).forEach(([key, value]) => { $(`#filterFields [name="${key}"]`).value = value; });
   $('#filterFields').hidden = !sideExpanded('filters');
 }
@@ -219,7 +220,10 @@ $('#filterFields').addEventListener('change', () => {
   if (after && through && through < after) return toast('The end date must follow the start date', 'x', true);
   const min = val('min'), max = val('max');
   if (min && max && +max < +min) return toast('Maximum size must be larger than minimum', 'x', true);
-  S.filters = { after, before: through ? through + 86400 : null, min_size: min ? Math.round(+min * 1e6) : null, max_size: max ? Math.round(+max * 1e6) : null };
+  if (val('min_duration') && val('max_duration') && +val('max_duration') < +val('min_duration')) return toast('Maximum length must be larger than minimum', 'x', true);
+  const num = name => val(name) === '' ? null : +val(name);
+  S.filters = { after, before: through ? through + 86400 : null, min_size: min ? Math.round(+min * 1e6) : null, max_size: max ? Math.round(+max * 1e6) : null,
+    min_width: num('min_width'), min_height: num('min_height'), min_duration: num('min_duration'), max_duration: num('max_duration'), min_fps: num('min_fps'), aspect: val('aspect') || null, codec: val('codec') || null };
   drawFilterStatus(); record(); loadFiles(true);
 });
 $('#clearFilters').onclick = () => { S.filters = {}; drawFilterStatus(); record(); loadFiles(true); };
@@ -253,13 +257,13 @@ async function loadStats() {
 async function loadProjects() {
   S.projects = await api('/projects');
   drawProjects();
-  $('#projSelect').innerHTML = S.projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  $('#projSelect').innerHTML = S.projects.filter(p => !p.smart).map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
   $('#cSp').textContent = S.projects.length || '';
 }
 function drawProjects() {
   const active = S.projects.find(p => S.view === 'project' && S.project === p.id);
   const list = S.spAll ? S.projects : [...S.projects.slice(0, 3), ...(active && !S.projects.slice(0, 3).includes(active) ? [active] : [])];
-  $('#projects').innerHTML = (list.map(p => `<button class="row proj ${S.view === 'project' && S.project === p.id ? 'active' : ''}" data-id="${p.id}">${glyph(p.id)}<span>${esc(p.name)}</span><em>${p.count}</em></button>`).join('')
+  $('#projects').innerHTML = (list.map(p => `<button class="row proj ${S.view === 'project' && S.project === p.id ? 'active' : ''}" data-id="${p.id}">${p.smart ? ic('sparkle') : glyph(p.id)}<span>${esc(p.name)}${p.smart ? ' <small class="live-mark">Live</small>' : ''}</span><em>${p.count}</em></button>`).join('')
     || '<div class="hintrow">Spaces are virtual folders. Press + to make one.</div>')
     + (S.projects.length ? `<button class="row more-spaces" id="spMore"><i data-ic="layers"></i><span>View all ${S.projects.length} spaces</span></button>` : '');
   hydrate($('#projects'));
@@ -486,7 +490,7 @@ $('#q').addEventListener('keydown', e => { if (e.key === 'Backspace' && !e.targe
 function spacesHTML() {
   const card = p => { const c = p.cover || [];
     const fan = c.length ? c.map((t, i) => t.kind === 'audio' ? `<span class="k${i}">${ic('music')}</span>` : `<img class="k${i}" src="/api/thumb/${t.id}" alt="" loading="lazy">`).join('') : `<span class="none">Empty</span>`;
-    return `<button class="space" data-sp="${p.id}"><div class="fan n${c.length}">${fan}</div><div class="spname"><span class="ring" style="--c:${HUES[p.id % HUES.length]}"></span>${esc(p.name)}<em>${p.count}</em></div></button>`; };
+    return `<button class="space" data-sp="${p.id}"><div class="fan n${c.length}">${fan}</div><div class="spname"><span class="ring" style="--c:${HUES[p.id % HUES.length]}"></span>${esc(p.name)}${p.smart ? '<small class="live-mark">Live</small>' : ''}<em>${p.count}</em></div></button>`; };
   return `<div class="spaces"><div class="sphead"><h1 class="d-head">All Spaces</h1><div class="acts"><button class="btn ghost sm" id="spAuto">${ic('sparkle')}<span>Auto-group</span></button><button class="btn dark sm" id="spNew"><span class="ring" style="--c:var(--accent)"></span><span>Create a new space</span></button></div></div>
     <div class="spgrid">${S.projects.map(card).join('')}<button class="space add" id="spNew2"><div class="fan"><span class="none">${ic('plus')}</span></div><div class="spname">New space</div></button></div></div>`;
 }
@@ -497,9 +501,15 @@ function bindSpaces() {
 }
 async function loadIdeas() { try { const r = await api('/ideas?n=36'); if (r.ideas.length) { S.ideas = shuffleIdeas(r.ideas); S.ideaAt = 0; if (S.view === 'discover') render(); else if (!S.searching) drawHero(); } } catch { } }
 async function saveAsSpace() {
-  const fl = filterLabel(); const name = prompt('Name this space:', S.searching ? (S.search?.label || 'Search').replace(/[“”]/g, '') : fl ? fl.text.replace('Name: ', '') : 'Collection'); if (!name) return;
-  const ids = S.searching ? S.files.map(f => f.id) : (await api('/files?' + filterParams({ ids_only: 'true' }))).ids;
-  const r = await api('/projects', { method: 'POST', body: { name, file_ids: ids } }); await refreshAll(); go({ view: 'project', project: r.id }); toast(`Created “${name}” with ${ids.length} files`);
+  const fl = filterLabel(); const suggested = S.searching ? (S.search?.label || 'Search').replace(/[“”]/g, '') : fl ? fl.text.replace('Name: ', '') : 'Collection';
+  const canLive = !S.searching || !!S.search?.body?.qs;
+  modal(`<div class="mh"><h3>Save as a Space</h3><p>A live Space updates as your library grows. A snapshot keeps only the current results.</p></div><div class="mb"><label class="line"><span class="k">Name</span><input id="spaceName" value="${esc(suggested)}" style="flex:1"></label><div class="line"><button class="btn dark" id="makeLive" ${canLive ? '' : 'disabled'}>${ic('sparkle')}<span>Live Space</span></button><button class="btn" id="makeSnapshot">Keep snapshot</button></div>${canLive ? '' : '<p class="hint">Reference searches can be saved as snapshots.</p>'}</div>`, { w: 460 });
+  const create = async live => { const name = $('#spaceName').value.trim(); if (!name) return toast('Give this Space a name', 'x', true);
+    const spec = { ...S.filters, root: S.root, kind: S.kind === 'all' ? null : S.kind, color: S.color, source: S.source, qs: S.searching ? (S.search?.body?.qs || []) : [] };
+    try { const payload = live ? { name, smart: spec } : { name, file_ids: S.searching ? S.files.map(f => f.id) : (await api('/files?' + filterParams({ ids_only: 'true' }))).ids };
+      const r = await api('/projects', { method: 'POST', body: payload }); closeModal(); await refreshAll(); go({ view: 'project', project: r.id }); toast(`${live ? 'Live Space' : 'Snapshot'} created`);
+    } catch (error) { toast(error.message, 'x', true); } };
+  $('#makeLive').onclick = () => create(true); $('#makeSnapshot').onclick = () => create(false); $('#spaceName').focus();
 }
 function render() {
   if (S.view === 'spaces') { $('#grid').innerHTML = spacesHTML(); $('#empty').hidden = true; bindSpaces(); updateBar(); setTitle(); drawHero(); return; }
@@ -533,6 +543,7 @@ function render() {
     $('#grid').innerHTML = `<div class="discover"><div class="discover-head"><h1>Discover what’s already here.</h1></div>
       ${themes.length ? `<section class="discover-section"><div class="discover-section-head"><h2>Visual themes</h2></div><div class="discover-circles">${themes.map(circle).join('')}</div></section>` : ''}
       ${S.discoverGroups.length ? `<section class="discover-section"><div class="discover-section-head"><h2>Questions worth asking</h2></div><div class="discover-prompts">${questions.map(q => `<button class="discover-prompt" data-ex="${esc(q[1])}"><span class="prompt-text">${esc(q[0])}</span><span class="prompt-arrow" aria-hidden="true">↗</span></button>`).join('')}</div></section>` : ''}
+      <section class="discover-section"><div class="discover-section-head"><h2>Explore deeper</h2></div><div class="discover-tools"><button id="discoverDuplicates">${ic('layers')}<span><strong>Review duplicates</strong><small>See exact copies and possible visual matches</small></span><b>↗</b></button><button id="discoverMoments">${ic('film')}<span><strong>Find a moment</strong><small>Search clips you chose to analyze</small></span><b>↗</b></button><button id="discoverReference">${ic('image')}<span><strong>Search with an image</strong><small>Choose a picture and add a description</small></span><b>↗</b></button></div></section>
       ${P.ideas && S.ideas.length ? `<section class="discover-section"><div class="discover-section-head"><h2>Try a thought</h2><p>Search your library by meaning</p></div><div class="discover-queries">${[...S.ideas, ...S.ideas].slice(S.ideaAt, S.ideaAt + Math.min(5, S.ideas.length)).map((x, i) => ideaChip(x, i)).join('')}<button class="idea more" id="moreDiscover">${ic('redo')}<span>More</span></button></div></section>` : ''}
       ${kinds.length ? `<section class="discover-section"><div class="discover-section-head"><h2>By file type</h2><p>Quick ways into your collection</p></div><div class="discover-cards">${kinds.map(card).join('')}</div></section>` : ''}
       ${origins.length ? `<section class="discover-section"><div class="discover-section-head"><h2>Where it came from</h2><p>Apps and cameras detected from names and photo data</p></div><div class="discover-origins">${origins.map(g => `<button data-discover="${esc(g.key)}">${ic(g.key.startsWith('camera:') ? 'image' : g.icon)}<span>${esc(g.title)}</span><em>${g.count.toLocaleString()}</em></button>`).join('')}</div></section>` : ''}
@@ -541,6 +552,9 @@ function render() {
     $$('#grid [data-ex]').forEach(b => b.onclick = () => { S.view = 'all'; S.discover = null; searchTags([{ q: b.dataset.ex }]); });
     $('#moreDiscover')?.addEventListener('click', () => { S.ideaAt = (S.ideaAt + 5) % S.ideas.length; render(); });
     $('#discoverAdd')?.addEventListener('click', addFolderModal);
+    $('#discoverDuplicates').onclick = duplicateModal;
+    $('#discoverMoments').onclick = momentSearchModal;
+    $('#discoverReference').onclick = () => referenceModal();
     updateBar(); setTitle(); drawHero(); return;
   }
   const W = Math.floor($('#grid').clientWidth || ($('#scroller').clientWidth - 88));
@@ -612,7 +626,7 @@ function showCtx(e, id) {
     <button data-c="copy">${ic('copy')}Copy ${ids.length > 1 ? `${ids.length} files` : 'file'} to…</button><button data-c="move">${ic('move')}Move ${ids.length > 1 ? `${ids.length} files` : 'file'} to…</button><button data-c="delete" class="danger">${ic('trash')}Move to Trash</button><hr>
     <button data-c="spaces" aria-expanded="false">${ic('layers')}Add to space ${ic('right')}</button>
     <div class="ctx-submenu" hidden><input id="ctxSpaceSearch" placeholder="Find a space…" aria-label="Find a space"><div class="ctx-space-list"></div><button data-c="new">${ic('folderplus')}New space…</button></div>`;
-  const spaceList = q => { $('.ctx-space-list', m).innerHTML = S.projects.filter(p => p.name.toLowerCase().includes(q.toLowerCase())).map(p => `<button data-c="add" data-p="${p.id}"><span class="ring" style="--c:${HUES[p.id % HUES.length]}"></span><span>${esc(p.name)}</span></button>`).join('') || '<div class="ctx-empty">No matching spaces</div>'; };
+  const spaceList = q => { $('.ctx-space-list', m).innerHTML = S.projects.filter(p => !p.smart && p.name.toLowerCase().includes(q.toLowerCase())).map(p => `<button data-c="add" data-p="${p.id}"><span class="ring" style="--c:${HUES[p.id % HUES.length]}"></span><span>${esc(p.name)}</span></button>`).join('') || '<div class="ctx-empty">No matching spaces</div>'; };
   spaceList(''); $('#ctxSpaceSearch', m).oninput = ev => spaceList(ev.target.value);
   m.hidden = false; m.style.left = clamp(e.clientX, 8, innerWidth - 250) + 'px'; m.style.top = clamp(e.clientY, 8, innerHeight - m.offsetHeight - 8) + 'px';
   m.onclick = async ev => {
@@ -767,6 +781,7 @@ async function openViewer(id, opt = {}) {
   if (opt.rec === 'replace') record(true); else if (opt.rec == null || opt.rec === 'push') record();
   $('#viewer').scrollTo({ top: 0, behavior: 'instant' });
   const playback = $('#stage video, #stage audio');
+  if (playback && Number.isFinite(opt.seek)) { const seek = () => { playback.currentTime = Math.max(0, opt.seek); }; if (playback.readyState >= 1) seek(); else playback.addEventListener('loadedmetadata', seek, { once: true }); }
   if (playback?.play) playback.play().catch(() => { /* Leave blocked autoplay paused; controls remain available. */ });
   $('#title').className = 'title two'; $('#title').innerHTML = `<span>${esc(f.name)}</span><span class="sub">${esc(KIND[f.kind]?.label.replace(/s$/, '') || f.kind)} · ${fmtSize(f.size)}</span>`;
   $('#zoom').hidden = f.kind !== 'image' && f.kind !== 'video'; $('#volbox').hidden = f.kind === 'image'; $('#copyFrame').hidden = f.kind !== 'video'; applyZoom(); paintVol();
@@ -832,16 +847,20 @@ $('#feed').onclick = e => gridClick(e, () => F.files, id => { S.ctx = F.files.sl
 
 function drawInspector(f) {
   clearTimeout(window._transcriptTimer);
-  const id = f.id, box = $('#inspector'), others = S.projects.filter(p => !f.projects.some(x => x.id === p.id)), src = S.sources.find(s => s.key === f.src), m = f.meta || {};
+  const id = f.id, box = $('#inspector'), others = S.projects.filter(p => !p.smart && !f.projects.some(x => x.id === p.id)), src = S.sources.find(s => s.key === f.src), m = f.meta || {};
   const label = k => S.colors.find(c => c.key === k)?.label || k;
   box.innerHTML = `
     <div class="ihead"><span class="detail-over">FILE DETAILS</span><div class="detail-grid">
       <span>Type<strong>${esc(KIND[f.kind]?.label.replace(/s$/, '') || f.kind)} · ${esc(f.ext.slice(1).toUpperCase())}</strong></span>
       <span>Size<strong>${fmtSize(f.size)}</strong></span>
       ${f.dimensions ? `<span>Resolution<strong>${f.dimensions[0].toLocaleString()} × ${f.dimensions[1].toLocaleString()}</strong></span>` : ''}
+      ${f.duration ? `<span>Length<strong>${audioTime(f.duration)}</strong></span>` : ''}
+      ${f.fps ? `<span>Frame rate<strong>${Number(f.fps).toFixed(1)} fps</strong></span>` : ''}
+      ${f.codec ? `<span>Codec<strong>${esc(f.codec.toUpperCase())}</strong></span>` : ''}
       <span>Modified<strong>${ago(f.mtime)}</strong></span></div></div>
     <div class="is"><div class="quickbtns"><button class="btn dark" id="qbExplorer" title="Show in ${FM}  (E)">${ic('explorer')}<span>Show in ${FMS}</span></button>
       <button class="btn icon" id="qbOpen" title="Open in a new window">${ic('open')}</button><button class="btn icon" id="qbCopy" title="Copy the full path">${ic('copy')}</button><button class="btn icon" id="qbSim" title="All similar files as search results">${ic('images')}</button></div></div>
+    <div class="is insight-actions"><button class="btn sm" id="referenceSearch">${ic('search')}<span>Search with this file</span></button>${f.kind === 'video' || f.kind === 'audio' ? `<button class="btn sm" id="fileMoments">${ic('film')}<span>Find moments</span></button>` : ''}</div>
     ${f.tags?.length ? `<div class="is"><h5><i data-ic="tag"></i>Tags <span class="cnt">· What's in it?</span></h5>
       <div class="tagline">${f.tags.map(t => `<button data-t="${esc(t)}" title="Search “${esc(t)}”  ·  Shift-click to add it to the current search">${esc(t)}</button>`).join('')}</div></div>` : ''}
     ${f.kind === 'audio' ? `<div class="is transcript-section"><h5>${ic('type')}Transcript</h5><div id="transcriptBody" class="transcript-body"><span class="hint">Loading transcript status…</span></div></div>` : ''}
@@ -854,12 +873,14 @@ function drawInspector(f) {
       <div class="strip">${f.colors.map(c => `<button style="background:${c}" data-near="${c}" title="${c} — find files in this colour"></button>`).join('')}</div>
       ${(f.swatches || []).length ? `<div class="mostly">Mostly ${(f.swatches || []).map(w => `<button data-color="${w.key}" title="Files that are largely ${esc(label(w.key))}">${esc(label(w.key))} <b>${Math.round(w.share * 100)}%</b></button>`).join('<span>·</span>')}</div>` : ''}</div>` : ''}
     <div class="is"><h5><i data-ic="folder"></i>Space</h5><div class="chips">
-      ${f.projects.map(p => `<span class="chip">${glyph(p.id)}${esc(p.name)}<button data-rm="${p.id}" title="Remove from this space">${ic('x')}</button></span>`).join('')}
+      ${f.projects.map(p => `<span class="chip">${glyph(p.id)}${esc(p.name)}${S.projects.find(x => x.id === p.id)?.smart ? '' : `<button data-rm="${p.id}" title="Remove from this space">${ic('x')}</button>`}</span>`).join('')}
       <span class="chip add"><i data-ic="plus"></i><select id="insAdd"><option value="">Add</option>${others.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}<option value="__new">New space…</option></select></span></div></div>
     <div class="is"><h5><i data-ic="pencil"></i>New name <span class="cnt">· applied only when you commit</span></h5>
       <div class="pillin"><input id="insName" value="${esc(f.proposed || f.name.replace(/\.[^.]+$/, ''))}" spellcheck="false"><button id="insSave" title="Save">${ic('send')}</button></div>
       ${f.proposed ? `<div class="pending">Pending: <b>${esc(f.proposed)}</b> · <a id="insClr">remove</a></div>` : ''}</div>`;
   $('#qbExplorer').onclick = () => reveal(id); $('#qbOpen').onclick = () => window.open(`/api/file/${id}`, '_blank'); $('#qbCopy').onclick = () => copyText(f.path); $('#qbSim').onclick = () => go_similar(id);
+  $('#referenceSearch').onclick = () => referenceModal(f);
+  if ($('#fileMoments')) $('#fileMoments').onclick = () => fileMomentsModal(f);
   if (m.prompt) $('#pCopy').onclick = () => copyText(m.prompt, 'Prompt copied');
   $$('[data-t]', box).forEach(b => b.onclick = e => e.shiftKey && S.searching ? addTag({ q: b.dataset.t }) : searchTags([{ q: b.dataset.t }]));
   const sc = $('#srcChip'); if (sc) sc.onclick = () => go({ source: f.src });
@@ -985,7 +1006,7 @@ document.addEventListener('keydown', e => {
 });
 
 /* ================================================================ selection bar */
-function updateBar() { const n = S.selected.size; $('#floatbar').hidden = n === 0; $('#dock').hidden = n > 0 || !S.files.length; $('#selCount').textContent = `${n} selected`; $('#removeFromProj').hidden = S.view !== 'project'; }
+function updateBar() { const n = S.selected.size; $('#floatbar').hidden = n === 0; $('#dock').hidden = n > 0 || !S.files.length; $('#selCount').textContent = `${n} selected`; $('#removeFromProj').hidden = S.view !== 'project' || !!S.projects.find(p => p.id === S.project)?.smart; }
 $('#selNone').onclick = () => { S.selected.clear(); refreshSel(); };
 $('#selAll').onclick = () => { (S.open ? F.files : S.files).forEach(f => S.selected.add(f.id)); refreshSel(); };
 $('#addToProj').onclick = async () => { const pid = $('#projSelect').value; if (!pid) return toast('Create a space first — press + next to Spaces', 'x', true); await api(`/projects/${pid}/add`, { method: 'POST', body: { file_ids: [...S.selected] } }); toast(`Added ${S.selected.size} files to the space`); S.selected.clear(); await refreshAll(); };
@@ -1063,6 +1084,55 @@ async function openHistoryModal() {
     (cs.map(c => `<div class="line"><span style="flex:1">#${c.id} · ${new Date(c.ts * 1000).toLocaleString()} · ${esc(c.summary)}</span>${c.undone ? '<span class="hint">undone</span>' : `<button class="btn" data-undo="${c.id}">Undo</button>`}</div>`).join('') || '<p class="hint">No commits yet.</p>') + `<div class="line"><button class="btn" id="cancel">Close</button></div></div>`);
   $('#cancel').onclick = closeModal;
   $('#modalBox').onclick = async e => { const id = e.target.dataset.undo; if (!id) return; const r = await api(`/commits/${id}/undo`, { method: 'POST' }); toast(r.error || `Restored ${r.restored} files`); closeModal(); refreshAll(); };
+}
+
+/* ================================================================ deeper library tools */
+async function duplicateModal() {
+  modal(`<div class="mh"><h3>Review duplicates</h3><p>Exact copies and possible visual matches. Nothing is removed automatically.</p></div><div class="mb"><p class="hint">Comparing files on this device…</p></div>`, { w: 520 });
+  try {
+    const result = await api('/duplicates'); if ($('#modal').hidden) return;
+    const group = (files, title) => `<div class="duplicate-group"><strong>${title}</strong><div class="duplicate-members">${files.map(f => `<button data-duplicate="${f.id}">${f.kind === 'audio' ? ic('music') : `<img src="/api/thumb/${f.id}" alt="">`}<span title="${esc(f.name)}">${esc(f.name)}</span><small>${fmtSize(f.size)}</small></button>`).join('')}</div></div>`;
+    const exact = result.exact.map(g => group(g, 'Exact copies')).join('');
+    const visual = result.visual.map(g => group(g, 'Possible visual matches')).join('');
+    $('#modalBox').innerHTML = `<div class="mh"><h3>Review duplicates</h3><p>${result.total_exact} exact groups · ${result.total_visual} possible visual groups. Compare before taking any file action.</p></div><div class="mb duplicate-list">${exact || visual ? exact + visual : '<p class="hint">No duplicates found in the current library.</p>'}</div>`;
+    $('#modalBox').querySelectorAll('[data-duplicate]').forEach(button => button.onclick = () => { const id = +button.dataset.duplicate; closeModal(); openViewer(id); });
+    hydrate($('#modalBox'));
+  } catch (error) { $('#modalBox .mb').innerHTML = `<p class="hint">${esc(error.message)}</p>`; }
+}
+function referenceModal(f = null) {
+  modal(`<div class="mh"><h3>Search with a reference</h3><p>${f ? `Find files that feel like ${esc(f.name)}.` : 'Choose an image from your device.'} Add words to guide the search.</p></div><div class="mb">${f ? '' : '<label class="line">Image<input id="referenceFile" type="file" accept="image/*" style="flex:1"></label>'}<label class="line"><span class="k">Describe</span><input id="referenceWords" placeholder="Optional, e.g. warmer and close up" style="flex:1"></label><div class="line"><button class="btn dark" id="referenceGo">${ic('search')}<span>Find matches</span></button></div></div>`, { w: 500 });
+  const submit = async () => { const words = $('#referenceWords').value.trim();
+    if (f) { closeModal(); S.view = 'all'; runSearch({ reference_id: f.id, text: words }, `Like ${f.name}${words ? ` · ${words}` : ''}`); return; }
+    const file = $('#referenceFile').files[0]; if (!file) return toast('Choose an image first', 'x', true);
+    $('#referenceGo').disabled = true; const form = new FormData(); form.append('file', file);
+    try { const r = await api('/search/image?' + new URLSearchParams({ text: words, root: S.root || '', limit: 200 }), { method: 'POST', body: form });
+      closeModal(); S.view = 'all'; S.searching = true; S.search = { body: { image_name: file.name, text: words }, label: `Like ${file.name}${words ? ` · ${words}` : ''}` }; S.files = r.files; S.related = []; S.selected.clear(); $('#more').hidden = true; viewerUI(false); record(); render();
+    } catch (error) { toast(error.message, 'x', true); $('#referenceGo').disabled = false; } };
+  $('#referenceGo').onclick = submit; $('#referenceWords').onkeydown = e => { if (e.key === 'Enter') submit(); }; $('#referenceWords').focus();
+}
+function fileMomentsModal(f) {
+  modal(`<div class="mh"><h3>Moments in ${esc(f.name)}</h3><p>Analyze this file only when you choose to. Each result opens at its time in the clip.</p></div><div class="mb" id="momentsBody"></div>`, { w: 500 });
+  const refresh = async () => {
+    if ($('#modal').hidden || !$('#momentsBody')) return;
+    try {
+      const state = await api(`/moments/${f.id}`); const box = $('#momentsBody');
+      box.innerHTML = state.status === 'running' ? `<p class="hint">Analyzing ${state.done} of ${state.total || '…'} moments on this device…</p>` : state.status === 'ready' ?
+        `<p class="hint">${state.segments.length} searchable moments are ready.</p><div class="moment-segments">${state.segments.map(s => `<button data-moment-seek="${s.start}">${ic('play')} ${audioTime(s.start)}–${audioTime(s.end)}</button>`).join('')}</div><button class="btn" id="rebuildMoments">Analyze again</button>` :
+        `<p class="hint">${state.status === 'error' ? esc(state.error || 'Analysis failed') : 'This file has not been analyzed yet.'}</p><button class="btn dark" id="analyzeMoments">${ic('sparkle')}<span>Analyze moments</span></button>`;
+      box.querySelectorAll('[data-moment-seek]').forEach(button => button.onclick = () => { const seek = +button.dataset.momentSeek; closeModal(); openViewer(f.id, { seek, rec: 'replace' }); });
+      const start = box.querySelector('#analyzeMoments,#rebuildMoments'); if (start) start.onclick = async () => { start.disabled = true; await api(`/moments/${f.id}`, { method: 'POST' }); refresh(); };
+      if (state.status === 'running') setTimeout(refresh, 1200);
+    } catch (error) { if ($('#momentsBody')) $('#momentsBody').textContent = error.message; }
+  }; refresh();
+}
+function momentSearchModal() {
+  modal(`<div class="mh"><h3>Find a moment</h3><p>Search the videos and audio files you have chosen to analyze.</p></div><div class="mb"><div class="line"><input id="momentWords" placeholder="e.g. a motorcycle on a city street" style="flex:1"><button class="btn dark" id="searchMoments">Search</button></div><div id="momentResults"><p class="hint">Open a video or audio file and choose “Find moments” to prepare it.</p></div></div>`, { w: 540 });
+  const submit = async () => { const q = $('#momentWords').value.trim(); if (!q) return; $('#momentResults').innerHTML = '<p class="hint">Searching analyzed clips…</p>';
+    try { const result = await api('/moments/search', { method: 'POST', body: { q } }); if ($('#modal').hidden) return;
+      $('#momentResults').innerHTML = result.moments.length ? result.moments.map(m => `<button class="moment-result" data-file="${m.file_id}" data-seek="${m.start}"><span class="moment-thumb">${m.kind === 'video' ? `<img src="/api/thumb/${m.file_id}" alt="">` : ic('music')}</span><span><strong>${esc(m.name)}</strong><small>${audioTime(m.start)}–${audioTime(m.end)}</small></span><b>↗</b></button>`).join('') : '<p class="hint">No analyzed moments matched. Open a clip and choose “Find moments” to add more.</p>';
+      $$('#momentResults [data-file]').forEach(b => b.onclick = () => { const id = +b.dataset.file, seek = +b.dataset.seek; closeModal(); openViewer(id, { seek }); });
+    } catch (error) { $('#momentResults').textContent = error.message; } };
+  $('#searchMoments').onclick = submit; $('#momentWords').onkeydown = e => { if (e.key === 'Enter') submit(); }; $('#momentWords').focus();
 }
 
 /* ================================================================ modal + boot */

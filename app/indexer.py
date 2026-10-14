@@ -77,7 +77,7 @@ def scan(root_id: int, root: str) -> int:
                     "INSERT INTO files(root_id,path,name,ext,kind,size,mtime,status) VALUES(?,?,?,?,?,?,?,'pending')",
                     (root_id, p, fn, ext, kind, st.st_size, st.st_mtime))
             elif row["mtime"] != st.st_mtime or row["size"] != st.st_size:
-                c.execute("UPDATE files SET mtime=?, size=?, status='pending', vec=NULL WHERE id=?",
+                c.execute("UPDATE files SET mtime=?, size=?, status='pending', vec=NULL, width=NULL, height=NULL, duration=NULL, fps=NULL, codec=NULL WHERE id=?",
                           (st.st_mtime, st.st_size, row["id"]))
     existing = c.execute("SELECT id, path FROM files WHERE root_id=?", (root_id,)).fetchall()
     gone = [r["id"] for r in existing if r["path"] not in seen]
@@ -218,6 +218,9 @@ def _run(root_id: int, root: str):
     finally:
         state["running"] = False
         state["current"] = ""
+        if state["phase"] != "error":
+            from . import media_meta
+            threading.Thread(target=media_meta.backfill, daemon=True).start()
         if _queue and not state["stop"]:
             start(*_queue.pop(0))
 

@@ -33,6 +33,11 @@ your own computer. No account, no cloud, no uploads.
 | 🎵 **Audio playback and transcripts** | Scrub a waveform in the viewer. For recordings with speech, choose **Transcribe audio** in the right panel to make a copyable, timestamped transcript in the detected language. Transcription runs on your device. |
 | 🎞️ **Copy a video frame** | Pause or scrub a video in the viewer, then choose **Copy frame** to paste that still as a PNG into another app. |
 | 🗂️ **Spaces and renames** | Group files into spaces and draft clearer file names. Open **Customize → Preview file changes** to commit staged renames or moves, or **Undo changes** to review history. The Spaces gallery previews each collection as a stack of its files. |
+| ✨ **Live Spaces** | Save a search or filter as a Space that includes matching files added later. Choose **Keep snapshot** if you want a fixed collection instead. |
+| 🎛️ **Media filters** | Narrow the library by date, size, image/video dimensions, aspect ratio, duration, frame rate or codec from the inline sidebar. Media details are read locally in the background. |
+| 🪞 **Review duplicates** | Discover → **Review duplicates** shows byte-identical copies and possible visual matches. This is a review list; it never deletes files on its own. |
+| 🖼️ **Search with a reference** | Open any image, video or audio file and choose **Search with this file**, then optionally describe what you want. Discover also lets you choose an image from outside the library. |
+| ⏱️ **Find moments** | In a video or audio viewer, choose **Find moments → Analyze moments** to create a time-stamped local index for that file. Discover → **Find a moment** searches only clips you have opted in; results open at the matching time. |
 | 🗃️ **Direct file actions** | Right-click a tile to copy or move the original to a folder, or send it to the system Trash. These actions happen immediately after you choose a destination or confirm deletion. Copy and move never overwrite an existing file. Add to space stays in a compact submenu. |
 | 🌗 **Make it yours** | Ten themes including dark Night and Ink, accent colours, four gallery layouts (masonry, rows, contact sheet and storyboard), tile size, and a sidebar menu you can reorder or hide from Customize. |
 

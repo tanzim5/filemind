@@ -31,7 +31,12 @@ CREATE TABLE IF NOT EXISTS files (
     embed_mode TEXT,          -- content | filename
     vec BLOB,                 -- float32, normalized
     thumb TEXT,
-    cluster INTEGER
+    cluster INTEGER,
+    width INTEGER,
+    height INTEGER,
+    duration REAL,
+    fps REAL,
+    codec TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_files_root ON files(root_id);
 CREATE INDEX IF NOT EXISTS idx_files_kind ON files(kind);
@@ -89,4 +94,32 @@ def init():
         conn().execute("ALTER TABLE files ADD COLUMN dom TEXT")      # dominant colour '#rrggbb'
     if "pal" not in cols:
         conn().execute("ALTER TABLE files ADD COLUMN pal TEXT")      # JSON {swatch: share of picture}
+    for name, sql_type in (("width", "INTEGER"), ("height", "INTEGER"), ("duration", "REAL"),
+                           ("fps", "REAL"), ("codec", "TEXT")):
+        if name not in cols:
+            conn().execute(f"ALTER TABLE files ADD COLUMN {name} {sql_type}")
+    conn().executescript("""
+        CREATE TABLE IF NOT EXISTS smart_spaces (
+            project_id INTEGER PRIMARY KEY,
+            spec TEXT NOT NULL,
+            query_vec BLOB
+        );
+        CREATE TABLE IF NOT EXISTS moments (
+            file_id INTEGER NOT NULL,
+            start REAL NOT NULL,
+            end REAL NOT NULL,
+            vec BLOB NOT NULL,
+            size INTEGER NOT NULL,
+            mtime REAL NOT NULL,
+            PRIMARY KEY(file_id, start)
+        );
+        CREATE INDEX IF NOT EXISTS idx_moments_file ON moments(file_id);
+        CREATE TABLE IF NOT EXISTS moment_runs (
+            file_id INTEGER PRIMARY KEY,
+            size INTEGER NOT NULL,
+            mtime REAL NOT NULL,
+            status TEXT NOT NULL,
+            error TEXT
+        );
+    """)
     conn().commit()

@@ -63,6 +63,13 @@ try {
       <label>From date<input name="from" type="date"></label>
       <label>Through date<input name="through" type="date"></label>
       <div class="filter-sizes"><label>Min MB<input name="min" type="number" min="0" step="0.1" placeholder="Any"></label><label>Max MB<input name="max" type="number" min="0" step="0.1" placeholder="Any"></label></div>
+      <details class="media-filter-more"><summary>Media details</summary>
+        <div class="filter-sizes"><label>Min width (px)<input name="min_width" type="number" min="0" placeholder="Any"></label><label>Min height (px)<input name="min_height" type="number" min="0" placeholder="Any"></label></div>
+        <div class="filter-sizes"><label>Min length (s)<input name="min_duration" type="number" min="0" step="0.1" placeholder="Any"></label><label>Max length (s)<input name="max_duration" type="number" min="0" step="0.1" placeholder="Any"></label></div>
+        <label>Minimum frame rate<input name="min_fps" type="number" min="0" step="0.1" placeholder="Any"></label>
+        <label>Shape<select name="aspect"><option value="">Any shape</option><option value="landscape">Landscape</option><option value="portrait">Portrait</option><option value="square">Square</option><option value="wide">Wide</option></select></label>
+        <label>Codec<select name="codec"><option value="">Any codec</option><option value="h264">H.264</option><option value="hevc">HEVC</option><option value="av1">AV1</option><option value="vp9">VP9</option><option value="prores">ProRes</option><option value="aac">AAC</option><option value="mp3">MP3</option><option value="flac">FLAC</option></select></label>
+      </details>
       <button class="filter-reset" id="clearFilters" hidden>Clear filters</button>
     </div>
   </section>

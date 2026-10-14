@@ -17,12 +17,14 @@ from fastapi.staticfiles import StaticFiles
 from . import colors as colors_mod
 from . import names as names_mod
 from . import commit as commit_mod
-from . import db, embedder, extract, indexer
+from . import db, embedder, extract, indexer, media_meta
 from . import suggest as suggest_mod
 from . import tags as tags_mod
 from . import fetch as fetch_mod
 from . import discover as discover_mod
 from . import transcribe as transcribe_mod
+from . import duplicates as duplicates_mod
+from . import moments as moments_mod
 
 app = FastAPI(title="Local File Brain")
 STATIC = Path(__file__).parent / "static"
@@ -44,6 +46,7 @@ def _startup():
     threading.Thread(target=indexer.backfill_colors, daemon=True).start()     # colours for older files
     threading.Thread(target=_warm_ideas, daemon=True).start()
     threading.Thread(target=_warm_dims, daemon=True).start()                  # thumbnail sizes, so the first grid is quick                 # search ideas from the library
+    threading.Thread(target=media_meta.backfill, daemon=True).start()
     # pick up anything new in the folders you added (cheap when nothing changed)
     for r in c.execute("SELECT id, path FROM roots ORDER BY id").fetchall():
         if os.path.isdir(r["path"]):
@@ -73,6 +76,7 @@ def _file_dict(r, score=None):
          "size": r["size"], "mtime": r["mtime"], "has_thumb": bool(r["thumb"]),
          "status": r["status"], "mode": r["embed_mode"], "snippet": r["snippet"],
          "dom": r["dom"] or None, "src": names_mod.source_of(r["name"])}
+    d.update({key: r[key] for key in ("width", "height", "duration", "fps", "codec") if key in r.keys()})
     if score is not None:
         d["score"] = round(float(score), 4)
     return d
@@ -199,14 +203,21 @@ def files(root: int | None = None, kind: str | None = None, project: int | None 
           color: str | None = None, near: str | None = None, source: str | None = None,
           pattern: str | None = None, discover: str | None = None,
           after: float | None = None, before: float | None = None,
-          min_size: int | None = None, max_size: int | None = None, ids_only: bool = False):
+          min_size: int | None = None, max_size: int | None = None,
+          min_width: int | None = None, min_height: int | None = None,
+          min_duration: float | None = None, max_duration: float | None = None,
+          min_fps: float | None = None, aspect: str | None = None,
+          codec: str | None = None, ids_only: bool = False):
     where, args = ["f.status='done'"], []      # only fully read files; never half-processed cards
     if root:
         where.append("f.root_id=?"); args.append(root)
     if kind and kind != "all":
         where.append("f.kind=?"); args.append(kind)
+    smart_members = None
     if project:
-        where.append("f.id IN (SELECT file_id FROM project_files WHERE project_id=?)"); args.append(project)
+        smart_members = _smart_space_ids(project)
+        if smart_members is None:
+            where.append("f.id IN (SELECT file_id FROM project_files WHERE project_id=?)"); args.append(project)
     if unassigned:
         where.append("f.id NOT IN (SELECT file_id FROM project_files)")
     if after is not None:
@@ -217,11 +228,27 @@ def files(root: int | None = None, kind: str | None = None, project: int | None 
         where.append("f.size>=?"); args.append(min_size)
     if max_size is not None:
         where.append("f.size<=?"); args.append(max_size)
+    for column, value, operator in (("width", min_width, ">="), ("height", min_height, ">="),
+                                    ("duration", min_duration, ">="), ("duration", max_duration, "<="),
+                                    ("fps", min_fps, ">=")):
+        if value is not None:
+            where.append(f"f.{column}{operator}?"); args.append(value)
+    if aspect:
+        aspect_sql = {"portrait": "f.width<f.height", "landscape": "f.width>f.height",
+                      "square": "f.width*1.1>=f.height AND f.height*1.1>=f.width",
+                      "wide": "f.width>=f.height*1.7"}
+        if aspect not in aspect_sql:
+            raise HTTPException(400, "Unknown aspect ratio")
+        where.append("(" + aspect_sql[aspect] + ")")
+    if codec:
+        where.append("f.codec=?"); args.append(codec.lower())
     order = {"mtime": "f.mtime DESC", "name": "f.name COLLATE NOCASE", "size": "f.size DESC"}.get(sort, "f.mtime DESC")
     c = db.conn()
     base = c.execute(f"SELECT f.id, f.name, f.dom, f.pal FROM files f WHERE {' AND '.join(where)} ORDER BY {order}", args).fetchall()
     meta = {r["id"]: r for r in base}
     ids = [r["id"] for r in base]
+    if smart_members is not None:
+        ids = [i for i in ids if i in smart_members]
     if discover:
         discovered = discover_mod.file_ids(discover)
         ids = [i for i in ids if i in discovered]
@@ -253,6 +280,29 @@ def files(root: int | None = None, kind: str | None = None, project: int | None 
         d["proposed"] = pn.get(i)
         out.append(d)
     return {"total": total, "files": out}
+
+
+def _smart_space_ids(pid: int) -> set[int] | None:
+    row = db.conn().execute("SELECT spec,query_vec FROM smart_spaces WHERE project_id=?", (pid,)).fetchone()
+    if row is None:
+        return None
+    spec = json.loads(row["spec"])
+    params = {key: spec[key] for key in ("root", "kind", "color", "source", "after", "before",
+                                        "min_size", "max_size", "min_width", "min_height",
+                                        "min_duration", "max_duration", "min_fps", "aspect", "codec") if spec.get(key) is not None}
+    members = files(**params, ids_only=True)["ids"]
+    if row["query_vec"] is None:
+        return set(members)
+    ids, mat = indexer.matrix()
+    if not len(ids):
+        return set()
+    vec = np.frombuffer(row["query_vec"], dtype=np.float32)
+    if mat.shape[1] != len(vec):
+        return set()
+    allowed = set(members)
+    scores = mat @ vec
+    order = np.argsort(-scores)
+    return set([int(ids[pos]) for pos in order if int(ids[pos]) in allowed][:300])
 
 
 @app.get("/api/discover")
@@ -400,7 +450,11 @@ def _search_filter(body):
     color, source, project = body.get("color"), body.get("source"), body.get("project")
     if not (color or source or project):
         return None
-    members = {r[0] for r in db.conn().execute("SELECT file_id FROM project_files WHERE project_id=?", (project,))} if project else None
+    members = None
+    if project:
+        members = _smart_space_ids(int(project))
+        if members is None:
+            members = {r[0] for r in db.conn().execute("SELECT file_id FROM project_files WHERE project_id=?", (project,))}
 
     def keep(r):
         if color and colors_mod.shares(r["pal"]).get(color, 0) < colors_mod.MIN_SHARE:
@@ -418,6 +472,16 @@ def search(body: dict = Body(...)):
     limit = int(body.get("limit", 100))
     offset = int(body.get("offset", 0))
     keep = _search_filter(body)
+    if body.get("reference_id"):
+        fid = int(body["reference_id"])
+        row = db.conn().execute("SELECT path,kind FROM files WHERE id=? AND status='done'", (fid,)).fetchone()
+        if row is None or not Path(row["path"]).is_file():
+            raise HTTPException(404, "Reference file is no longer indexed")
+        try:
+            q = embedder.embed_reference(Path(row["path"]), row["kind"], str(body.get("text") or "")[:300])
+        except (OSError, ValueError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return {"files": _rank(q, root, kinds, limit + offset, exclude_id=fid, keep=keep)[offset:]}
     if body.get("similar_to"):
         fid = int(body["similar_to"])
         r = db.conn().execute("SELECT vec FROM files WHERE id=?", (fid,)).fetchone()
@@ -528,11 +592,12 @@ async def voice(file: UploadFile = File(...)):
 
 
 @app.post("/api/search/image")
-async def search_by_image(file: UploadFile = File(...), root: int | None = None, limit: int = 100):
+async def search_by_image(file: UploadFile = File(...), root: int | None = None, limit: int = 100,
+                          text: str = ""):
     tmp = extract.TMP_DIR / f"query_{int(time.time()*1000)}{Path(file.filename).suffix}"
     tmp.write_bytes(await file.read())
     try:
-        q = embedder.embed_image_file(str(tmp))
+        q = embedder.embed_reference(tmp, "image", text[:300])
     finally:
         tmp.unlink(missing_ok=True)
     return {"files": _rank(q, root, None, limit)}
@@ -545,6 +610,39 @@ def stats():
     return {"total": sum(kinds.values()), "kinds": kinds,
             "unassigned": c.execute("SELECT COUNT(*) FROM files WHERE status='done' AND id NOT IN (SELECT file_id FROM project_files)").fetchone()[0],
             "renames": c.execute("SELECT COUNT(*) FROM proposed_names").fetchone()[0]}
+
+
+@app.get("/api/duplicates")
+def duplicate_candidates():
+    result = duplicates_mod.groups()
+    ids = {fid for category in ("exact", "visual") for group in result[category] for fid in group}
+    c = db.conn()
+    rows = {r["id"]: _file_dict(r) for r in c.execute(
+        f"SELECT * FROM files WHERE id IN ({','.join('?' for _ in ids) or 'NULL'})", tuple(ids))}
+    return {"exact": [[rows[fid] for fid in group if fid in rows] for group in result["exact"]],
+            "visual": [[rows[fid] for fid in group if fid in rows] for group in result["visual"]],
+            "total_exact": result["total_exact"], "total_visual": result["total_visual"]}
+
+
+@app.get("/api/moments/{fid}")
+def moment_status(fid: int):
+    try:
+        return moments_mod.status(fid)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.post("/api/moments/{fid}")
+def analyze_moments(fid: int):
+    try:
+        return moments_mod.start(fid)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.post("/api/moments/search")
+def search_moments(body: dict = Body(...)):
+    return {"moments": moments_mod.search(body.get("q", ""), int(body.get("limit", 40)))}
 
 
 @app.get("/api/info/{fid}")
@@ -568,6 +666,9 @@ def info(fid: int):
             pass
     projs = [{"id": p["id"], "name": p["name"]} for p in c.execute(
         "SELECT p.* FROM projects p JOIN project_files pf ON pf.project_id=p.id WHERE pf.file_id=?", (fid,))]
+    for p in c.execute("SELECT p.id,p.name FROM projects p JOIN smart_spaces s ON s.project_id=p.id"):
+        if fid in _smart_space_ids(p["id"]):
+            projs.append({"id": p["id"], "name": p["name"]})
     pn = c.execute("SELECT new_name FROM proposed_names WHERE file_id=?", (fid,)).fetchone()
     d = _file_dict(r)
     d.update(colors=colors, projects=projs, proposed=pn["new_name"] if pn else None,
@@ -731,10 +832,17 @@ def projects():
     c = db.conn()
     out = []
     for p in c.execute("SELECT * FROM projects ORDER BY name COLLATE NOCASE").fetchall():
-        n = c.execute("SELECT COUNT(*) FROM project_files WHERE project_id=?", (p["id"],)).fetchone()[0]
-        cover = c.execute("SELECT f.id, f.kind FROM project_files pf JOIN files f ON f.id=pf.file_id "
-                          "WHERE pf.project_id=? AND f.thumb IS NOT NULL AND f.thumb!='' ORDER BY f.mtime DESC LIMIT 3", (p["id"],)).fetchall()
-        out.append({"id": p["id"], "name": p["name"], "count": n, "cover": [{"id": r["id"], "kind": r["kind"]} for r in cover]})
+        smart_ids = _smart_space_ids(p["id"])
+        if smart_ids is None:
+            n = c.execute("SELECT COUNT(*) FROM project_files WHERE project_id=?", (p["id"],)).fetchone()[0]
+            cover = c.execute("SELECT f.id, f.kind FROM project_files pf JOIN files f ON f.id=pf.file_id "
+                              "WHERE pf.project_id=? AND f.thumb IS NOT NULL AND f.thumb!='' ORDER BY f.mtime DESC LIMIT 3", (p["id"],)).fetchall()
+        else:
+            n = len(smart_ids)
+            cover = c.execute(f"SELECT id,kind FROM files WHERE id IN ({','.join('?' for _ in smart_ids) or 'NULL'}) "
+                              "AND thumb IS NOT NULL AND thumb!='' ORDER BY mtime DESC LIMIT 3", tuple(smart_ids)).fetchall()
+        out.append({"id": p["id"], "name": p["name"], "count": n, "smart": smart_ids is not None,
+                    "cover": [{"id": r["id"], "kind": r["kind"]} for r in cover]})
     return out
 
 
@@ -743,11 +851,29 @@ def create_project(body: dict = Body(...)):
     name = (body.get("name") or "").strip()
     if not name:
         raise HTTPException(400, "Name required")
+    spec, vec = None, None
+    if body.get("smart"):
+        spec = body["smart"]
+        if not isinstance(spec, dict):
+            raise HTTPException(400, "Invalid live-space search")
+        queries = spec.get("qs") or []
+        if not isinstance(queries, list) or len(queries) > 5 or any(not isinstance(q, str) or len(q) > 300 or q.startswith("voice:") for q in queries):
+            raise HTTPException(400, "Live spaces need up to five text searches")
+        if queries:
+            vectors = [embedder.embed_query(q.strip()) for q in queries if q.strip()]
+            if vectors:
+                vec = embedder._norm(np.mean(vectors, axis=0)).astype(np.float32).tobytes()
+        allowed = {"qs", "root", "kind", "color", "source", "after", "before", "min_size", "max_size",
+                   "min_width", "min_height", "min_duration", "max_duration", "min_fps", "aspect", "codec"}
+        spec = {key: value for key, value in spec.items() if key in allowed and value is not None}
     c = db.conn()
     cur = c.execute("INSERT INTO projects(name, created) VALUES(?,?)", (name, time.time()))
     pid = cur.lastrowid
-    for fid in body.get("file_ids", []):
-        c.execute("INSERT OR IGNORE INTO project_files VALUES(?,?)", (pid, fid))
+    if spec is not None:
+        c.execute("INSERT INTO smart_spaces VALUES(?,?,?)", (pid, json.dumps(spec), vec))
+    else:
+        for fid in body.get("file_ids", []):
+            c.execute("INSERT OR IGNORE INTO project_files VALUES(?,?)", (pid, fid))
     c.commit()
     return {"id": pid}
 
@@ -763,6 +889,7 @@ def rename_project(pid: int, body: dict = Body(...)):
 def delete_project(pid: int):
     c = db.conn()
     c.execute("DELETE FROM project_files WHERE project_id=?", (pid,))
+    c.execute("DELETE FROM smart_spaces WHERE project_id=?", (pid,))
     c.execute("DELETE FROM projects WHERE id=?", (pid,))
     c.commit()
     return {"ok": True}
@@ -771,6 +898,8 @@ def delete_project(pid: int):
 @app.post("/api/projects/{pid}/add")
 def project_add(pid: int, body: dict = Body(...)):
     c = db.conn()
+    if c.execute("SELECT 1 FROM smart_spaces WHERE project_id=?", (pid,)).fetchone():
+        raise HTTPException(400, "A live space updates from its search; add files to a regular space instead")
     for fid in body["file_ids"]:
         c.execute("INSERT OR IGNORE INTO project_files VALUES(?,?)", (pid, fid))
     c.commit()
