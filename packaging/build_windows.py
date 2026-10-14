@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
 
 COLLECT_ALL = ["transformers", "sentence_transformers", "tokenizers", "safetensors", "huggingface_hub",
-               "accelerate", "librosa", "soundfile", "uvicorn", "webview"]
+               "accelerate", "librosa", "soundfile", "uvicorn", "webview", "faster_whisper", "ctranslate2", "av", "onnxruntime"]
 METADATA = ["numpy", "tqdm", "regex", "requests", "packaging", "filelock", "pyyaml", "pillow", "scipy",
             "scikit-learn"]
 EXCLUDE = ["tkinter", "matplotlib", "IPython", "jupyter", "notebook", "pytest",

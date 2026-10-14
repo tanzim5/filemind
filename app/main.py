@@ -21,6 +21,7 @@ from . import suggest as suggest_mod
 from . import tags as tags_mod
 from . import fetch as fetch_mod
 from . import discover as discover_mod
+from . import transcribe as transcribe_mod
 
 app = FastAPI(title="Local File Brain")
 STATIC = Path(__file__).parent / "static"
@@ -596,6 +597,22 @@ def _original_dimensions(path: str, kind: str, mtime: float) -> list[int] | None
     except (OSError, ValueError, IndexError, KeyError, subprocess.SubprocessError):
         pass
     return None
+
+
+@app.get("/api/transcript/{fid}")
+def transcript_status(fid: int):
+    try:
+        return transcribe_mod.status(fid)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.post("/api/transcript/{fid}")
+def transcript_start(fid: int):
+    try:
+        return transcribe_mod.start(fid)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
 
 
 @app.get("/api/wave/{fid}")

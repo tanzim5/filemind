@@ -134,3 +134,5 @@ jobs:
             **Mac:** unzip, drag `FileMind.app` to Applications, and open it. The app isn't notarized by Apple, so the first time macOS will say it can't verify it: open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. (Or run `xattr -dr com.apple.quarantine /Applications/FileMind.app` once.) Your library index and the model live in `~/Library/Application Support/File Mind`.
 
             After the first launch File Mind works fully offline. Made by [Tanzim](https://x.com/tanzim31). Intel Macs and Linux: [run from source](https://github.com/tanzim5/filemind#run-from-source-macos-linux-windows).
+
+            This version adds a waveform audio player and optional local speech transcription. The separate speech model (~148 MB) downloads only when you first choose **Transcribe audio**. Meaning-based audio search continues to work without a transcript. For real file drops into Photoshop or After Effects, use the Windows desktop app; browser tabs cannot provide the native Windows file-drop format.

@@ -253,7 +253,7 @@ async function loadStats() {
   if (!S.moods.length) S.moods = await api('/moods').catch(() => []);
   if (!S.ideas.length && s.total) loadIdeas();
   $('#cAll').textContent = s.total ? s.total.toLocaleString() : ''; $('#cUn').textContent = s.total ? s.unassigned.toLocaleString() : ''; $('#cRen').textContent = s.renames || '';
-  $('#dot').hidden = !(s.renames || S.projects.some(p => p.count)); drawTypes(); drawColors(); drawSources();
+  drawTypes(); drawColors(); drawSources();
 }
 async function loadProjects() {
   S.projects = await api('/projects');
@@ -385,7 +385,7 @@ const wave = id => { let h = ''; for (let i = 0; i < 34; i++) h += `<i style="he
 function tileInner(f) {
   if (f.kind === 'audio') return `<div class="aud" data-aud="${f.id}"><div class="top">${kicon('audio')}<span>${esc(f.ext.slice(1))} · ${fmtSize(f.size)}</span><span class="dur"></span></div>
     <div class="prow"><button class="pbtn" data-play title="Play">${ic('play')}</button><div class="wv" title="Click to jump">${wave(f.id)}</div></div><div class="nm">${esc(f.name)}</div></div>`;
-  return `<img class="im" draggable="false" loading="lazy" decoding="async" src="/api/thumb/${f.id}" alt="" onload="this.classList.add('in')" onerror="this.classList.add('in')">${f.kind === 'video' ? `<div class="play"><span>${ic('play')}</span></div>` : ''}<div class="cap">${esc(f.name)}</div>`;
+  return `<img class="im" draggable="true" loading="lazy" decoding="async" src="/api/thumb/${f.id}" alt="" onload="this.classList.add('in')" onerror="this.classList.add('in')">${f.kind === 'video' ? `<div class="play"><span>${ic('play')}</span></div>` : ''}<div class="cap">${esc(f.name)}</div>`;
 }
 function tile(f, w, h, i, animate) {
   const extra = (f.score !== undefined ? `<span class="score">${(f.score * 100).toFixed(0)}%</span>` : '') + (f.proposed ? `<div class="prop">→ ${esc(f.proposed)}</div>` : '');
@@ -686,14 +686,40 @@ $('#volRange').oninput = e => { S.vol = +e.target.value; S.muted = S.vol === 0; 
 $('#volBtn').onclick = () => { S.muted = !S.muted; if (!S.muted && S.vol === 0) S.vol = 60; saveVol(); applyVol(); };
 const ctxIds = () => (S.ctx && S.ctx.length ? S.ctx : S.files).map(f => f.id);
 
+const audioTime = seconds => fmtDur(Math.max(0, Math.floor(seconds || 0)));
 async function prepareStage(id, kind, ar) {
   let m;
-  if (kind === 'image') { m = document.createElement('img'); m.alt = ''; m.draggable = false; m.decoding = 'async'; m.src = `/api/file/${id}`; await m.decode(); }
+  if (kind === 'image') { m = document.createElement('img'); m.alt = ''; m.draggable = true; m.decoding = 'async'; m.src = `/api/file/${id}`; await m.decode(); }
   else if (kind === 'video' || kind === 'audio') {
-    m = document.createElement(kind); m.controls = true; m.draggable = false; m.loop = kind === 'video'; m.preload = 'auto'; m.src = `/api/file/${id}`; if (kind === 'video') m.poster = `/api/thumb/${id}`;
+    m = document.createElement(kind); m.controls = kind === 'video'; m.draggable = kind === 'video'; m.loop = kind === 'video'; m.preload = 'auto'; m.src = `/api/file/${id}`; if (kind === 'video') m.poster = `/api/thumb/${id}`;
     if (kind === 'video') { const poster = new Image(); poster.src = m.poster; await poster.decode().catch(() => {}); }
     m.volume = S.vol / 100; m.muted = S.muted || S.vol === 0;
     m.onvolumechange = () => { S.vol = Math.round(m.volume * 100); S.muted = m.muted; saveVol(); paintVol(); };
+    if (kind === 'audio') {
+      const card = document.createElement('div'); card.className = 'audio-player'; card.draggable = true;
+      card.innerHTML = `<div class="audio-player-top"><span class="audio-mark">${ic('music')}</span><span>Now playing</span><span class="audio-format">Audio</span></div>
+        <div class="audio-wave" data-audio-scrub tabindex="0" role="slider" aria-label="Seek audio" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+        <div class="audio-player-bottom"><button type="button" class="audio-play" aria-label="Pause">${ic('pause')}</button><span class="audio-now">0:00</span><span class="audio-timeline"></span><span class="audio-end">0:00</span></div>`;
+      card.appendChild(m);
+      m.onloadedmetadata = () => { card.querySelector('.audio-end').textContent = audioTime(m.duration); };
+      const update = () => { const ratio = m.duration ? m.currentTime / m.duration : 0;
+        card.style.setProperty('--audio-progress', `${Math.min(100, ratio * 100)}%`);
+        card.querySelector('.audio-now').textContent = audioTime(m.currentTime);
+        card.querySelector('[data-audio-scrub]').setAttribute('aria-valuenow', String(Math.round(ratio * 100)));
+        card.querySelectorAll('.audio-wave i').forEach((bar, i, all) => bar.classList.toggle('played', i / all.length <= ratio)); };
+      m.ontimeupdate = update; m.onplay = () => { card.querySelector('.audio-play').innerHTML = ic('pause'); card.querySelector('.audio-play').setAttribute('aria-label', 'Pause'); };
+      m.onpause = () => { card.querySelector('.audio-play').innerHTML = ic('play'); card.querySelector('.audio-play').setAttribute('aria-label', 'Play'); };
+      card.querySelector('.audio-play').onclick = () => m.paused ? m.play() : m.pause();
+      const seek = ratio => { if (m.duration) m.currentTime = Math.max(0, Math.min(m.duration, ratio * m.duration)); };
+      const waveEl = card.querySelector('[data-audio-scrub]');
+      waveEl.onclick = e => seek((e.clientX - waveEl.getBoundingClientRect().left) / waveEl.clientWidth);
+      waveEl.onkeydown = e => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); seek((m.currentTime + (e.key === 'ArrowRight' ? 5 : -5)) / m.duration); } };
+      api('/wave/' + id).then(w => {
+        waveEl.innerHTML = w.peaks.map(p => `<i style="height:${Math.max(8, p * 100)}%"></i>`).join('');
+        card.querySelector('.audio-end').textContent = audioTime(w.duration || m.duration); update();
+      }).catch(() => { waveEl.innerHTML = wave(id); });
+      return card;
+    }
   }
   const ratio = kind === 'image' && m.naturalWidth && m.naturalHeight ? m.naturalWidth / m.naturalHeight : ar;
   if (m && ratio && kind !== 'audio') m.style.cssText = `aspect-ratio:${ratio};width:min(100%,calc((100vh - 230px) * ${ratio.toFixed(4)}))`;
@@ -715,7 +741,8 @@ async function openViewer(id, opt = {}) {
   viewerUI(true); S.selected.clear(); $('#floatbar').hidden = true;
   if (opt.rec === 'replace') record(true); else if (opt.rec == null || opt.rec === 'push') record();
   $('#viewer').scrollTo({ top: 0, behavior: 'instant' });
-  if (media?.play) media.play().catch(() => { /* Leave blocked autoplay paused; controls remain available. */ });
+  const playback = $('#stage video, #stage audio');
+  if (playback?.play) playback.play().catch(() => { /* Leave blocked autoplay paused; controls remain available. */ });
   $('#title').className = 'title two'; $('#title').innerHTML = `<span>${esc(f.name)}</span><span class="sub">${esc(KIND[f.kind]?.label.replace(/s$/, '') || f.kind)} · ${fmtSize(f.size)}</span>`;
   $('#zoom').hidden = f.kind !== 'image' && f.kind !== 'video'; $('#volbox').hidden = f.kind === 'image'; $('#copyFrame').hidden = f.kind !== 'video'; applyZoom(); paintVol();
   const ids = ctxIds(), i = ids.indexOf(id); $('#prevItem').hidden = i <= 0; $('#nextItem').hidden = i < 0 || i >= ids.length - 1;
@@ -779,6 +806,7 @@ let rzf, lastFeedWidth = 0; new ResizeObserver(() => { const width = Math.floor(
 $('#feed').onclick = e => gridClick(e, () => F.files, id => { S.ctx = F.files.slice(); openViewer(id, { smooth: true }); });
 
 function drawInspector(f) {
+  clearTimeout(window._transcriptTimer);
   const id = f.id, box = $('#inspector'), others = S.projects.filter(p => !f.projects.some(x => x.id === p.id)), src = S.sources.find(s => s.key === f.src), m = f.meta || {};
   const label = k => S.colors.find(c => c.key === k)?.label || k;
   box.innerHTML = `
@@ -791,6 +819,7 @@ function drawInspector(f) {
       <button class="btn icon" id="qbOpen" title="Open in a new window">${ic('open')}</button><button class="btn icon" id="qbCopy" title="Copy the full path">${ic('copy')}</button><button class="btn icon" id="qbSim" title="All similar files as search results">${ic('images')}</button></div></div>
     ${f.tags?.length ? `<div class="is"><h5><i data-ic="tag"></i>Tags <span class="cnt">· What's in it?</span></h5>
       <div class="tagline">${f.tags.map(t => `<button data-t="${esc(t)}" title="Search “${esc(t)}”  ·  Shift-click to add it to the current search">${esc(t)}</button>`).join('')}</div></div>` : ''}
+    ${f.kind === 'audio' ? `<div class="is transcript-section"><h5>${ic('type')}Transcript</h5><div id="transcriptBody" class="transcript-body"><span class="hint">Loading transcript status…</span></div></div>` : ''}
     <div class="is"><dl class="kv">
       ${src ? `<dt>Source</dt><dd><button class="chip" id="srcChip" title="Everything from ${esc(src.label)}"><span class="dot" style="background:${src.color}"></span>${esc(src.label)}</button></dd>` : ''}
       ${m.author ? `<dt>By</dt><dd>${esc(m.author)}</dd>` : ''}${m.date ? `<dt>Made</dt><dd>${esc(m.date)}</dd>` : ''}
@@ -821,6 +850,26 @@ function drawInspector(f) {
   $('#insSave').onclick = save; $('#insName').onkeydown = e => { if (e.key === 'Enter') save(); };
   const clr = $('#insClr'); if (clr) clr.onclick = async () => { await api('/names/clear', { method: 'POST', body: { file_ids: [id] } }); await loadStats(); refreshInspector(id); };
   hydrate(box);
+  if (f.kind === 'audio') refreshTranscript(id);
+}
+async function refreshTranscript(id) {
+  if (S.open !== id || !$('#transcriptBody')) return;
+  let state;
+  try { state = await api(`/transcript/${id}`); } catch (error) { state = { status: 'error', error: error.message }; }
+  const body = $('#transcriptBody'); if (S.open !== id || !body) return;
+  if (state.status === 'done') {
+    body.innerHTML = `<div class="transcript-tools"><span>${esc((state.language || 'Unknown').toUpperCase())} · ${state.segments.length} segments</span><button class="btn sm" id="copyTranscript">${ic('copy')}<span>Copy text</span></button></div>
+      <div class="transcript-lines">${state.segments.length ? state.segments.map(s => `<button data-seek="${s.start}"><time>${audioTime(s.start)}</time><span>${esc(s.text)}</span></button>`).join('') : '<p class="hint">No clear speech was detected in this audio.</p>'}</div>`;
+    $('#copyTranscript').onclick = () => copyText(state.text, 'Transcript copied');
+    body.querySelectorAll('[data-seek]').forEach(button => button.onclick = () => { const audio = $('#stage audio'); if (audio) { audio.currentTime = +button.dataset.seek; audio.play().catch(() => {}); } });
+  } else if (state.status === 'downloading' || state.status === 'transcribing') {
+    body.innerHTML = `<div class="transcript-progress">${state.status === 'downloading' ? `Downloading speech model${state.progress ? ` · ${Math.round(state.progress * 100)}%` : '…'}` : 'Transcribing on this device…'}</div><p class="hint">You can keep browsing; this runs locally.</p>`;
+    window._transcriptTimer = setTimeout(() => refreshTranscript(id), 1500);
+  } else {
+    body.innerHTML = `<p class="hint">${state.status === 'error' ? esc(state.error) : 'Turn speech in this audio into copyable text. The multilingual model downloads once, then runs locally.'}</p>
+      <button class="btn dark sm" id="startTranscript">${ic('type')}<span>${state.status === 'error' ? 'Try again' : 'Transcribe audio'}</span></button>`;
+    $('#startTranscript').onclick = async () => { body.innerHTML = '<span class="hint">Starting…</span>'; try { await api(`/transcript/${id}`, { method: 'POST' }); refreshTranscript(id); } catch (error) { body.textContent = error.message; } };
+  }
 }
 async function refreshInspector(id) { const f = await api(`/info/${id}`); if (S.open === id) { S.cur = f; drawInspector(f); } }
 
@@ -857,6 +906,8 @@ function settingsModal() {
     <h6>Show</h6>${tog('sNames', 'File names', 'under every tile, not just on hover')}${tog('sHover', 'Video preview on hover', 'plays muted after a moment')}${tog('sIdeas', 'Search ideas', 'suggestions picked from your library')}
     <h6>Sidebar menu</h6><p class="hint">Choose what appears and move items up or down. Hidden items stay available here.</p><div id="sNavItems" class="sidebar-settings"></div>
     <h6>Sidebar sections</h6><div id="sSideItems" class="sidebar-settings"></div>
+    <h6>File changes</h6><p class="hint">Apply drafted names and space moves only when you choose to.</p>
+    <div class="settings-actions"><button class="btn" id="sReview">Preview file changes</button><button class="btn ghost" id="sHistory">Undo changes</button></div>
     <h6>Default volume <output id="oVol"></output></h6><input type="range" id="sVol" min="0" max="100" step="5">
     <div class="line"><button class="btn ghost" id="sReset">${ic('redo')}<span>Reset everything</span></button></div></div>`, { kind: 'tune', w: 410 });
   const paintSidebarSettings = () => {
@@ -889,6 +940,8 @@ function settingsModal() {
   $('#sIdeas').onclick = () => { P.ideas = !P.ideas; commit(false); if (S.view === 'discover') render(); else drawHero(); };
   $('#sVol').oninput = e => { S.vol = +e.target.value; S.muted = S.vol === 0; saveVol(); applyVol(); sync(); };
   $('#sReset').onclick = () => { Object.assign(P, structuredClone(PDEF)); S.spAll = false; commit(); applySidebar(); drawProjects(); drawSources(); loadRoots(); paintSidebarSettings(); drawHero(); };
+  $('#sReview').onclick = openCommitModal;
+  $('#sHistory').onclick = openHistoryModal;
   sync();
 }
 $('#settingsBtn').onclick = settingsModal;
@@ -958,7 +1011,7 @@ async function nameGroups() {
 $('#autoGroup').onclick = autoGroup; $('#nameGroups').onclick = nameGroups;
 
 /* ================================================================ commit + history */
-$('#commitBtn').onclick = () => {
+function openCommitModal() {
   const defRoot = S.roots.find(r => r.id === S.root)?.path || S.roots[0]?.path || '';
   modal(`<div class="mh"><h3>Make it real</h3><p>The only step that changes files on your PC. You'll see every move first, and you can undo it afterwards.</p></div>
     <div class="mb"><div class="line"><span class="k">Destination</span><input id="dest" style="flex:1" value="${esc(defRoot ? defRoot + '\\Spaces' : '')}"></div>
@@ -978,14 +1031,14 @@ $('#commitBtn').onclick = () => {
       $('#planOut').innerHTML = `<p class="good">Done — ${r.done} applied${r.failed ? `, <span class="warn">${r.failed} failed</span>` : ''}. Saved as #${r.commit_id}.</p>` + (r.errors.length ? `<div class="plan">${r.errors.map(esc).join('\n')}</div>` : ''); refreshAll();
     };
   }; hydrate($('#modalBox'));
-};
-$('#historyBtn').onclick = async () => {
+}
+async function openHistoryModal() {
   const cs = await api('/commits');
   modal(`<div class="mh"><h3>History</h3><p>Every real change is journaled. Undo puts files back exactly where they were.</p></div><div class="mb">` +
     (cs.map(c => `<div class="line"><span style="flex:1">#${c.id} · ${new Date(c.ts * 1000).toLocaleString()} · ${esc(c.summary)}</span>${c.undone ? '<span class="hint">undone</span>' : `<button class="btn" data-undo="${c.id}">Undo</button>`}</div>`).join('') || '<p class="hint">No commits yet.</p>') + `<div class="line"><button class="btn" id="cancel">Close</button></div></div>`);
   $('#cancel').onclick = closeModal;
   $('#modalBox').onclick = async e => { const id = e.target.dataset.undo; if (!id) return; const r = await api(`/commits/${id}/undo`, { method: 'POST' }); toast(r.error || `Restored ${r.restored} files`); closeModal(); refreshAll(); };
-};
+}
 
 /* ================================================================ modal + boot */
 /* panels open beside the library (pushing it aside) instead of covering the window */

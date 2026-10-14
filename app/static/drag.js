@@ -16,9 +16,10 @@ function dragSource(target, clientY) {
   const tile = target.closest('.tile[data-id]');
   if (tile) return { id: +tile.dataset.id, tile: true };
   // Leave the video's bottom control strip alone; its picture and the handle can be dragged.
-  const media = target.closest('#stage img, #stage video');
+  const media = target.closest('#stage img, #stage video, #stage .audio-player, #stage');
   if (media) {
     if (media.tagName === 'VIDEO' && (clientY == null || clientY >= media.getBoundingClientRect().bottom - 64)) return null;
+    if (target.closest('.audio-player button,.audio-player [data-audio-scrub]')) return null;
     return { id: +$('#stage').dataset.id, tile: false };
   }
   return null;
