@@ -15,11 +15,14 @@ class FileDragTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.original = Path(self.tmp.name) / "original ü sample.png"
         self.original.write_bytes(b"original bytes")
+        self.video = Path(self.tmp.name) / "actual clip.mp4"
+        self.video.write_bytes(b"video bytes")
         self.conn = sqlite3.connect(":memory:")
         self.conn.row_factory = sqlite3.Row
         self.addCleanup(self.conn.close)
         self.conn.execute("CREATE TABLE files (id INTEGER, path TEXT)")
         self.conn.execute("INSERT INTO files VALUES (1, ?)", (str(self.original),))
+        self.conn.execute("INSERT INTO files VALUES (2, ?)", (str(self.video),))
         self.patch = patch.object(desktop_drag.db, "conn", return_value=self.conn)
         self.patch.start()
         self.addCleanup(self.patch.stop)
@@ -72,10 +75,11 @@ class FileDragTests(unittest.TestCase):
                                      DataObject=forms.DataObject, DragDropEffects=forms.DragDropEffects,
                                      MouseButtons=forms.MouseButtons)
         with patch.dict(sys.modules, {"System.Windows.Forms": fake_forms}):
-            result = desktop_drag.drag_files(window, [1])
+            result = desktop_drag.drag_files(window, [1, 2])
         self.assertEqual(result["effect"], "Copy")
-        self.assertEqual(calls, [([str(self.original.resolve())], forms.DragDropEffects.Copy)])
+        self.assertEqual(calls, [([str(self.original.resolve()), str(self.video.resolve())], forms.DragDropEffects.Copy)])
         self.assertEqual(self.original.read_bytes(), b"original bytes")
+        self.assertEqual(self.video.read_bytes(), b"video bytes")
         fake_forms.Control.MouseButtons = getattr(forms.MouseButtons, "None")
         with patch.dict(sys.modules, {"System.Windows.Forms": fake_forms}):
             self.assertEqual(desktop_drag.drag_files(window, [1])["effect"], "cancelled")

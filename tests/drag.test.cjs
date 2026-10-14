@@ -19,7 +19,7 @@ async function setup(native = true) {
       drag_capabilities: async () => ({ native_files: native }),
       drag_files: ids => { calls.push(Array.from(ids)); return new Promise(r => finish = r); }
     } } },
-    S: { selected: new Set(), files: [{ id: 7, name: 'original.png' }], cur: { id: 9, name: 'movie.mp4' } }, F: { files: [] },
+    S: { selected: new Set(), files: [{ id: 7, name: 'original.png', kind: 'image', ext: '.png' }], cur: { id: 9, name: 'movie.mp4', kind: 'video', ext: '.mp4' } }, F: { files: [] },
     $: s => s === '#stage' ? { dataset: { id: '9' } } : button,
     stopHover() {}, toast: m => toast.push(m),
   });
@@ -57,14 +57,27 @@ test('video controls remain interactive and the video picture is draggable', asy
   t.fire('pointerdown', t.event(video, { clientY: 150 }));
   t.fire('pointermove', t.event(video, { clientX: 30, clientY: 150 })); assert.deepEqual(t.calls, [[9]]); t.finish();
 });
+test('native video drag cancels Chromium media-frame dragging', async () => {
+  const t = await setup(), video = new t.Element({}, 'VIDEO');
+  video.matches['#stage img, #stage video'] = video;
+  const drag = t.fire('dragstart', t.event(video, { clientY: 150 }));
+  assert.equal(drag.prevented, true);
+  assert.equal(t.calls.length, 0);
+});
 test('released button cancels a pending gesture', async () => {
   const t = await setup(); t.fire('pointerdown', t.event(t.tile));
   t.fire('pointermove', t.event(t.tile, { buttons: 0, clientX: 30 })); assert.equal(t.calls.length, 0);
 });
 test('browser fallback exports original endpoint rather than thumbnail', async () => {
   const t = await setup(false), payload = {};
-  const dataTransfer = { setData: (k,v) => payload[k] = v };
+  const dataTransfer = { clearData: () => { for (const key of Object.keys(payload)) delete payload[key]; }, setData: (k,v) => payload[k] = v };
   t.fire('dragstart', t.event(t.tile, { dataTransfer }));
-  assert.equal(payload.DownloadURL, 'application/octet-stream:original.png:http://localhost/api/file/7');
+  assert.equal(payload.DownloadURL, 'image/png:original.png:http://localhost/api/file/7');
   assert.equal(dataTransfer.effectAllowed, 'copy'); assert.equal(t.calls.length, 0);
+});
+test('browser video fallback carries an MP4 URL instead of a still image', async () => {
+  const t = await setup(false), payload = {};
+  const h = new t.Element({ '#dragFile': {} });
+  t.fire('dragstart', t.event(h, { dataTransfer: { clearData() {}, setData: (k,v) => payload[k] = v } }));
+  assert.equal(payload.DownloadURL, 'video/mp4:movie.mp4:http://localhost/api/file/9');
 });

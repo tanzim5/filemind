@@ -94,16 +94,17 @@ async function applyState(s) {
   try {
     if (s.open) { S.ctx = s.ctx; await openViewer(s.open, { rec: 'none', scroll: s.scroll }); }
     else {
-      const home = grabStage(); if (home) S.animNext = false;
-      viewerUI(false);
-      if (s.search?.body) await runSearch(s.search.body, s.search.label, { rec: 'none', tags: s.search.tags }); else { S.searching = false; S.search = null; await loadFiles(true); }
+      // Build the destination behind the viewer. Showing the old grid while its
+      // request is in flight causes a visible blank/jump on Back.
+      S.animNext = false;
+      if (s.search?.body) await runSearch(s.search.body, s.search.label, { rec: 'none', tags: s.search.tags, deferViewer: true }); else { S.searching = false; S.search = null; await loadFiles(true); }
       $('#scroller').scrollTop = s.scroll || 0;
-      if (home) morphOut(home);
+      viewerUI(false); setTitle(); updateBar();
     }
   } finally { H.busy = false; navState(); }
 }
 async function histMove(d) { const n = H.i + d; if (n < 0 || n >= H.stack.length) return; const cur = H.stack[H.i]; if (cur) cur.scroll = !$('#browse').hidden ? $('#scroller').scrollTop : $('#viewer').scrollTop; H.i = n; await applyState(H.stack[n]); }
-const goBack = () => { if (H.i > 0) histMove(-1); else if (S.open) { const home = grabStage(); viewerUI(false); setTitle(); updateBar(); if (home) morphOut(home); } };
+const goBack = () => { if (H.i > 0) histMove(-1); else if (S.open) { viewerUI(false); setTitle(); updateBar(); } };
 $('#navBack').onclick = () => histMove(-1); $('#navFwd').onclick = () => histMove(1);
 document.addEventListener('mouseup', e => { if (e.button === 3) { e.preventDefault(); histMove(-1); } if (e.button === 4) { e.preventDefault(); histMove(1); } });
 
@@ -384,7 +385,7 @@ const wave = id => { let h = ''; for (let i = 0; i < 34; i++) h += `<i style="he
 function tileInner(f) {
   if (f.kind === 'audio') return `<div class="aud" data-aud="${f.id}"><div class="top">${kicon('audio')}<span>${esc(f.ext.slice(1))} · ${fmtSize(f.size)}</span><span class="dur"></span></div>
     <div class="prow"><button class="pbtn" data-play title="Play">${ic('play')}</button><div class="wv" title="Click to jump">${wave(f.id)}</div></div><div class="nm">${esc(f.name)}</div></div>`;
-  return `<img class="im" loading="lazy" decoding="async" src="/api/thumb/${f.id}" alt="" onload="this.classList.add('in')" onerror="this.classList.add('in')">${f.kind === 'video' ? `<div class="play"><span>${ic('play')}</span></div>` : ''}<div class="cap">${esc(f.name)}</div>`;
+  return `<img class="im" draggable="false" loading="lazy" decoding="async" src="/api/thumb/${f.id}" alt="" onload="this.classList.add('in')" onerror="this.classList.add('in')">${f.kind === 'video' ? `<div class="play"><span>${ic('play')}</span></div>` : ''}<div class="cap">${esc(f.name)}</div>`;
 }
 function tile(f, w, h, i, animate) {
   const extra = (f.score !== undefined ? `<span class="score">${(f.score * 100).toFixed(0)}%</span>` : '') + (f.proposed ? `<div class="prop">→ ${esc(f.proposed)}</div>` : '');
@@ -652,7 +653,7 @@ async function runSearch(body, label, opt = {}) {
   let tags = opt.tags || null;
   if (body.q && !body.qs) { tags = [{ q: body.q, label: opt.label || null, mood: opt.mood || null }]; body = { qs: [body.q] }; }
   if (tags) label = tags.map(t => t.label || `“${t.q}”`).join(' + ');
-  S.searching = true; S.search = { body, label, tags }; viewerUI(false); S.animNext = true; S.selected.clear();
+  S.searching = true; S.search = { body, label, tags }; if (!opt.deferViewer) viewerUI(false); S.animNext = !opt.deferViewer; S.selected.clear();
   if (opt.rec !== 'none') record();
   try {
     const mine = S.search;
@@ -687,9 +688,9 @@ const ctxIds = () => (S.ctx && S.ctx.length ? S.ctx : S.files).map(f => f.id);
 
 async function prepareStage(id, kind, ar) {
   let m;
-  if (kind === 'image') { m = document.createElement('img'); m.alt = ''; m.decoding = 'async'; m.src = `/api/file/${id}`; await m.decode(); }
+  if (kind === 'image') { m = document.createElement('img'); m.alt = ''; m.draggable = false; m.decoding = 'async'; m.src = `/api/file/${id}`; await m.decode(); }
   else if (kind === 'video' || kind === 'audio') {
-    m = document.createElement(kind); m.controls = true; m.loop = kind === 'video'; m.preload = 'auto'; m.src = `/api/file/${id}`; if (kind === 'video') m.poster = `/api/thumb/${id}`;
+    m = document.createElement(kind); m.controls = true; m.draggable = false; m.loop = kind === 'video'; m.preload = 'auto'; m.src = `/api/file/${id}`; if (kind === 'video') m.poster = `/api/thumb/${id}`;
     if (kind === 'video') { const poster = new Image(); poster.src = m.poster; await poster.decode().catch(() => {}); }
     m.volume = S.vol / 100; m.muted = S.muted || S.vol === 0;
     m.onvolumechange = () => { S.vol = Math.round(m.volume * 100); S.muted = m.muted; saveVol(); paintVol(); };

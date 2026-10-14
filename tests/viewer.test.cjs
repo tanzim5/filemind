@@ -51,3 +51,23 @@ test('leaving the viewer cancels an in-flight preview', async () => {
   pending.get(2).resolve({ id: 2, removeAttribute() {} }); await a;
   assert.equal(stage.media.id, 1);
 });
+test('Back keeps the viewer visible until its gallery is ready', async () => {
+  const history = source.slice(source.indexOf('async function applyState('), source.indexOf('async function histMove('));
+  const ready = deferred(), browse = { hidden: true }, viewer = { hidden: false }, scroller = { scrollTop: 0 };
+  const els = { '#browse': browse, '#viewer': viewer, '#scroller': scroller, '#q': { value: '' } };
+  const c = vm.createContext({
+    H: { busy: false }, S: { selected: new Set(), animNext: true }, $: s => els[s],
+    stopAudio() {}, setNav() {}, drawFilterStatus() {}, navState() {}, setTitle() {}, updateBar() {},
+    viewerUI(on) { browse.hidden = on; viewer.hidden = !on; },
+    loadFiles: () => ready.promise, runSearch() {}, openViewer() {},
+  });
+  vm.runInContext(history, c);
+  const back = c.applyState({ view: 'all', kind: 'all', filters: {}, sort: 'mtime', scroll: 120 });
+  await new Promise(setImmediate);
+  assert.equal(viewer.hidden, false);
+  assert.equal(browse.hidden, true);
+  ready.resolve(); await back;
+  assert.equal(viewer.hidden, true);
+  assert.equal(browse.hidden, false);
+  assert.equal(scroller.scrollTop, 120);
+});
