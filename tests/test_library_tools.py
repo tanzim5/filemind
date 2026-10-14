@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import numpy as np
 from PIL import Image
+from fastapi.testclient import TestClient
 
 from app import db, duplicates, main
 
@@ -61,6 +62,32 @@ class LibraryToolTests(unittest.TestCase):
         with self.assertRaises(Exception):
             main.create_project({"name": "Bad", "smart": {"qs": [42]}})
         self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0], 0)
+
+    def test_regroup_can_restore_previous_spaces(self):
+        self.conn.execute("INSERT INTO projects(id,name,created) VALUES(9,'Original Space',1)")
+        self.conn.execute("INSERT INTO project_files VALUES(9,1)")
+        self.conn.commit()
+        for fid in (4, 5):
+            path = self.root / f"{fid}.png"
+            Image.new("RGB", (20, 20), "green").save(path)
+            self.conn.execute("INSERT INTO files(id,root_id,path,name,ext,kind,size,mtime,status,embed_mode,thumb) "
+                              "VALUES(?,?,?,?,?,?,?,?,?,?,?)", (fid, 1, str(path), path.name, ".png", "image", 50, fid, "done", "content", path.name))
+        self.conn.commit()
+        result = main.regroup_projects({"replace_ids": [9], "groups": [{"name": "Useful Group", "file_ids": [1, 2, 3, 4, 5]}]})
+        self.assertEqual(len(result["created"]), 1)
+        self.assertEqual(main.latest_regroup()["count"], 1)
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0], 1)
+        restored = main.restore_regroup(result["backup_id"])
+        self.assertEqual(restored["restored"], 1)
+        self.assertIsNone(main.latest_regroup())
+        self.assertEqual(self.conn.execute("SELECT name FROM projects WHERE id=9").fetchone()[0], "Original Space")
+        self.assertEqual(self.conn.execute("SELECT file_id FROM project_files WHERE project_id=9").fetchone()[0], 1)
+
+    def test_moment_search_route_is_not_treated_as_a_file_id(self):
+        with patch.object(main.moments_mod, "search", return_value=[]):
+            response = TestClient(main.app).post("/api/moments/search", json={"q": "street at night"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"moments": []})
 
 
 if __name__ == "__main__":

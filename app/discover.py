@@ -82,7 +82,7 @@ def request_groups():
     """Return immediately while a larger library is being grouped in the background."""
     global _building
     r = db.conn().execute("SELECT COUNT(*) AS n, SUM(id) AS ids, SUM(CAST(mtime AS INTEGER)) AS modified FROM files WHERE status='done'").fetchone()
-    key = (r["n"], r["ids"] or 0, r["modified"] or 0)
+    key = (r["n"], r["ids"] or 0, r["modified"] or 0, embedder.ready())
     with _build_lock:
         if _cache["key"] == key:
             return {"groups": _cache["groups"], "building": False}
@@ -105,7 +105,7 @@ def groups():
     rows = db.conn().execute(
         "SELECT id,path,name,kind,mtime,thumb,vec FROM files WHERE status='done' ORDER BY mtime DESC"
     ).fetchall()
-    key = (len(rows), sum(int(r["id"]) for r in rows), sum(int(r["mtime"] or 0) for r in rows))
+    key = (len(rows), sum(int(r["id"]) for r in rows), sum(int(r["mtime"] or 0) for r in rows), embedder.ready())
     if _cache["key"] == key:
         return _cache["groups"]
 
