@@ -12,7 +12,7 @@
 
 ---
 
-File Mind reads a folder on your PC — Downloads, Pictures, a project drive — and lets you find anything in it
+File Mind reads a folder on your device — Downloads, Pictures, a project drive — and lets you find anything in it
 by describing it. It understands **what is in** your photos, videos and sounds using Google's
 [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2), a multimodal AI model that runs entirely on
 your own computer. No account, no cloud, no uploads.
@@ -28,8 +28,11 @@ your own computer. No account, no cloud, no uploads.
 | 🖼️ **Photos, videos and sounds** | Looks at images and video frames, listens to audio. Also filter by colour, by type, or by the AI tool a file came from. |
 | 🏷️ **Tags and colour palettes** | Every file gets automatic tags and its main colours. Click any of them to find more like it. |
 | ✨ **More like this** | Open a file and keep following similar ones, endlessly. |
+| 🧭 **Discover** | Browse compact visual themes such as people in frame, illustrations, architecture and products, or start from a suggested question. Groups also show file types, sources and camera metadata. Visual themes use existing embeddings; they do not identify individual people. |
+| 🖱️ **Drag originals into other apps (Windows desktop)** | Drag a tile, the image/video in the viewer, or the viewer's **Drag file** handle into an app that accepts that file type. Select several tiles to drag them together. Originals stay in place. |
+| 🎞️ **Copy a video frame** | Pause or scrub a video in the viewer, then choose **Copy frame** to paste that still as a PNG into another app. |
 | 🗂️ **Spaces and renames** | Group files into spaces and draft clearer file names. Nothing on disk changes until you review and commit — and every commit can be undone. |
-| 🌗 **Make it yours** | Ten themes including dark Night and Ink, accent colours, masonry or rows, tile size. |
+| 🌗 **Make it yours** | Ten themes including dark Night and Ink, accent colours, four gallery layouts (masonry, rows, contact sheet and storyboard), tile size, and a sidebar menu you can reorder or hide from Customize. |
 
 <p align="center"><img src="docs/dark.png" alt="File Mind in the Night theme" width="49%"> <img src="docs/themes.png" alt="Customize panel with themes and accent colours" width="49%"></p>
 
@@ -130,6 +133,15 @@ Then File Mind opens and downloads the AI model once. Later runs start in second
 `run.bat` again. Add `--browser` to use your web browser instead of the app window. On Linux it always
 opens in your browser.
 
+**Dragging files out.** For original-file drops into Photoshop, After Effects, Explorer, and other desktop
+apps, launch the Windows desktop window with `run.bat` (without `--browser`). The destination decides
+which formats and drop locations it accepts. Drag the preview picture itself, or use **Drag file** for
+any media type; video playback controls still work. Browser mode offers a download drag where the
+browser supports it, but cannot provide the same native file drop. macOS/Linux native export is not yet supported.
+The **Copy frame** action works in the Windows desktop viewer; other environments may offer a browser download instead.
+
+New installations use the **Ink** theme. Saved theme choices are kept, and can be changed in Customize.
+
 <details>
 <summary><b>Manual setup</b> (if you prefer to do each step yourself)</summary>
 
@@ -155,7 +167,10 @@ MLX, set `FILEMIND_BACKEND=torch` (it then downloads the original 1.5 GB model).
 "Show in folder" opens your file manager.
 
 To build the apps yourself, see `packaging/build_windows.py` and `packaging/build_macos.py`. GitHub Actions
-builds the Windows zips and the Mac app automatically for every `v*` tag, and tests each one end to end.
+builds three separate downloads for every `v*` tag: standard Windows, NVIDIA Windows, and Apple Silicon Mac.
+You can also run the **Release builds** workflow manually and download the three artifacts from that run.
+The workflow checks the contents of every archive and smoke-tests the standard Windows and Mac apps.
+NVIDIA support is packaged and checked, but its first-run CUDA download and GPU use require testing on an NVIDIA PC.
 
 ## Licence
 

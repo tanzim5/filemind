@@ -102,6 +102,17 @@ def _window(url):
     import webview
 
     class Api:                                                    # window.pywebview.api.* in the page
+        def drag_capabilities(self):
+            return {"native_files": os.name == "nt"}
+
+        def drag_files(self, file_ids):
+            from app.desktop_drag import drag_files
+            return drag_files(win, file_ids)
+
+        def copy_frame(self, png_data_url):
+            from app.frame_clipboard import copy_png_frame
+            return copy_png_frame(win, png_data_url)
+
         def pick_folder(self):
             r = win.create_file_dialog(webview.FileDialog.FOLDER)
             return r[0] if r else None
@@ -120,7 +131,7 @@ def _window(url):
         except Exception:
             pass
     win = webview.create_window("File Mind", url, width=1480, height=940, min_size=(900, 600),
-                                background_color="#f5f6f9", js_api=Api(), minimized="--hidden" in sys.argv)
+                                background_color="#0b0b0d", js_api=Api(), minimized="--hidden" in sys.argv)
     win.events.shown += lambda: _set_icon(win, png, ico)
     webview.start(private_mode=False, storage_path=str(Path(os.environ["FILEMIND_DATA"]) / "webview"),
                   icon=str(png) if sys.platform.startswith("linux") else None)

@@ -1,10 +1,17 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="ink">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light">
-<meta name="theme-color" content="#f1e8ea">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0b0b0d">
+<script>
+try {
+  const theme = JSON.parse(localStorage.getItem('prefs') || '{}').theme || 'ink';
+  if (theme === 'blush') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.dataset.theme = theme;
+} catch { }
+</script>
 <title>File Mind</title>
 <link rel="icon" href="icon.png" type="image/png">
 <link rel="apple-touch-icon" href="icon.png">
@@ -18,38 +25,53 @@
     <div class="duo"><button id="addTop" title="Add a folder to read"><i data-ic="folderplus"></i></button><button id="toggleSide" title="Hide sidebar"><i data-ic="panel"></i></button></div>
   </div>
 
-  <nav class="grp">
+  <nav class="grp" id="mainNav">
     <button class="row active" data-view="all"><i data-ic="library"></i><span>Library</span><em id="cAll"></em></button>
+    <button class="row" data-view="discover"><i data-ic="sparkle"></i><span>Discover</span></button>
     <button class="row" data-view="unassigned"><i data-ic="inbox"></i><span>Unsorted</span><em id="cUn"></em></button>
     <button class="row" data-view="renames"><i data-ic="pencil"></i><span>Pending renames</span><em id="cRen"></em></button>
     <button class="row" data-view="spaces"><i data-ic="layers"></i><span>All spaces</span><em id="cSp"></em></button>
   </nav>
 
-  <div class="label" data-sec="types"><span>Types</span></div>
+  <div id="sideSections">
+  <section class="side-section" data-side-section="types"><div class="label" data-sec="types"><span>Types</span></div>
   <nav class="grp" id="types"></nav>
+  </section>
 
-  <div class="label" data-sec="colors"><span>Colors</span><button class="mini-link" id="rainbow" title="Sort everything by color">Rainbow</button></div>
+  <section class="side-section" data-side-section="colors"><div class="label" data-sec="colors"><span>Colors</span><button class="mini-link" id="rainbow" title="Sort everything by color">Rainbow</button></div>
   <div id="colors"></div>
+  <button class="mood-toggle" id="moodToggle" aria-expanded="false"><i data-ic="mood"></i><span>Looks &amp; moods</span><i data-ic="right"></i></button>
   <div id="moods"></div>
+  <button class="side-more" data-more="colors">Show all colors</button></section>
 
-  <div class="label" data-sec="sources"><span>Sources</span></div>
+  <section class="side-section" data-side-section="filters"><div class="label" data-sec="filters"><span>Filters</span><button class="mini-link" id="filterOpen" title="Filter by date or file size">Set filters</button></div>
+  <nav class="grp" id="filterStatus"></nav>
+  </section>
+
+  <section class="side-section" data-side-section="sources"><div class="label" data-sec="sources"><span>Sources</span></div>
   <nav class="grp" id="sources"></nav>
   <nav class="grp"><button class="row" id="nameGroups"><i data-ic="type" style="color:#6d5bd0"></i><span>Group by file name…</span></button></nav>
+  </section>
 
-  <div class="label" data-sec="spaces"><span>Spaces</span><button class="plus" id="newProject" title="New space"><i data-ic="plus"></i></button></div>
+  <section class="side-section" data-side-section="spaces"><div class="label" data-sec="spaces"><span>Spaces</span><button class="plus" id="newProject" title="New space"><i data-ic="plus"></i></button></div>
   <nav class="grp" id="projects"></nav>
   <nav class="grp"><button class="row" id="autoGroup"><i data-ic="sparkle" style="color:#e0629f"></i><span>Auto-group by content</span></button></nav>
+  </section>
 
-  <div class="label" data-sec="folders"><span>Folders</span><button class="plus" id="addSide" title="Add a folder"><i data-ic="plus"></i></button></div>
+  <section class="side-section" data-side-section="folders"><div class="label" data-sec="folders"><span>Folders</span><button class="plus" id="addSide" title="Add a folder"><i data-ic="plus"></i></button></div>
   <nav class="grp" id="roots"></nav>
   <nav class="grp"><button class="row addrow" id="addRow"><i data-ic="folderplus"></i><span>Add a folder…</span></button></nav>
+  </section>
+  </div>
 
   <div class="grow"></div>
-  <div class="local"><i data-ic="lock"></i><span>Runs only on this PC. Nothing is uploaded.</span></div>
-  <div class="foot">
-    <button id="commitBtn" class="pillbtn"><i data-ic="commit"></i><span>Review &amp; commit</span><b id="dot" hidden></b></button>
-    <button id="historyBtn" class="circ" title="History / undo"><i data-ic="history"></i></button>
-    <a id="xLink" class="circ" href="https://x.com/tanzim31" target="_blank" rel="noopener" title="@tanzim31 on X"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+  <div class="side-bottom">
+    <div class="local"><span class="privacy-icon"><i data-ic="circle-dot"></i></span><span><strong>Private &amp; local</strong><small>Your files stay on this device</small></span><span class="privacy-status" aria-hidden="true"></span></div>
+    <button id="commitBtn" class="pillbtn"><span class="commit-icon"><i data-ic="commit"></i></span><span>Review &amp; commit</span><b id="dot" hidden></b><i data-ic="right" class="commit-chevron"></i></button>
+    <div class="foot">
+      <button id="historyBtn" class="foot-action" title="History / undo"><i data-ic="history"></i><span>History</span></button>
+      <a id="xLink" class="foot-action" href="https://x.com/tanzim31" target="_blank" rel="noopener" title="@tanzim31 on X" aria-label="@tanzim31 on X"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+    </div>
   </div>
 </aside>
 
@@ -61,9 +83,7 @@
     </div>
     <div class="title" id="title"></div>
     <div class="tr">
-      <button class="circ" id="focusSearch" title="Search  ( / )"><i data-ic="search"></i></button>
-      <label class="circ" title="Search with an image"><i data-ic="image"></i><input type="file" id="imgq" accept="image/*" hidden></label>
-      <div class="duo2"><button id="autoTop" title="Auto-group by content"><i data-ic="sparkle"></i></button><button id="addToolbar" title="Add a folder"><i data-ic="folderplus"></i></button></div>
+      <button class="circ" id="addToolbar" title="Add a folder"><i data-ic="folderplus"></i></button>
       <button class="circ" id="settingsBtn" title="Customize"><i data-ic="sliders"></i></button>
     </div>
   </div>
@@ -73,7 +93,7 @@
       <div id="banner" hidden></div>
       <div class="hero">
         <div class="overline" id="overline"></div>
-        <form id="searchForm"><i data-ic="search" class="sicon"></i><div id="qtags"></div><input id="q" placeholder="Search by what's in it…" autocomplete="off" spellcheck="false"><button type="button" id="micBtn" class="mic" title="Search by voice — say what you are looking for"><i data-ic="mic"></i></button><kbd>/</kbd></form>
+        <form id="searchForm"><i data-ic="search" class="sicon"></i><div id="qtags"></div><input id="q" placeholder="Search by what's in it…" autocomplete="off" spellcheck="false"><button type="button" id="micBtn" class="mic" title="Search by voice — say what you are looking for" aria-label="Search by voice"><i data-ic="mic"></i><span>Voice</span></button></form>
         <div class="try" id="try"></div>
       </div>
       <div id="grid"></div>
@@ -82,12 +102,18 @@
     </div>
     <div id="dock">
       <button id="sortBtn" title="Sort"><i data-ic="sort"></i></button>
-      <button id="layoutBtn" title="Switch layout"><i data-ic="columns"></i></button>
+      <button id="layoutBtn" title="Choose layout" aria-label="Choose layout" aria-expanded="false"><i data-ic="columns"></i></button>
       <span class="sep"></span>
       <button id="sizeDown" title="Smaller tiles"><i data-ic="minus"></i></button>
       <button id="sizeUp" title="Bigger tiles"><i data-ic="plus"></i></button>
       <div id="sortMenu" hidden>
         <button data-sort="mtime">Newest first</button><button data-sort="name">Name A–Z</button><button data-sort="size">Largest first</button><button data-sort="color">By color (rainbow)</button>
+      </div>
+      <div id="layoutMenu" hidden>
+        <button data-layout="cols"><i data-ic="columns"></i><span><strong>Masonry</strong><small>Original shapes</small></span></button>
+        <button data-layout="rows"><i data-ic="rows"></i><span><strong>Rows</strong><small>Edge-to-edge gallery</small></span></button>
+        <button data-layout="contact"><i data-ic="images"></i><span><strong>Contact sheet</strong><small>See more at once</small></span></button>
+        <button data-layout="story"><i data-ic="film"></i><span><strong>Storyboard</strong><small>Wide frames with names</small></span></button>
       </div>
     </div>
   </section>
@@ -99,6 +125,8 @@
         <button class="circ edge r" id="nextItem" title="Next  →"><i data-ic="right"></i></button>
         <div id="stage"></div>
         <div id="viewdock">
+          <button class="pill file-drag" id="dragFile" draggable="true" title="Drag the original file into another app"><i data-ic="move"></i><span>Drag file</span></button>
+          <button class="pill frame-copy" id="copyFrame" title="Copy the current video frame as an image" hidden><i data-ic="copy"></i><span>Copy frame</span></button>
           <div class="pill" id="zoom"><button id="zOut" title="Zoom out"><i data-ic="minus"></i></button><span id="zVal">100%</span><button id="zIn" title="Zoom in"><i data-ic="plus"></i></button></div>
           <div class="pill" id="volbox"><button id="volBtn" title="Mute / unmute  (M)"><i data-ic="vol"></i></button><input type="range" id="volRange" min="0" max="100" step="1"><span id="volVal">60%</span></div>
         </div>
@@ -128,5 +156,6 @@
 <div id="toast" hidden></div>
 <script src="icons.js"></script>
 <script src="app.js"></script>
+<script src="drag.js"></script>
 </body>
 </html>

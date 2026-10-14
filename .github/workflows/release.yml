@@ -38,13 +38,24 @@ jobs:
       - name: Build (NVIDIA, downloads PyTorch with CUDA on first run)
         run: python packaging/build_windows.py --ffmpeg ffbin --variant nvidia
 
+      - name: Validate both Windows downloads
+        run: |
+          python packaging/validate_build.py windows
+          python packaging/validate_build.py nvidia
+
       - name: Smoke test (CPU build; downloads the model, indexes a photo, a video and a sound)
         run: python packaging/smoke_test.py dist/cpu/FileMind/FileMind.exe --ffmpeg ffbin
 
       - uses: actions/upload-artifact@v4
         with:
-          name: FileMind-Windows
-          path: dist/*.zip
+          name: FileMind-Windows-portable
+          path: dist/FileMind-Windows-portable.zip
+          compression-level: 0
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FileMind-Windows-NVIDIA
+          path: dist/FileMind-Windows-NVIDIA.zip
           compression-level: 0
 
   macos:
@@ -74,6 +85,9 @@ jobs:
 
       - name: Build
         run: python packaging/build_macos.py --ffmpeg ffbin
+
+      - name: Validate Mac download
+        run: python packaging/validate_build.py macos
 
       - name: Smoke test (the runner has no GPU, so MLX runs on its CPU here)
         env:

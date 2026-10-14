@@ -36,12 +36,20 @@ const glyph = id => {
 
 /* ================================================================ state */
 /* user settings (Customize) — kept in this browser only */
-const PDEF = { tile: 300, gap: 12, rad: 10, names: false, hover: true, accent: '#ff5a1f', layout: 'cols', theme: 'blush', tstyle: 'lift', head: 'serif', ideas: true };
+const PDEF = { tile: 300, gap: 12, rad: 10, names: false, hover: true, accent: '#ff5a1f', layout: 'cols', theme: 'ink', tstyle: 'lift', head: 'serif', ideas: true,
+  sideOrder: ['types', 'colors', 'sources', 'filters', 'spaces', 'folders'], sideHidden: [], navOrder: ['all', 'discover', 'unassigned', 'renames', 'spaces'], navHidden: ['unassigned', 'renames', 'spaces'], sideExpanded: [] };
 const THEMES = [['blush', 'Blush', '#f5f6f9', 'linear-gradient(180deg,#f1e8ea,#e8e2ea)'], ['paper', 'Paper', '#fbfaf8', '#f3f1ec'], ['mist', 'Mist', '#f6f8fb', 'linear-gradient(180deg,#e8eef7,#e1e8f3)'],
   ['sage', 'Sage', '#f7f8f4', 'linear-gradient(180deg,#e8eee2,#dfe8da)'], ['sand', 'Sand', '#faf7f1', 'linear-gradient(180deg,#f3eadc,#ece0cc)'], ['lilac', 'Lilac', '#f8f7fc', 'linear-gradient(180deg,#eeeaf8,#e5dff3)'],
   ['peach', 'Peach', '#fdf8f5', 'linear-gradient(180deg,#fbe8dd,#f5dfe0)'], ['studio', 'Studio', '#ffffff', '#f5f5f6'],
   ['night', 'Night', '#16171d', '#111217'], ['ink', 'Ink', '#0b0b0d', '#000000']];
 const P = (() => { try { return { ...PDEF, ...JSON.parse(store.get('prefs', '{}')) }; } catch { return { ...PDEF }; } })();
+if (P.sidebarRevision !== 2) {
+  P.navHidden = [...new Set([...(P.navHidden || []), 'unassigned', 'renames', 'spaces'])];
+  const order = [...new Set([...(P.sideOrder || []), ...PDEF.sideOrder])].filter(key => key !== 'sources');
+  order.splice(Math.max(0, order.indexOf('filters')), 0, 'sources');
+  P.sideOrder = order;
+  P.sidebarRevision = 2;
+}
 function applyPrefs() {
   const d = document.documentElement, r = d.style; r.setProperty('--gap', P.gap + 'px'); r.setProperty('--rad', P.rad + 'px'); r.setProperty('--accent', P.accent);
   if (P.theme === 'blush') d.removeAttribute('data-theme'); else d.dataset.theme = P.theme;
@@ -50,9 +58,9 @@ function applyPrefs() {
   store.set('prefs', JSON.stringify(P));
 }
 applyPrefs();
-const S = { view: 'all', project: null, kind: 'all', root: null, color: null, near: null, source: null, pattern: null, sort: 'mtime', layout: P.layout,
+const S = { view: 'all', project: null, kind: 'all', root: null, color: null, near: null, source: null, pattern: null, discover: null, discoverGroups: [], discoverBuilding: false, discoverSignature: '', filters: {}, sort: 'mtime', layout: P.layout,
   files: [], total: 0, selected: new Set(), searching: false, search: null, projects: [], roots: [], sources: [], colors: [], moods: [], stats: { kinds: {} }, known: [], ideas: [], ideaAt: 0, related: [],
-  open: null, cur: null, ctx: null, zoom: 1, vol: +store.get('vol', 60), muted: store.get('muted', '0') === '1', animNext: true, srcAll: false, loading: false };
+  open: null, cur: null, ctx: null, zoom: 1, vol: +store.get('vol', 60), muted: store.get('muted', '0') === '1', animNext: true, srcAll: false, spAll: false, loading: false };
 const EXAMPLES = ['a person standing at night', 'product on a green background', 'aerial view of a city', 'someone talking about pricing'];
 
 const toast = (msg, icon = 'check', bad = false) => {
@@ -68,7 +76,7 @@ const copyText = async (text, msg = 'Path copied') => { try { await navigator.cl
 
 /* ================================================================ history: one stack, every view */
 const H = { stack: [], i: -1, busy: false };
-const snapshot = () => ({ view: S.view, project: S.project, kind: S.kind, root: S.root, color: S.color, near: S.near, source: S.source, pattern: S.pattern, sort: S.sort,
+const snapshot = () => ({ view: S.view, project: S.project, kind: S.kind, root: S.root, color: S.color, near: S.near, source: S.source, pattern: S.pattern, discover: S.discover, filters: { ...S.filters }, sort: S.sort,
   search: S.searching ? S.search : null, open: S.open, ctx: S.ctx, scroll: 0 });
 function record(replace = false) {
   if (H.busy) return; const cur = H.stack[H.i];
@@ -80,8 +88,8 @@ function record(replace = false) {
 function navState() { $('#navBack').disabled = H.i <= 0; $('#navFwd').disabled = H.i >= H.stack.length - 1; }
 async function applyState(s) {
   H.busy = true; stopAudio();
-  Object.assign(S, { view: s.view, project: s.project, kind: s.kind, root: s.root, color: s.color, near: s.near, source: s.source, pattern: s.pattern, sort: s.sort, searching: !!s.search, search: s.search });
-  S.selected.clear(); S.animNext = true; setNav();
+  Object.assign(S, { view: s.view, project: s.project, kind: s.kind, root: s.root, color: s.color, near: s.near, source: s.source, pattern: s.pattern, discover: s.discover || null, filters: { ...s.filters }, sort: s.sort, searching: !!s.search, search: s.search });
+  S.selected.clear(); S.animNext = true; setNav(); drawFilterStatus();
   $('#q').value = '';
   try {
     if (s.open) { S.ctx = s.ctx; await openViewer(s.open, { rec: 'none', scroll: s.scroll }); }
@@ -134,14 +142,15 @@ async function addRoot(path) {
 /* ================================================================ sidebar: folders, types, colors, sources, spaces */
 async function loadRoots() {
   S.roots = await api('/roots');
-  $('#roots').innerHTML = S.roots.map(r => {
+  $('#roots').innerHTML = (sideExpanded('folders') ? S.roots : S.roots.slice(0, 3)).map(r => {
     const nm = r.path.split(/[\\/]/).filter(Boolean).pop() || r.path;
     return `<div class="row ${S.root === r.id ? 'active' : ''}" data-root="${r.id}" title="${esc(r.path)}"><i data-ic="folder" style="color:#e8803a"></i><span>${esc(nm)}</span><em>${r.files.toLocaleString()}</em>
       <button class="mini" data-reindex="${r.id}" title="Look for new files"><i data-ic="loader"></i></button><button class="mini" data-forget="${r.id}" title="Forget this folder (never deletes files)"><i data-ic="x"></i></button></div>`;
-  }).join('') || '<div class="hintrow">No folder yet.</div>';
+  }).join('') + (S.roots.length > 3 ? `<button class="row side-more" data-more="folders">${sideExpanded('folders') ? 'Show fewer' : `Show all ${S.roots.length} folders`}</button>` : '') || '<div class="hintrow">No folder yet.</div>';
   hydrate($('#roots'));
 }
 $('#roots').onclick = async e => {
+  if (e.target.closest('[data-more="folders"]')) { $('.label[data-sec="folders"]').click(); return; }
   const b = e.target.closest('button');
   if (b) {
     if (b.dataset.reindex) { await api(`/roots/${b.dataset.reindex}/index`, { method: 'POST' }); poll(); }
@@ -178,13 +187,47 @@ $('#moods').onclick = e => { const b = e.target.closest('[data-mood]'); if (!b) 
 $('#colors').onclick = e => { const b = e.target.closest('[data-color]'); if (b) go({ color: S.color === b.dataset.color ? null : b.dataset.color }, { keepFilters: true, keepKind: true }); };
 $('#rainbow').onclick = () => { S.sort = S.sort === 'color' ? 'mtime' : 'color'; drawColors(); if (!S.searching) { S.animNext = true; loadFiles(true); } };
 function drawSources() {
-  const list = S.srcAll ? S.sources : S.sources.slice(0, 6);
-  $('#sources').innerHTML = list.map(s => `<button class="row ${S.source === s.key ? 'active' : ''}" data-source="${s.key}"><span class="dot" style="background:${s.color}"></span><span>${esc(s.label)}</span><em>${s.count.toLocaleString()}</em></button>`).join('')
-    + (S.sources.length > 6 ? `<button class="row" id="srcMore"><i data-ic="${S.srcAll ? 'left' : 'dots'}" style="color:var(--ink3)"></i><span style="color:var(--ink3)">${S.srcAll ? 'Show fewer' : `${S.sources.length - 6} more sources`}</span></button>` : '')
+  const list = sideExpanded('sources') ? S.sources : S.sources.slice(0, 3);
+  const sourceIcon = { camera: 'image', screenshot: 'scan', whatsapp: 'send', elevenlabs: 'music', midjourney: 'sparkle', chatgpt: 'quote', nanobanana: 'palette', dreamina: 'wand', higgsfield: 'film', comfyui: 'shapes', firefly: 'star', runway: 'video', sora: 'play', flow: 'layers', kling: 'clapperboard', seedance: 'clapperboard', krea: 'pipette', openart: 'palette', creation: 'package', hailuo: 'eye', luma: 'expand', leonardo: 'pencil', ideogram: 'type' };
+  $('#sources').innerHTML = list.map(s => `<button class="row ${S.source === s.key ? 'active' : ''}" data-source="${esc(s.key)}" title="${esc(s.label)}"><span class="sourceicon" style="--source-color:${s.color}"><i data-ic="${sourceIcon[s.key] || 'sparkle'}"></i></span><span>${esc(s.label)}</span><em>${s.count.toLocaleString()}</em></button>`).join('')
+    + (S.sources.length > 3 ? `<button class="row" id="srcMore"><i data-ic="${sideExpanded('sources') ? 'left' : 'dots'}" style="color:var(--ink3)"></i><span style="color:var(--ink3)">${sideExpanded('sources') ? 'Show fewer' : `${S.sources.length - 3} more sources`}</span></button>` : '')
     || '<div class="hintrow">Detected from file names — Midjourney, ChatGPT, Higgsfield…</div>';
   hydrate($('#sources'));
 }
-$('#sources').onclick = e => { if (e.target.closest('#srcMore')) { S.srcAll = !S.srcAll; return drawSources(); } const b = e.target.closest('[data-source]'); if (b) go({ source: S.source === b.dataset.source ? null : b.dataset.source }, { keepFilters: true, keepKind: true }); };
+$('#sources').onclick = e => { if (e.target.closest('#srcMore')) { $('.label[data-sec="sources"]').click(); return; } const b = e.target.closest('[data-source]'); if (b) go({ source: S.source === b.dataset.source ? null : b.dataset.source }, { keepFilters: true, keepKind: true }); };
+$('#moodToggle').onclick = () => { const show = $('#moods').hidden; $('#moods').hidden = !show; $('#moodToggle').setAttribute('aria-expanded', String(show)); };
+$('#moods').hidden = true;
+function drawFilterStatus() {
+  const n = Object.values(S.filters).filter(Boolean).length;
+  $('#filterOpen').textContent = n ? `${n} active` : 'Set filters';
+  $('#filterStatus').innerHTML = n ? `<button class="row" id="activeFilters"><i data-ic="calendar"></i><span>Date &amp; size filters</span><em>${n}</em></button><button class="row filter-clear" id="clearFilters"><i data-ic="x"></i><span>Clear filters</span></button>` : '<div class="hintrow">Date and file size</div>';
+  hydrate($('#filterStatus'));
+  $('#activeFilters')?.addEventListener('click', openFilters);
+  $('#clearFilters')?.addEventListener('click', () => { S.filters = {}; drawFilterStatus(); loadFiles(true); record(); });
+}
+function openFilters() {
+  const f = S.filters;
+  const date = t => t ? new Date(t * 1000).toISOString().slice(0, 10) : '';
+  modal(`<div class="mh"><h3>Filter files</h3><p>Narrow this view by date or file size.</p></div><div class="mb filter-form">
+    <label>From date<input name="from" type="date" value="${date(f.after)}"></label>
+    <label>Through date<input name="through" type="date" value="${date(f.before ? f.before - 86400 : null)}"></label>
+    <label>Minimum size (MB)<input name="min" type="number" min="0" step="0.1" value="${f.min_size ? f.min_size / 1e6 : ''}"></label>
+    <label>Maximum size (MB)<input name="max" type="number" min="0" step="0.1" value="${f.max_size ? f.max_size / 1e6 : ''}"></label>
+    <button class="btn dark wide" id="applyFilters">Apply filters</button><button class="btn ghost wide" id="resetFilters">Clear filters</button></div>`);
+  $('#applyFilters').onclick = () => {
+    const val = n => $(`.filter-form [name="${n}"]`).value;
+    const epoch = s => s ? Math.floor(new Date(s + 'T00:00:00').getTime() / 1000) : null;
+    const after = epoch(val('from')), through = epoch(val('through'));
+    if (after && through && through < after) return toast('The end date must follow the start date', 'x', true);
+    const min = val('min'), max = val('max');
+    if (min && max && +max < +min) return toast('Maximum size must be larger than minimum', 'x', true);
+    S.filters = { after, before: through ? through + 86400 : null, min_size: min ? Math.round(+min * 1e6) : null, max_size: max ? Math.round(+max * 1e6) : null };
+    closeModal(); drawFilterStatus(); record(); loadFiles(true);
+  };
+  $('#resetFilters').onclick = () => { S.filters = {}; closeModal(); drawFilterStatus(); record(); loadFiles(true); };
+}
+$('#filterOpen').onclick = openFilters;
+drawFilterStatus();
 let polling = false;
 async function poll() {
   if (polling) return; polling = true; let last = 0, fin = null;
@@ -213,12 +256,19 @@ async function loadStats() {
 }
 async function loadProjects() {
   S.projects = await api('/projects');
-  $('#projects').innerHTML = S.projects.map(p => `<button class="row proj ${S.view === 'project' && S.project === p.id ? 'active' : ''}" data-id="${p.id}">${glyph(p.id)}<span>${esc(p.name)}</span><em>${p.count}</em></button>`).join('')
-    || '<div class="hintrow">Spaces are virtual folders. Press + to make one.</div>';
+  drawProjects();
   $('#projSelect').innerHTML = S.projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
   $('#cSp').textContent = S.projects.length || '';
 }
-$('#projects').onclick = e => { const b = e.target.closest('.proj'); if (b) go({ view: 'project', project: +b.dataset.id }); };
+function drawProjects() {
+  const active = S.projects.find(p => S.view === 'project' && S.project === p.id);
+  const list = S.spAll ? S.projects : [...S.projects.slice(0, 3), ...(active && !S.projects.slice(0, 3).includes(active) ? [active] : [])];
+  $('#projects').innerHTML = (list.map(p => `<button class="row proj ${S.view === 'project' && S.project === p.id ? 'active' : ''}" data-id="${p.id}">${glyph(p.id)}<span>${esc(p.name)}</span><em>${p.count}</em></button>`).join('')
+    || '<div class="hintrow">Spaces are virtual folders. Press + to make one.</div>')
+    + (S.projects.length > 3 ? `<button class="row more-spaces" id="spMore"><i data-ic="${S.spAll ? 'left' : 'layers'}"></i><span>${S.spAll ? 'Show fewer' : `View all ${S.projects.length} spaces`}</span></button>` : '');
+  hydrate($('#projects'));
+}
+$('#projects').onclick = e => { if (e.target.closest('#spMore')) { $('.label[data-sec="spaces"]').click(); return; } const b = e.target.closest('.proj'); if (b) go({ view: 'project', project: +b.dataset.id }); };
 $('#projects').oncontextmenu = async e => {
   const b = e.target.closest('.proj'); if (!b) return; e.preventDefault();
   const p = S.projects.find(x => x.id == b.dataset.id);
@@ -228,29 +278,44 @@ $('#projects').oncontextmenu = async e => {
 };
 $('#newProject').onclick = async () => { const name = prompt('Name your new space:'); if (!name) return; await api('/projects', { method: 'POST', body: { name } }); await loadProjects(); };
 $$('.row[data-view]').forEach(b => b.onclick = () => go({ view: b.dataset.view }));
-$$('.label[data-sec]').forEach(l => {
-  const sec = l.dataset.sec, kids = () => { const out = []; let n = l.nextElementSibling; while (n && !n.classList.contains('label') && !n.classList.contains('grow')) { out.push(n); n = n.nextElementSibling; } return out; };
-  const apply = c => { l.classList.toggle('col', c); kids().forEach(k => k.hidden = c); };
-  if (store.get('sec_' + sec, '0') === '1') apply(true);
-  l.onclick = e => { if (e.target.closest('button')) return; const c = !l.classList.contains('col'); store.set('sec_' + sec, c ? '1' : '0'); apply(c); };
+const SIDE_NAMES = { types: 'Types', colors: 'Colors', filters: 'Filters', sources: 'Sources', spaces: 'Spaces', folders: 'Folders' };
+const NAV_NAMES = { all: 'Library', discover: 'Discover', unassigned: 'Unsorted', renames: 'Pending renames', spaces: 'All spaces' };
+function sideExpanded(sec) { return (P.sideExpanded || []).includes(sec); }
+function applySidebar() {
+  const sections = $('#sideSections'), nav = $('#mainNav');
+  [...new Set([...(P.sideOrder || []), ...Object.keys(SIDE_NAMES)])].forEach(k => { const el = $(`[data-side-section="${k}"]`); if (el) { sections.append(el); el.hidden = (P.sideHidden || []).includes(k); el.classList.toggle('expanded', sideExpanded(k)); } });
+  [...new Set([...(P.navOrder || []), ...Object.keys(NAV_NAMES)])].forEach(k => { const el = $(`#mainNav [data-view="${k}"]`); if (el) { nav.append(el); el.hidden = (P.navHidden || []).includes(k); } });
+  $('[data-more="colors"]').textContent = sideExpanded('colors') ? 'Show fewer colors' : 'Show all colors';
+}
+$$('.label[data-sec]').forEach(l => l.onclick = e => {
+  if (e.target.closest('button') || !['colors', 'sources', 'spaces', 'folders'].includes(l.dataset.sec)) return;
+  const sec = l.dataset.sec, current = new Set(P.sideExpanded || []);
+  if (current.has(sec)) current.delete(sec); else current.add(sec);
+  P.sideExpanded = [...current]; applyPrefs(); applySidebar();
+  if (sec === 'sources') drawSources(); if (sec === 'spaces') { S.spAll = sideExpanded(sec); drawProjects(); } if (sec === 'folders') loadRoots();
 });
+$('[data-more="colors"]').onclick = () => $('.label[data-sec="colors"]').click();
+applySidebar();
+S.spAll = sideExpanded('spaces');
 $('#toggleSide').onclick = () => { document.body.classList.add('collapsed'); $('#showSide').hidden = false; };
 $('#showSide').onclick = () => { document.body.classList.remove('collapsed'); $('#showSide').hidden = true; };
 
 /* ---------------- navigation entry point */
 function go(o = {}, opt = {}) {
   viewerUI(false);
-  const keep = opt.keepFilters ? { color: S.color, near: S.near, source: S.source, pattern: S.pattern, view: S.view === 'project' ? 'all' : S.view } : {};
-  const base = { view: 'all', project: null, kind: opt.keepKind ? S.kind : 'all', color: null, near: null, source: null, pattern: null, ...keep };
+  const keep = opt.keepFilters ? { color: S.color, near: S.near, source: S.source, pattern: S.pattern, view: ['project', 'discover', 'discover-group', 'spaces'].includes(S.view) ? 'all' : S.view } : {};
+  const base = { view: 'all', project: null, discover: null, kind: opt.keepKind ? S.kind : 'all', color: null, near: null, source: null, pattern: null, ...keep };
   if (o.color || o.near || o.source || o.pattern) { base.color = base.near = base.source = base.pattern = null; }       // one colour/source filter at a time
   const srch = opt.keepFilters && S.searching && S.search?.tags ? S.search : null;
   Object.assign(S, base, o, { searching: !!srch, search: srch });
+  if (S.view === 'discover' || S.view === 'discover-group') { S.source = S.color = S.near = S.pattern = null; }
   if (S.near) S.color = null; if (S.color) S.near = null;
-  S.selected.clear(); S.animNext = true; setNav(); record();
+  S.selected.clear(); S.animNext = true; setNav(); drawFilterStatus(); record();
   if (srch) runSearch(srch.body, srch.label, { rec: 'none', tags: srch.tags }); else loadFiles(true);
 }
 function setNav() {
-  $$('.row[data-view]').forEach(b => b.classList.toggle('active', S.view === b.dataset.view && (S.view !== 'all' || (S.kind === 'all' && !S.color && !S.near && !S.source && !S.pattern && !S.searching))));
+  $$('.row[data-view]').forEach(b => b.classList.toggle('active', (S.view === b.dataset.view || (b.dataset.view === 'discover' && S.view === 'discover-group')) && (S.view !== 'all' || (S.kind === 'all' && !S.color && !S.near && !S.source && !S.pattern && !S.searching))));
+  if (S.projects.length) drawProjects();
   $$('.proj').forEach(b => b.classList.toggle('active', S.view === 'project' && +b.dataset.id === S.project));
   $$('#types .row').forEach(b => b.classList.toggle('active', S.kind === b.dataset.kind));
   $$('#roots .row').forEach(b => b.classList.toggle('active', S.root === +b.dataset.root));
@@ -266,15 +331,16 @@ function filterLabel() {
 }
 function setTitle() {
   if (S.open) return;
-  const pr = S.projects.find(p => p.id === S.project), fl = filterLabel(); let g = `<i data-ic="library" style="color:var(--ink2)"></i>`, t = 'Library';
-  if (S.searching) { g = `<i data-ic="search" style="color:var(--ink2)"></i>`; t = S.search?.label || 'Search'; }
-  else if (S.view === 'project') { g = pr ? glyph(pr.id) : ''; t = pr?.name || ''; }
-  else if (S.view === 'unassigned') { g = `<i data-ic="inbox" style="color:var(--ink2)"></i>`; t = 'Unsorted'; }
-  else if (S.view === 'renames') { g = `<i data-ic="pencil" style="color:var(--ink2)"></i>`; t = 'Pending renames'; }
-  else if (S.view === 'spaces') { g = `<i data-ic="layers" style="color:var(--ink2)"></i>`; t = 'All spaces'; }
-  else if (fl) { g = fl.dot ? `<span class="dotc" style="background:${fl.dot}"></span>` : `<i data-ic="${fl.icon}" style="color:var(--ink2)"></i>`; t = fl.text + (S.kind !== 'all' ? ' · ' + KIND[S.kind].label : ''); }
-  else if (S.kind !== 'all') { g = kicon(S.kind); t = KIND[S.kind].label; }
-  $('#title').className = 'title'; $('#title').innerHTML = `${g}<span>${esc(t)}</span><small>${(S.searching ? S.files.length : S.total).toLocaleString()}</small>`; hydrate($('#title'));
+  const pr = S.projects.find(p => p.id === S.project), fl = filterLabel(); let t = '';
+  if (S.searching) t = S.search?.label || 'Search';
+  else if (S.view === 'project') t = pr?.name || '';
+  else if (S.view === 'unassigned') t = 'Unsorted';
+  else if (S.view === 'renames') t = 'Pending renames';
+  else if (S.view === 'spaces') t = 'All spaces';
+  else if (S.view === 'discover' || S.view === 'discover-group') t = S.view === 'discover' ? 'Discover' : (S.discoverGroups.find(x => x.key === S.discover)?.title || 'Discover');
+  else if (fl) t = fl.text + (S.kind !== 'all' ? ' · ' + KIND[S.kind].label : '');
+  else if (S.kind !== 'all') t = KIND[S.kind].label;
+  $('#title').className = 'title'; $('#title').textContent = t;
 }
 
 /* ================================================================ grid */
@@ -283,14 +349,28 @@ function filterParams(extra = {}) {
   if (S.root) p.set('root', S.root); if (S.kind !== 'all') p.set('kind', S.kind);
   if (S.view === 'project') p.set('project', S.project); if (S.view === 'unassigned') p.set('unassigned', 'true');
   if (S.color) p.set('color', S.color); if (S.near) p.set('near', S.near); if (S.source) p.set('source', S.source); if (S.pattern) p.set('pattern', S.pattern);
+  if (S.view === 'discover-group' && S.discover) p.set('discover', S.discover);
+  for (const [key, value] of Object.entries(S.filters)) if (value != null && value !== '') p.set(key, value);
   return p;
 }
 async function loadFiles(reset = true, keepScroll = false) {
   if (S.searching || (!reset && S.loading)) return;
   if (S.view === 'spaces') { S.files = []; S.total = S.projects.length; $('#more').hidden = true; return render(); }
+  if (S.view === 'discover') {
+    const r = await api('/discover'); const signature = JSON.stringify(r.groups.map(g => [g.key, g.count]));
+    if (S.view !== 'discover') return;
+    const changed = signature !== S.discoverSignature || !!r.building !== S.discoverBuilding;
+    S.discoverGroups = r.groups; S.discoverBuilding = !!r.building; S.discoverSignature = signature; S.files = []; S.total = r.groups.length; $('#more').hidden = true;
+    if (changed || reset) render();
+    if (r.building) setTimeout(() => { if (S.view === 'discover') loadFiles(false); }, 1800);
+    return;
+  }
   S.loading = true;
   try {
-    const r = await api('/files?' + filterParams({ limit: reset ? 180 : 120, offset: reset ? 0 : S.files.length })); const sc = $('#scroller').scrollTop;
+    const request = filterParams({ limit: reset ? 180 : 120, offset: reset ? 0 : S.files.length }).toString();
+    const r = await api('/files?' + request);
+    if (S.view === 'discover' || filterParams({ limit: reset ? 180 : 120, offset: reset ? 0 : S.files.length }).toString() !== request) return;
+    const sc = $('#scroller').scrollTop;
     let files = r.files; if (S.view === 'renames') files = files.filter(f => f.proposed);
     S.files = reset ? files : S.files.concat(files); S.total = S.view === 'renames' ? files.length : r.total;
     $('#more').hidden = S.files.length >= r.total || S.view === 'renames';
@@ -308,8 +388,8 @@ function tileInner(f) {
 }
 function tile(f, w, h, i, animate) {
   const extra = (f.score !== undefined ? `<span class="score">${(f.score * 100).toFixed(0)}%</span>` : '') + (f.proposed ? `<div class="prop">→ ${esc(f.proposed)}</div>` : '');
-  return `<div class="tile ${S.selected.has(f.id) ? 'sel' : ''} ${animate ? 'rise' : ''}" data-id="${f.id}" data-kind="${f.kind}" style="width:${w}px;height:${h}px;${f.kind !== 'audio' && f.dom ? `background:${f.dom};` : ''}${animate ? `--i:${Math.min(i, 40)}` : ''}">
-    <div class="chk" data-chk>${ic('check', '', 2.8)}</div><div class="qa"><button data-qa="reveal" title="Show in ${FM}">${ic('explorer')}</button><button data-qa="similar" title="Find similar">${ic('sparkle')}</button></div>${extra}${tileInner(f)}</div>`;
+  return `<div draggable="true" class="tile ${S.selected.has(f.id) ? 'sel' : ''} ${animate ? 'rise' : ''}" data-id="${f.id}" data-kind="${f.kind}" style="width:${w}px;height:${h}px;${f.kind !== 'audio' && f.dom ? `background:${f.dom};` : ''}${animate ? `--i:${Math.min(i, 40)}` : ''}">
+    <div class="chk" data-chk>${ic('check', '', 2.8)}</div><div class="qa"><button data-qa="reveal" title="Show in ${FM}">${ic('explorer')}</button><button data-qa="similar" title="Find similar">${ic('sparkle')}</button></div><span class="tile-drag-cue" title="Drag the original file into another app">${ic('move')}</span>${extra}${tileInner(f)}</div>`;
 }
 /* masonry: equal-width columns, each tile keeps its own shape; new pages drop into the shortest column */
 function masonry(W) { const gap = P.gap, cn = Math.max(2, Math.round((W + gap) / (P.tile + gap))), w = Math.floor((W - gap * (cn - 1)) / cn); return { gap, cn, w }; }
@@ -322,6 +402,15 @@ function layoutHTML(files, W, animate, M) {
     if (M) Object.assign(M, { w: m.w, heights: cols.map(c => c.h), n });
     return `<div class="cols">${cols.map(c => `<div class="col" style="width:${m.w}px">${c.items.join('')}</div>`).join('')}</div>`;
   }
+  if (['contact', 'story'].includes(M?.force || S.layout)) {
+    const mode = M?.force || S.layout;
+    const target = mode === 'contact' ? Math.min(P.tile * .68, 245) : Math.min(P.tile * 1.32, 430);
+    const cn = Math.max(2, Math.round((W + gap) / (target + gap)));
+    const w = Math.floor((W - gap * (cn - 1)) / cn);
+    const h = Math.round(mode === 'contact' ? w : w * 9 / 16);
+    if (M) Object.assign(M, { w, h, n: files.length, mode });
+    return `<div class="regular-grid ${mode}" style="grid-template-columns:repeat(${cn},minmax(0,1fr))">${files.map(f => tile(f, w, h, n++, animate)).join('')}</div>`;
+  }
   if (M) M.w = 0;
   const target = Math.round(P.tile * .78), rows = []; let cur = [], sum = 0;
   for (const f of files) { const a = aspect(f); cur.push({ f, a }); sum += a; if (sum * target + gap * (cur.length - 1) >= W) { rows.push({ items: cur, h: (W - gap * (cur.length - 1)) / sum }); cur = []; sum = 0; } }
@@ -330,6 +419,12 @@ function layoutHTML(files, W, animate, M) {
 }
 /* add tiles to an already-drawn masonry without moving what is on screen */
 function appendTo(container, M, files) {
+  if (M.mode && M.mode === S.layout && M.w && M.h) {
+    const grid = container.querySelector(':scope > .regular-grid');
+    if (!grid) return false;
+    grid.insertAdjacentHTML('beforeend', files.map(f => tile(f, M.w, M.h, M.n++, true)).join(''));
+    hydrate(grid); return true;
+  }
   const colEls = container.querySelectorAll(':scope > .cols > .col');
   if ((M.force || S.layout) !== 'cols' || !colEls.length || !M.w) return false;
   const parts = [...colEls].map(() => []);
@@ -340,21 +435,21 @@ function appendTo(container, M, files) {
 const GM = {};
 function appendGrid(files) { if (!appendTo($('#grid'), GM, files)) render(); else { afterRenderAudio(); updateBar(); setTitle(); drawHero(); } }
 function drawHero() {
-  const hasLib = S.roots.length || S.files.length; $('.hero').style.display = hasLib && S.view !== 'spaces' ? '' : 'none';
+  const hasLib = S.roots.length || S.files.length; $('.hero').style.display = hasLib && S.view !== 'spaces' && S.view !== 'discover' ? '' : 'none';
   const fl = filterLabel(); let h = ''; drawBar();
   const u = S.searching && S.understood || {}, read = [u.kind && `only ${KIND[u.kind].label.toLowerCase()}`, u.source && `from ${u.source}`, u.without && `leaving out ${u.without.map(w => `“${w}”`).join(', ')}`].filter(Boolean);
   if (read.length) h += `<span class="und">${ic('sparkle')}Read as ${esc(read.join(' · '))}</span>`;
   if (S.searching && S.related.length && P.ideas) h += `<span class="rel">${ic('plus')}Narrow with</span>${S.related.map((x, i) => ideaChip(x, i, 'add')).join('')}`;
-  if (!S.searching && P.ideas) h += ideasHTML();
-  if ((fl || S.searching || S.kind !== 'all') && S.files.length) h += `<button class="chipb save" id="saveSpace">${ic('folderplus')}<span>Save these ${S.searching ? S.files.length : S.total} as a space</span></button>`;
-  const d = new Date(), n = S.searching ? S.files.length : S.total;
-  $('#overline').innerHTML = `${d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}<span class="soft">· ${n.toLocaleString()} ${S.searching ? 'closest matches' : 'files'}</span>`;
+  if ((fl || S.searching || S.kind !== 'all' || S.view === 'discover-group') && S.files.length) h += `<button class="chipb save" id="saveSpace" title="Save this set of files as a space">${ic('folderplus')}<span>Save view as space</span><em>${(S.searching ? S.files.length : S.total).toLocaleString()}</em></button>`;
+  $('#overline').textContent = '';
   $('#try').innerHTML = h; hydrate($('#try'));
   $$('#try [data-ex]').forEach(b => b.onclick = () => searchTags([{ q: b.dataset.ex }]));
   $$('#try [data-add]').forEach(b => b.onclick = () => addTag({ q: b.dataset.add }));
   const mi = $('#moreIdeas'); if (mi) mi.onclick = () => { S.ideaAt += IDEAS_SHOWN; drawHero(); };
   const sv = $('#saveSpace'); if (sv) sv.onclick = saveAsSpace;
-  $('#layoutBtn').innerHTML = `<i data-ic="${S.layout === 'rows' ? 'columns' : 'rows'}"></i>`; $('#layoutBtn').title = S.layout === 'rows' ? 'Masonry columns' : 'Justified rows'; hydrate($('#layoutBtn'));
+  const layouts = { cols: ['columns', 'Masonry'], rows: ['rows', 'Rows'], contact: ['images', 'Contact sheet'], story: ['film', 'Storyboard'] };
+  $('#layoutBtn').innerHTML = `<i data-ic="${(layouts[S.layout] || layouts.cols)[0]}"></i>`;
+  $('#layoutBtn').title = `Layout: ${(layouts[S.layout] || layouts.cols)[1]}`; hydrate($('#layoutBtn'));
 }
 /* ideas: searches this library can answer well, drawn from what was actually indexed */
 const IDEAS_SHOWN = 7;
@@ -403,7 +498,7 @@ function bindSpaces() {
   ['#spNew', '#spNew2'].forEach(s => $(s).onclick = async () => { const name = prompt('Name your new space:'); if (!name) return; await api('/projects', { method: 'POST', body: { name } }); await loadProjects(); render(); });
   $('#spAuto').onclick = autoGroup;
 }
-async function loadIdeas() { try { const r = await api('/ideas?n=36'); if (r.ideas.length) { S.ideas = shuffleIdeas(r.ideas); S.ideaAt = 0; if (!S.searching) drawHero(); } } catch { } }
+async function loadIdeas() { try { const r = await api('/ideas?n=36'); if (r.ideas.length) { S.ideas = shuffleIdeas(r.ideas); S.ideaAt = 0; if (S.view === 'discover') render(); else if (!S.searching) drawHero(); } } catch { } }
 async function saveAsSpace() {
   const fl = filterLabel(); const name = prompt('Name this space:', S.searching ? (S.search?.label || 'Search').replace(/[“”]/g, '') : fl ? fl.text.replace('Name: ', '') : 'Collection'); if (!name) return;
   const ids = S.searching ? S.files.map(f => f.id) : (await api('/files?' + filterParams({ ids_only: 'true' }))).ids;
@@ -411,6 +506,40 @@ async function saveAsSpace() {
 }
 function render() {
   if (S.view === 'spaces') { $('#grid').innerHTML = spacesHTML(); $('#empty').hidden = true; bindSpaces(); updateBar(); setTitle(); drawHero(); return; }
+  if (S.view === 'discover') {
+    $('#empty').hidden = true;
+    const themes = S.discoverGroups.filter(g => g.key.startsWith('theme:'));
+    const kinds = S.discoverGroups.filter(g => g.key.startsWith('type:'));
+    const origins = S.discoverGroups.filter(g => g.key.startsWith('source:') || g.key.startsWith('camera:'));
+    const questions = [
+      ['Find images with dramatic light', 'dramatic light, strong shadows and a cinematic atmosphere', 'cinematic'],
+      ['Show the city after dark', 'night city streets, neon signs and glowing lights', 'night'],
+      ['Find a clean product hero shot', 'product hero shot on a simple background', 'products'],
+      ['Where are the bold colors?', 'bold color, graphic shapes and bright visual design', 'graphics'],
+      ['Show movement and energy', 'action, motion and dynamic sports scenes', 'motion'],
+      ['Find quiet natural details', 'plants, leaves and soft natural textures', 'nature'],
+      ['Build an architecture moodboard', 'interesting buildings, spaces and interior details', 'architecture'],
+      ['Which images feel nostalgic?', 'warm nostalgic photographs with a vintage mood', 'cinematic'],
+      ['Find a solitary figure', 'one person alone in a large scene', 'people'],
+      ['Show a view from above', 'overhead and aerial views of places or objects', 'places'],
+      ['Where are hands making things?', 'hands working, crafting and making something', 'people'],
+      ['Find a calm place', 'peaceful quiet scenery and soft natural light', 'nature'],
+    ];
+    const circle = g => `<button class="discover-circle" data-discover="${esc(g.key)}"><span class="discover-circle-art">${g.sample?.length ? g.sample.slice(0, 3).map(t => `<img src="/api/thumb/${t.id}" alt="" loading="lazy">`).join('') : ic(g.icon)}</span><strong>${esc(g.title)}</strong><small>${g.count.toLocaleString()} files</small></button>`;
+    const card = g => `<button class="discover-card" data-discover="${esc(g.key)}"><span class="discover-art">${(g.sample || []).slice(0, 3).map(t => t.kind === 'audio' ? `<span class="discover-audio">${ic('music')}</span>` : `<img src="/api/thumb/${t.id}" alt="" loading="lazy">`).join('') || `<span class="discover-icon">${ic(g.icon)}</span>`}</span><span class="discover-card-body"><span class="discover-card-copy"><strong>${esc(g.title)}</strong><small>${esc(g.detail)}</small></span><em>${g.count.toLocaleString()}</em></span></button>`;
+    $('#grid').innerHTML = `<div class="discover"><div class="discover-head"><span class="discover-over">SEE YOUR LIBRARY DIFFERENTLY</span><h1>Discover what’s already here.</h1><p>Fresh paths through the files File Mind has read, shaped by visual similarity and file metadata.</p></div>
+      ${themes.length ? `<section class="discover-section"><div class="discover-section-head"><h2>Visual themes</h2><p>Explore what the images show</p></div><div class="discover-circles">${themes.map(circle).join('')}</div></section>` : ''}
+      ${S.discoverGroups.length ? `<section class="discover-section"><div class="discover-section-head"><h2>Questions worth asking</h2><p>Open-ended searches for the files already in your library</p></div><div class="discover-prompts">${questions.map((q, i) => `<button class="discover-prompt" data-ex="${esc(q[1])}"><span class="prompt-index">${String(i + 1).padStart(2, '0')}</span><span class="prompt-text">${esc(q[0])}</span><span class="prompt-arrow" aria-hidden="true">↗</span></button>`).join('')}</div></section>` : ''}
+      ${P.ideas && S.ideas.length ? `<section class="discover-section"><div class="discover-section-head"><h2>Try a thought</h2><p>Search your library by meaning</p></div><div class="discover-queries">${[...S.ideas, ...S.ideas].slice(S.ideaAt, S.ideaAt + Math.min(5, S.ideas.length)).map((x, i) => ideaChip(x, i)).join('')}<button class="idea more" id="moreDiscover">${ic('redo')}<span>More</span></button></div></section>` : ''}
+      ${kinds.length ? `<section class="discover-section"><div class="discover-section-head"><h2>By file type</h2><p>Quick ways into your collection</p></div><div class="discover-cards">${kinds.map(card).join('')}</div></section>` : ''}
+      ${origins.length ? `<section class="discover-section"><div class="discover-section-head"><h2>Where it came from</h2><p>Apps and cameras detected from names and photo data</p></div><div class="discover-origins">${origins.map(g => `<button data-discover="${esc(g.key)}">${ic(g.key.startsWith('camera:') ? 'image' : g.icon)}<span>${esc(g.title)}</span><em>${g.count.toLocaleString()}</em></button>`).join('')}</div></section>` : ''}
+      ${!S.discoverGroups.length ? (S.discoverBuilding ? `<div class="discover-zero"><h2>Finding connections…</h2><p>Reading your existing index and photo metadata.</p></div>` : `<div class="discover-zero"><h2>Groups appear as files are read.</h2><p>Add a folder to start discovering connections in your library.</p><button class="btn dark" id="discoverAdd">Add a folder</button></div>`) : `<p class="discover-note">${S.discoverBuilding ? 'Finding more visual themes and camera groups…' : 'People in frame finds pictures that appear to show people; it does not identify individuals.'}</p>`}</div>`;
+    $$('#grid [data-discover]').forEach(b => b.onclick = () => go({ view: 'discover-group', discover: b.dataset.discover }));
+    $$('#grid [data-ex]').forEach(b => b.onclick = () => { S.view = 'all'; S.discover = null; searchTags([{ q: b.dataset.ex }]); });
+    $('#moreDiscover')?.addEventListener('click', () => { S.ideaAt = (S.ideaAt + 5) % S.ideas.length; render(); });
+    $('#discoverAdd')?.addEventListener('click', addFolderModal);
+    updateBar(); setTitle(); drawHero(); return;
+  }
   const W = Math.floor($('#grid').clientWidth || ($('#scroller').clientWidth - 88));
   for (const k in GM) delete GM[k];
   $('#grid').innerHTML = layoutHTML(S.files, W, S.animNext, GM); S.animNext = false; stopHover();
@@ -418,12 +547,7 @@ function render() {
   if (none) {
     if (!S.roots.length) {
       $('#empty').className = '';
-      $('#empty').innerHTML = `<div class="over">Your private oasis</div><h1>Everything you've made,<br>finally findable.</h1>
-        <p class="lead">Point File Mind at a messy folder. It looks at every photo and video and listens to every sound — on this PC only — so you can search by what's in them and sort them into projects.</p>${addBoxHTML()}
-        <div class="steps">
-          <div class="step a"><div class="n"><i data-ic="eye"></i>Step 1</div><h3>It reads everything</h3><p>EmbeddingGemma 2 looks at pictures and video frames and listens to audio. Thousands of files take a while the first time; you can pause, and search already works on what's done.</p></div>
-          <div class="step b"><div class="n"><i data-ic="search"></i>Step 2</div><h3>Search by meaning</h3><p>Describe what it looks like or sounds like — “red logo on black”, “man talking about pricing”. Or filter by color, or by the AI tool a file came from.</p></div>
-          <div class="step c"><div class="n"><i data-ic="move"></i>Step 3</div><h3>Commit when happy</h3><p>Spaces and new names are only drafts. Nothing on disk changes until you review the plan and press commit — and every commit can be undone.</p></div></div>`;
+      $('#empty').innerHTML = `<div class="welcome-visual"><div class="welcome-content"><span class="welcome-over">YOUR PRIVATE CREATIVE LIBRARY</span><h1>Everything you’ve made,<br>finally findable.</h1><p>Search your photos, videos, and sounds by what’s in them. Start with a folder you’d like File Mind to read.</p>${addBoxHTML()}<div class="welcome-private">${ic('lock')} Your files stay on this PC. Reading them never changes the originals.</div></div></div>`;
       bindAddBox($('#empty'));
     } else {
       $('#empty').className = 'plain';
@@ -491,12 +615,13 @@ function showCtx(e, id) {
   }; hydrate(m);
 }
 ['#grid', '#feed'].forEach(s => $(s).addEventListener('contextmenu', e => { const t = e.target.closest('.tile'); if (t) showCtx(e, +t.dataset.id); }));
-document.addEventListener('click', e => { if (!e.target.closest('#ctx')) $('#ctx').hidden = true; if (!e.target.closest('#dock')) $('#sortMenu').hidden = true; });
+document.addEventListener('click', e => { if (!e.target.closest('#ctx')) $('#ctx').hidden = true; if (!e.target.closest('#dock')) { $('#sortMenu').hidden = true; $('#layoutMenu').hidden = true; $('#layoutBtn').setAttribute('aria-expanded', 'false'); } });
 
 /* ---- dock: sort + layout */
-$('#sortBtn').onclick = e => { e.stopPropagation(); $('#sortMenu').hidden = !$('#sortMenu').hidden; $$('#sortMenu button').forEach(b => b.classList.toggle('on', b.dataset.sort === S.sort)); };
+$('#sortBtn').onclick = e => { e.stopPropagation(); $('#layoutMenu').hidden = true; $('#layoutBtn').setAttribute('aria-expanded', 'false'); $('#sortMenu').hidden = !$('#sortMenu').hidden; $$('#sortMenu button').forEach(b => b.classList.toggle('on', b.dataset.sort === S.sort)); };
 $('#sortMenu').onclick = e => { const s = e.target.dataset.sort; if (!s) return; S.sort = s; $('#sortMenu').hidden = true; drawColors(); if (!S.searching) { S.animNext = true; loadFiles(true); } };
-$('#layoutBtn').onclick = () => { S.layout = P.layout = S.layout === 'rows' ? 'cols' : 'rows'; applyPrefs(); S.animNext = false; glide(render); };
+$('#layoutBtn').onclick = e => { e.stopPropagation(); $('#sortMenu').hidden = true; $('#layoutMenu').hidden = !$('#layoutMenu').hidden; $('#layoutBtn').setAttribute('aria-expanded', String(!$('#layoutMenu').hidden)); $$('#layoutMenu button').forEach(b => b.classList.toggle('on', b.dataset.layout === S.layout)); };
+$('#layoutMenu').onclick = e => { const v = e.target.closest('[data-layout]')?.dataset.layout; if (!v) return; S.layout = P.layout = v; applyPrefs(); $('#layoutMenu').hidden = true; $('#layoutBtn').setAttribute('aria-expanded', 'false'); S.animNext = false; render(); };
 const resize = d => { P.tile = clamp(P.tile + d, 160, 560); applyPrefs(); S.animNext = false; glide(render); if (S.open) relayoutFeed(); };
 $('#sizeDown').onclick = () => resize(-50); $('#sizeUp').onclick = () => resize(50);
 
@@ -542,18 +667,13 @@ async function runSearch(body, label, opt = {}) {
 function clearSearch() { S.searching = false; S.search = null; S.related = []; $('#q').value = ''; S.animNext = true; record(); loadFiles(true); drawMoods(); }
 function submitSearch() { const q = $('#q').value.trim(); if (!q) return; $('#q').value = ''; addTag({ q }); }
 $('#searchForm').onsubmit = e => { e.preventDefault(); submitSearch(); };
-$('#focusSearch').onclick = () => { if (S.open) goBack(); $('#q').focus(); };
-$('#imgq').onchange = async e => {
-  const f = e.target.files[0]; if (!f) return; viewerUI(false);
-  const fd = new FormData(); fd.append('file', f); S.searching = true; S.search = { body: null, label: 'Like ' + f.name, text: '' }; S.animNext = true;
-  const r = await api(`/search/image?${S.root ? 'root=' + S.root : ''}`, { method: 'POST', body: fd }); S.files = r.files; $('#more').hidden = true; record(true); render(); e.target.value = '';
-};
 
 /* ================================================================ viewer: the file on top, an endless "more like this" below */
-const F = { id: null, files: [], done: false, loading: false, M: {} };
+const F = { id: null, files: [], done: false, loading: false, M: {}, generation: 0 };
+let viewerRequest = 0;
 function viewerUI(on) {
   $('#browse').hidden = on; $('#viewer').hidden = !on;
-  if (!on) { if (S.open) stopMedia(); S.open = null; S.cur = null; F.id = null; $('#stage').innerHTML = ''; $('#feed').innerHTML = ''; updateBar(); }
+  if (!on) { viewerRequest++; if (S.open) stopMedia(); S.open = null; S.cur = null; F.id = null; $('#stage').innerHTML = ''; delete $('#stage').dataset.id; $('#feed').innerHTML = ''; updateBar(); }
 }
 function stopMedia() { const m = $('#stage video, #stage audio'); if (m) { m.pause(); m.removeAttribute('src'); m.load(); } }
 function paintVol() {
@@ -565,83 +685,110 @@ $('#volRange').oninput = e => { S.vol = +e.target.value; S.muted = S.vol === 0; 
 $('#volBtn').onclick = () => { S.muted = !S.muted; if (!S.muted && S.vol === 0) S.vol = 60; saveVol(); applyVol(); };
 const ctxIds = () => (S.ctx && S.ctx.length ? S.ctx : S.files).map(f => f.id);
 
-function buildStage(id, kind, ar) {
-  const st = $('#stage'); st.innerHTML = ''; st.dataset.id = id; let m;
-  if (kind === 'image') { m = document.createElement('img'); m.alt = ''; m.decoding = 'async'; m.src = `/api/file/${id}`; st.appendChild(m); }
+async function prepareStage(id, kind, ar) {
+  let m;
+  if (kind === 'image') { m = document.createElement('img'); m.alt = ''; m.decoding = 'async'; m.src = `/api/file/${id}`; await m.decode(); }
   else if (kind === 'video' || kind === 'audio') {
     m = document.createElement(kind); m.controls = true; m.loop = kind === 'video'; m.preload = 'auto'; m.src = `/api/file/${id}`; if (kind === 'video') m.poster = `/api/thumb/${id}`;
+    if (kind === 'video') { const poster = new Image(); poster.src = m.poster; await poster.decode().catch(() => {}); }
     m.volume = S.vol / 100; m.muted = S.muted || S.vol === 0;
     m.onvolumechange = () => { S.vol = Math.round(m.volume * 100); S.muted = m.muted; saveVol(); paintVol(); };
-    st.appendChild(m);
-    m.play().catch(() => { S.muted = true; applyVol(); m.play().catch(() => { }); toast('Browser blocked sound on autoplay — press the speaker to unmute', 'vol', true); });
   }
-  if (m && ar && kind !== 'audio') m.style.cssText = `aspect-ratio:${ar};width:min(100%,calc((100vh - 230px) * ${ar.toFixed(4)}))`;   // final size known before the bytes arrive
+  const ratio = kind === 'image' && m.naturalWidth && m.naturalHeight ? m.naturalWidth / m.naturalHeight : ar;
+  if (m && ratio && kind !== 'audio') m.style.cssText = `aspect-ratio:${ratio};width:min(100%,calc((100vh - 230px) * ${ratio.toFixed(4)}))`;
   return m;
 }
 async function openViewer(id, opt = {}) {
+  const request = ++viewerRequest;
   stopAudio(); stopHover();
   const cur = H.stack[H.i]; if (cur && !H.busy) cur.scroll =!$('#browse').hidden ? $('#scroller').scrollTop : $('#viewer').scrollTop;   // remember where we were
-  const from = opt.rec == null ? grabTile(id) : null;     // a click: remember the tile so it can fly into place
-  if (S.open) stopMedia();
-  S.zoom = 1; viewerUI(true); S.open = id; $('#viewer').style.animation = from ? 'none' : '';   // a flying tile replaces the fade-in
- S.selected.clear(); $('#floatbar').hidden = true;
+  let f, media;
+  try {
+    f = await api(`/info/${id}`); if (request !== viewerRequest) return;
+    media = await prepareStage(id, f.kind, f.tw && f.th ? f.tw / f.th : 0);
+  } catch (e) { if (request === viewerRequest) toast(`Could not open file: ${e.message}`, 'x', true); return; }
+  if (request !== viewerRequest) { if (media) { media.removeAttribute('src'); if (media.load) media.load(); } return; }
+  // Keep the previous frame until the replacement is decoded; commit the whole view together.
+  stopMedia(); S.zoom = 1; S.open = id; S.cur = f;
+  $('#stage').replaceChildren(...(media ? [media] : [])); $('#stage').dataset.id = id;
+  viewerUI(true); S.selected.clear(); $('#floatbar').hidden = true;
   if (opt.rec === 'replace') record(true); else if (opt.rec == null || opt.rec === 'push') record();
-  $('#viewer').scrollTo({ top: 0, behavior: opt.smooth && !from ? 'smooth' : 'auto' });
-  if (from) morphIn(from, buildStage(id, from.kind, from.ar));
-  const f = await api(`/info/${id}`); if (S.open !== id) return; S.cur = f;
+  $('#viewer').scrollTo({ top: 0, behavior: 'instant' });
+  if (media?.play) media.play().catch(() => { /* Leave blocked autoplay paused; controls remain available. */ });
   $('#title').className = 'title two'; $('#title').innerHTML = `<span>${esc(f.name)}</span><span class="sub">${esc(KIND[f.kind]?.label.replace(/s$/, '') || f.kind)} · ${fmtSize(f.size)}</span>`;
-  if ($('#stage').dataset.id !== String(id) || !from) buildStage(id, f.kind, f.tw && f.th ? f.tw / f.th : 0);
-  $('#zoom').hidden = f.kind !== 'image' && f.kind !== 'video'; $('#volbox').hidden = f.kind === 'image'; applyZoom(); paintVol();
+  $('#zoom').hidden = f.kind !== 'image' && f.kind !== 'video'; $('#volbox').hidden = f.kind === 'image'; $('#copyFrame').hidden = f.kind !== 'video'; applyZoom(); paintVol();
   const ids = ctxIds(), i = ids.indexOf(id); $('#prevItem').hidden = i <= 0; $('#nextItem').hidden = i < 0 || i >= ids.length - 1;
   drawInspector(f); setNav();
   await startFeed(id);
   if (opt.scroll) {            // coming back through history: grow the feed until the old position exists
     for (let k = 0; k < 8 && $('#viewer').scrollHeight < opt.scroll + innerHeight && !F.done && S.open === id; k++) await feedMore();
-    $('#viewer').scrollTop = opt.scroll;
+    if (request === viewerRequest) $('#viewer').scrollTop = opt.scroll;
   }
 }
 const step = d => { const ids = ctxIds(), i = ids.indexOf(S.open); if (i >= 0 && ids[i + d]) openViewer(ids[i + d], { rec: 'replace' }); };
 $('#prevItem').onclick = () => step(-1); $('#nextItem').onclick = () => step(1);
 function applyZoom() { $$('#stage img,#stage video').forEach(m => m.style.transform = `scale(${S.zoom})`); $('#zVal').textContent = Math.round(S.zoom * 100) + '%'; }
 $('#zIn').onclick = () => { S.zoom = Math.min(4, S.zoom * 1.25); applyZoom(); }; $('#zOut').onclick = () => { S.zoom = Math.max(.25, S.zoom / 1.25); applyZoom(); };
+$('#copyFrame').onclick = async () => {
+  const video = $('#stage video');
+  if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) { toast('Wait for the video frame to load', 'info', true); return; }
+  const button = $('#copyFrame'); button.disabled = true;
+  try {
+    const canvas = document.createElement('canvas'); canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error('Could not capture this frame')), 'image/png'));
+    if (navigator.clipboard?.write && window.ClipboardItem) {
+      try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); toast('Frame copied — paste it anywhere', 'copy'); return; }
+      catch (error) { if (!window.pywebview?.api?.copy_frame) throw error; }
+    }
+    if (!window.pywebview?.api?.copy_frame) throw new Error('Image clipboard is unavailable in this window');
+    await window.pywebview.api.copy_frame(canvas.toDataURL('image/png'));
+    toast('Frame copied — paste it anywhere', 'copy');
+  } catch (error) { toast(`Could not copy frame: ${error.message || error}`, 'x', true); }
+  finally { button.disabled = false; }
+};
 
 /* ---- the endless feed of similar files */
 async function startFeed(id) {
-  Object.assign(F, { id, files: [], done: false, loading: false, M: { force: 'cols' } });
-  $('#feed').innerHTML = ''; $('#feedmsg').textContent = '';
+  Object.assign(F, { id, files: [], done: false, loading: false, M: { force: 'cols' }, generation: F.generation + 1 });
+  // Keep the previous thumbnails painted until the next similarity page is ready.
+  $('#feedmsg').textContent = '';
   $('#feedhead').innerHTML = `<div><h2 class="d-head">More like this</h2><div class="sub">Closest first, by what is in them. Keep scrolling; click any to follow it.</div></div>
     <div class="acts"><button class="btn ghost sm" id="fhGrid">${ic('images')}<span>Open as results</span></button><button class="btn dark sm" id="fhColl">${ic('folderplus')}<span>Make a collection</span></button></div>`;
   $('#fhGrid').onclick = () => go_similar(id); $('#fhColl').onclick = () => collectionModal(S.cur);
   await feedMore();
 }
 async function feedMore() {
-  if (F.loading || F.done || !F.id) return; F.loading = true; const id = F.id, page = 60;
+  if (F.loading || F.done || !F.id) return; F.loading = true; const id = F.id, generation = F.generation, page = 60;
   try {
     const r = await api('/search', { method: 'POST', body: { similar_to: id, limit: page, offset: F.files.length } });
-    if (F.id !== id) return;
+    if (F.id !== id || F.generation !== generation) return;
     const fresh = r.files; if (fresh.length < page) F.done = true;
     const first = !F.files.length; F.files.push(...fresh);
-    if (first) { F.M = { force: 'cols' }; $('#feed').innerHTML = layoutHTML(fresh, Math.floor($('#feed').clientWidth), true, F.M); hydrate($('#feed')); }
+    if (first) { F.M = { force: 'cols' }; $('#feed').innerHTML = layoutHTML(fresh, Math.floor($('#feed').clientWidth), false, F.M); hydrate($('#feed')); }
     else appendTo($('#feed'), F.M, fresh);
     afterRenderAudio();
     $('#feedmsg').textContent = F.done ? (F.files.length ? `That's everything — ${F.files.length.toLocaleString()} files, least alike last.` : 'Nothing similar yet.') : '';
-  } catch (e) { $('#feedmsg').textContent = e.message; F.done = true; }
-  finally { F.loading = false; }
+  } catch (e) { if (F.generation === generation) { $('#feedmsg').textContent = e.message; F.done = true; } }
+  finally { if (F.generation === generation) F.loading = false; }
 }
 function relayoutFeed() { if (!F.files.length) return; F.M = { force: 'cols' }; $('#feed').innerHTML = layoutHTML(F.files, Math.floor($('#feed').clientWidth), false, F.M); hydrate($('#feed')); afterRenderAudio(); }
 new IntersectionObserver(es => { if (es[0].isIntersecting && S.open) feedMore(); }, { root: $('#viewer'), rootMargin: '1400px' }).observe($('#feedmore .sentinel'));
-let rzf; new ResizeObserver(() => { clearTimeout(rzf); rzf = setTimeout(() => { if (S.open) relayoutFeed(); }, 150); }).observe($('#feed'));
+let rzf, lastFeedWidth = 0; new ResizeObserver(() => { const width = Math.floor($('#feed').clientWidth); if (width === lastFeedWidth) return; lastFeedWidth = width; clearTimeout(rzf); rzf = setTimeout(() => { if (S.open) relayoutFeed(); }, 150); }).observe($('#viewer'));
 $('#feed').onclick = e => gridClick(e, () => F.files, id => { S.ctx = F.files.slice(); openViewer(id, { smooth: true }); });
 
 function drawInspector(f) {
   const id = f.id, box = $('#inspector'), others = S.projects.filter(p => !f.projects.some(x => x.id === p.id)), src = S.sources.find(s => s.key === f.src), m = f.meta || {};
   const label = k => S.colors.find(c => c.key === k)?.label || k;
   box.innerHTML = `
-    <div class="ihead"><h1 class="nm d-head">${esc(f.name.replace(/\.[^.]+$/, ''))}</h1>
-      <div class="meta">${kicon(f.kind, 14)}<span>${esc(KIND[f.kind]?.label.replace(/s$/, '') || f.kind)} · ${esc(f.ext.slice(1).toUpperCase())}</span><span>${fmtSize(f.size)}</span><span>${ago(f.mtime)}</span></div></div>
+    <div class="ihead"><span class="detail-over">FILE DETAILS</span><div class="detail-grid">
+      <span>Type<strong>${esc(KIND[f.kind]?.label.replace(/s$/, '') || f.kind)} · ${esc(f.ext.slice(1).toUpperCase())}</strong></span>
+      <span>Size<strong>${fmtSize(f.size)}</strong></span>
+      ${f.dimensions ? `<span>Resolution<strong>${f.dimensions[0].toLocaleString()} × ${f.dimensions[1].toLocaleString()}</strong></span>` : ''}
+      <span>Modified<strong>${ago(f.mtime)}</strong></span></div></div>
     <div class="is"><div class="quickbtns"><button class="btn dark" id="qbExplorer" title="Show in ${FM}  (E)">${ic('explorer')}<span>Show in ${FMS}</span></button>
       <button class="btn icon" id="qbOpen" title="Open in a new window">${ic('open')}</button><button class="btn icon" id="qbCopy" title="Copy the full path">${ic('copy')}</button><button class="btn icon" id="qbSim" title="All similar files as search results">${ic('images')}</button></div></div>
-    ${f.tags?.length ? `<div class="is"><h5><i data-ic="tag"></i>Tags <span class="cnt">· what is in it</span></h5>
+    ${f.tags?.length ? `<div class="is"><h5><i data-ic="tag"></i>Tags <span class="cnt">· What's in it?</span></h5>
       <div class="tagline">${f.tags.map(t => `<button data-t="${esc(t)}" title="Search “${esc(t)}”  ·  Shift-click to add it to the current search">${esc(t)}</button>`).join('')}</div></div>` : ''}
     <div class="is"><dl class="kv">
       ${src ? `<dt>Source</dt><dd><button class="chip" id="srcChip" title="Everything from ${esc(src.label)}"><span class="dot" style="background:${src.color}"></span>${esc(src.label)}</button></dd>` : ''}
@@ -701,14 +848,30 @@ function settingsModal() {
     <h6>Theme</h6><div class="themes" id="sTheme">${THEMES.map(([k, l, bg, side]) => `<button data-v="${k}"><span class="tt" style="background:${bg}"><i style="background:${side}"></i><b><span></span><span></span><span></span></b></span>${l}</button>`).join('')}</div>
     <h6>Accent</h6><div class="accents" id="sAcc">${ACC.map(c => `<button data-c="${c}" style="background:${c}" title="${c}"></button>`).join('')}<label title="Any color">${ic('pipette')}<input type="color" id="sAccAny" hidden></label></div>
     <h6>Headings</h6>${seg('sHead', [['serif', 'Serif'], ['sans', 'Sans']])}
-    <h6>Layout</h6>${seg('sLay', [['cols', 'Masonry', 'columns'], ['rows', 'Rows', 'rows']])}
+    <h6>Layout</h6>${seg('sLay', [['cols', 'Masonry', 'columns'], ['rows', 'Rows', 'rows'], ['contact', 'Contact', 'images'], ['story', 'Storyboard', 'film']])}
     <h6>Tile size <output id="oTile"></output></h6><input type="range" id="sTile" min="160" max="560" step="10">
     <h6>Spacing <output id="oGap"></output></h6><input type="range" id="sGap" min="0" max="32" step="1">
     <h6>Corners <output id="oRad"></output></h6><input type="range" id="sRad" min="0" max="28" step="1">
     <h6>Tiles</h6>${seg('sStyle', [['lift', 'Lift'], ['soft', 'Shadow'], ['outline', 'Outline'], ['flat', 'Flat']])}
     <h6>Show</h6>${tog('sNames', 'File names', 'under every tile, not just on hover')}${tog('sHover', 'Video preview on hover', 'plays muted after a moment')}${tog('sIdeas', 'Search ideas', 'suggestions picked from your library')}
+    <h6>Sidebar menu</h6><p class="hint">Choose what appears and move items up or down. Hidden items stay available here.</p><div id="sNavItems" class="sidebar-settings"></div>
+    <h6>Sidebar sections</h6><div id="sSideItems" class="sidebar-settings"></div>
     <h6>Default volume <output id="oVol"></output></h6><input type="range" id="sVol" min="0" max="100" step="5">
-    <div class="line"><button class="btn ghost" id="sReset">${ic('redo')}<span>Reset everything</span></button></div></div>`, { kind: 'tune', w: 340 });
+    <div class="line"><button class="btn ghost" id="sReset">${ic('redo')}<span>Reset everything</span></button></div></div>`, { kind: 'tune', w: 410 });
+  const paintSidebarSettings = () => {
+    const row = (k, label, visible, first, last) => `<div class="sidebar-setting" data-key="${k}"><button data-action="visible" title="${visible ? 'Hide' : 'Show'} ${label}" aria-pressed="${visible}">${ic(visible ? 'eye' : 'eye-off')}</button><span class="${visible ? '' : 'muted'}">${label}</span><button data-action="up" title="Move up" ${first ? 'disabled' : ''}>${ic('arrow-up')}</button><button data-action="down" title="Move down" ${last ? 'disabled' : ''}>${ic('down')}</button></div>`;
+    const draw = (id, order, names, hidden) => { const keys = [...new Set([...(order || []), ...Object.keys(names)])].filter(k => names[k]); $(id).innerHTML = keys.map((k, i) => row(k, names[k], !(hidden || []).includes(k), i === 0, i === keys.length - 1)).join(''); };
+    draw('#sNavItems', P.navOrder, NAV_NAMES, P.navHidden); draw('#sSideItems', P.sideOrder, SIDE_NAMES, P.sideHidden);
+  };
+  const changeSidebar = (container, orderKey, hiddenKey) => $(container).onclick = e => {
+    const action = e.target.closest('[data-action]')?.dataset.action, key = e.target.closest('[data-key]')?.dataset.key; if (!action || !key) return;
+    const order = [...new Set([...(P[orderKey] || []), ...Object.keys(orderKey === 'navOrder' ? NAV_NAMES : SIDE_NAMES)])];
+    if (action === 'visible') { const hidden = new Set(P[hiddenKey] || []); if (hidden.has(key)) hidden.delete(key); else hidden.add(key); P[hiddenKey] = [...hidden]; }
+    else { const i = order.indexOf(key), j = i + (action === 'up' ? -1 : 1); if (j < 0 || j >= order.length) return; [order[i], order[j]] = [order[j], order[i]]; P[orderKey] = order; }
+    applyPrefs(); applySidebar(); paintSidebarSettings();
+  };
+  changeSidebar('#sNavItems', 'navOrder', 'navHidden'); changeSidebar('#sSideItems', 'sideOrder', 'sideHidden');
+  paintSidebarSettings();
   const sync = () => {
     [['#sTheme', P.theme], ['#sHead', P.head], ['#sLay', P.layout], ['#sStyle', P.tstyle]].forEach(([g, v]) => $$(g + ' [data-v]').forEach(b => b.classList.toggle('on', b.dataset.v === v)));
     $('#sTile').value = P.tile; $('#oTile').textContent = P.tile + 'px'; $('#sGap').value = P.gap; $('#oGap').textContent = P.gap + 'px'; $('#sRad').value = P.rad; $('#oRad').textContent = P.rad + 'px';
@@ -722,9 +885,9 @@ function settingsModal() {
   $('#sTile').oninput = e => { P.tile = +e.target.value; commit(); }; $('#sGap').oninput = e => { P.gap = +e.target.value; commit(); }; $('#sRad').oninput = e => { P.rad = +e.target.value; commit(false); };
   $('#sAcc').onclick = e => { const c = e.target.dataset.c; if (c) { P.accent = c; commit(false); } }; $('#sAccAny').oninput = e => { P.accent = e.target.value; commit(false); };
   $('#sNames').onclick = () => { P.names = !P.names; commit(false); }; $('#sHover').onclick = () => { P.hover = !P.hover; commit(false); };
-  $('#sIdeas').onclick = () => { P.ideas = !P.ideas; commit(false); drawHero(); };
+  $('#sIdeas').onclick = () => { P.ideas = !P.ideas; commit(false); if (S.view === 'discover') render(); else drawHero(); };
   $('#sVol').oninput = e => { S.vol = +e.target.value; S.muted = S.vol === 0; saveVol(); applyVol(); sync(); };
-  $('#sReset').onclick = () => { Object.assign(P, PDEF); commit(); drawHero(); };
+  $('#sReset').onclick = () => { Object.assign(P, structuredClone(PDEF)); S.spAll = false; commit(); applySidebar(); drawProjects(); drawSources(); loadRoots(); paintSidebarSettings(); drawHero(); };
   sync();
 }
 $('#settingsBtn').onclick = settingsModal;
@@ -791,7 +954,7 @@ async function nameGroups() {
   const nice = p => p.replace(/\{id\}/g, 'id').replace(/#/g, '').replace(/\s+/g, ' ').trim().replace(/^./, c => c.toUpperCase()) || 'Untitled pattern';
   reviewGroups('Group by file name', `${r.groups.length} name patterns found among files not claimed by a known tool. “View” shows the group in the library.`, r.groups, g => nice(g.pattern) + ' (names)', true);
 }
-$('#autoGroup').onclick = autoGroup; $('#autoTop').onclick = autoGroup; $('#nameGroups').onclick = nameGroups;
+$('#autoGroup').onclick = autoGroup; $('#nameGroups').onclick = nameGroups;
 
 /* ================================================================ commit + history */
 $('#commitBtn').onclick = () => {
@@ -872,12 +1035,11 @@ async function firstRun() {
 }
 
 /* ================================================================ motion
-   Opening a file: the tile you clicked flies into the stage while everything around it
-   is pushed outward and fades, as if the camera dives in. Going back reverses it — the
-   file lands in its old slot and the grid gathers around it. Changing tile size or layout
+   Going back lands the file in its old slot and gathers the grid around it.
+   Changing tile size or layout
    glides every visible tile to its new place. Only transforms and opacity move. */
 const reduced = matchMedia('(prefers-reduced-motion: reduce)'), calm = { get matches() { return reduced.matches || document.hidden; } };
-const DIVE = 'cubic-bezier(.32,.72,0,1)', OUT = 'cubic-bezier(.2,.8,.2,1)';
+const DIVE = 'cubic-bezier(.32,.72,0,1)';
 const onScreen = r => r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth && r.width > 0;
 const settle = (a, ms, fn) => { let done = false; const f = () => { if (!done) { done = true; fn(); } }; a.onfinish = f; setTimeout(f, ms + 250); };
 const fx = () => $('#fx') || document.body.appendChild(Object.assign(document.createElement('div'), { id: 'fx' }));
@@ -885,45 +1047,6 @@ function ghost(src, r, rad) {
   const g = document.createElement('div'); g.className = 'ghost';
   g.style.cssText = `left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;border-radius:${rad}px`;
   if (src) g.innerHTML = `<img src="${src}" alt="">`; return g;
-}
-function grabTile(id) {
-  if (calm.matches) return null;
-  const box = $('#browse').hidden ? '#feed' : '#grid', t = $(`${box} .tile[data-id="${id}"]`), im = t?.querySelector('img.im');
-  if (!t || !im?.naturalWidth || t.dataset.kind === 'audio') return null;
-  const r = t.getBoundingClientRect(); if (!onScreen(r)) return null;
-  const others = [];
-  for (const o of $$(`${box} .tile`)) {             // everything else that is visible gets scattered
-    if (o === t || others.length > 90) continue;
-    const q = o.getBoundingClientRect(); if (!onScreen(q)) continue;
-    const oi = o.querySelector('img.im'); others.push({ r: q, src: oi?.naturalWidth ? oi.src : '', bg: getComputedStyle(o).backgroundColor });
-  }
-  const c = (box === '#grid' ? $('#scroller') : $('#viewer')).getBoundingClientRect();
-  return { id, r, src: im.src, kind: t.dataset.kind, ar: im.naturalWidth / im.naturalHeight, others, clip: `inset(${c.top}px ${innerWidth - c.right}px ${innerHeight - c.bottom}px ${c.left}px)` };
-}
-function morphIn(from, media) {
-  const layer = fx(), rad = parseFloat(getComputedStyle(document.body).getPropertyValue('--rad')) || 10;
-  const cx = from.r.left + from.r.width / 2, cy = from.r.top + from.r.height / 2;
-  const scat = layer.appendChild(Object.assign(document.createElement('div'), { className: 'scat' }));   // kept inside the grid area
-  scat.style.clipPath = from.clip; setTimeout(() => scat.remove(), 900);
-  for (const o of from.others) {
-    const g = ghost(o.src, o.r, rad); g.style.background = o.bg; scat.appendChild(g);
-    const dx = o.r.left + o.r.width / 2 - cx, dy = o.r.top + o.r.height / 2 - cy, d = Math.hypot(dx, dy);
-    g.animate([{ transform: 'none', opacity: 1 }, { transform: `translate(${dx * .55}px,${dy * .55}px) scale(${1.25 + d / 4000})`, opacity: 0 }],
-      { duration: 460, easing: OUT, delay: Math.min(d / 30, 60), fill: 'forwards' }); settle(g.getAnimations()[0], 520, () => g.remove());
-  }
-  if (!media) return;
-  const to = media.getBoundingClientRect(); if (!to.width) return;
-  const g = ghost(from.src, from.r, rad); g.classList.add('flyer'); layer.appendChild(g);
-  media.classList.add('arriving');
-  const a = g.animate([
-    { left: from.r.left + 'px', top: from.r.top + 'px', width: from.r.width + 'px', height: from.r.height + 'px', borderRadius: rad + 'px' },
-    { left: to.left + 'px', top: to.top + 'px', width: to.width + 'px', height: to.height + 'px', borderRadius: '6px' }], { duration: 560, easing: DIVE, fill: 'forwards' });
-  const ready = media.tagName === 'IMG' ? (media.complete ? Promise.resolve() : media.decode().catch(() => { })) : Promise.resolve();
-  const wait = ms => new Promise(r => setTimeout(r, ms));
-  Promise.all([Promise.race([a.finished, wait(800)]), Promise.race([ready, wait(1500)])]).then(() => {
-    media.classList.add('landed'); media.classList.remove('arriving');   // 'landed' = no pop-in, or the file dips to transparent as the flyer fades
-    settle(g.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, fill: 'forwards' }), 160, () => g.remove());
-  });
 }
 function grabStage() {
   if (calm.matches || !S.open) return null;
@@ -976,12 +1099,12 @@ function glide(redraw) {
    The recording itself goes to EmbeddingGemma, which understands speech directly and puts it
    in the same space as typed words — no transcription, nothing leaves this PC. */
 const V = { rec: null, chunks: [], stream: null, timer: null, ctx: null, raf: 0 };
-$('#micBtn').innerHTML = ic('mic');
+$('#micBtn').innerHTML = ic('mic') + '<span>Voice</span>';
 async function startVoice() {
   try { V.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
   catch { return toast('Microphone is blocked — allow it in the address bar to search by voice', 'mic', true); }
   V.chunks = []; V.rec = new MediaRecorder(V.stream); V.rec.ondataavailable = e => V.chunks.push(e.data); V.rec.onstop = sendVoice; V.rec.start();
-  const b = $('#micBtn'); b.classList.add('on'); b.title = 'Listening… click to search';
+  const b = $('#micBtn'); b.classList.add('on'); b.title = 'Listening… click to search'; b.querySelector('span').textContent = 'Listening';
   $('#q').placeholder = 'Listening… say what you are looking for';
   V.ctx = new AudioContext(); const an = V.ctx.createAnalyser(); an.fftSize = 512; V.ctx.createMediaStreamSource(V.stream).connect(an);
   const buf = new Uint8Array(an.fftSize); let quiet = 0, heard = false, last = performance.now();
@@ -998,7 +1121,7 @@ function stopVoice() {
   cancelAnimationFrame(V.raf); clearTimeout(V.timer);
   if (V.rec?.state === 'recording') V.rec.stop();
   V.stream?.getTracks().forEach(t => t.stop()); V.ctx?.close().catch(() => { }); V.ctx = null;
-  const b = $('#micBtn'); b.classList.remove('on'); b.classList.add('busy'); b.style.removeProperty('--lvl'); b.title = 'Search by voice';
+  const b = $('#micBtn'); b.classList.remove('on'); b.classList.add('busy'); b.style.removeProperty('--lvl'); b.title = 'Search by voice'; b.querySelector('span').textContent = 'Searching';
 }
 async function sendVoice() {
   const fd = new FormData(); fd.append('file', new Blob(V.chunks, { type: V.rec.mimeType || 'audio/webm' }), 'voice.webm'); V.rec = null;
@@ -1006,6 +1129,6 @@ async function sendVoice() {
     const r = await api('/voice', { method: 'POST', body: fd });
     addTag({ q: 'voice:' + r.id, label: r.hint.slice(0, 2).join(' · '), voice: true });
   } catch (e) { toast(e.message, 'mic', true); }
-  finally { $('#micBtn').classList.remove('busy'); drawBar(); }
+  finally { $('#micBtn').classList.remove('busy'); $('#micBtn').querySelector('span').textContent = 'Voice'; drawBar(); }
 }
 $('#micBtn').onclick = () => V.rec ? stopVoice() : startVoice();
