@@ -1,9 +1,11 @@
 import os
+import json
 import re
 import subprocess
 import sys
 import time
 from collections import Counter
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -18,6 +20,7 @@ from . import db, embedder, extract, indexer
 from . import suggest as suggest_mod
 from . import tags as tags_mod
 from . import fetch as fetch_mod
+from . import discover as discover_mod
 
 app = FastAPI(title="Local File Brain")
 STATIC = Path(__file__).parent / "static"
@@ -192,7 +195,9 @@ def status():
 def files(root: int | None = None, kind: str | None = None, project: int | None = None,
           unassigned: bool = False, sort: str = "mtime", limit: int = 300, offset: int = 0,
           color: str | None = None, near: str | None = None, source: str | None = None,
-          pattern: str | None = None, ids_only: bool = False):
+          pattern: str | None = None, discover: str | None = None,
+          after: float | None = None, before: float | None = None,
+          min_size: int | None = None, max_size: int | None = None, ids_only: bool = False):
     where, args = ["f.status='done'"], []      # only fully read files; never half-processed cards
     if root:
         where.append("f.root_id=?"); args.append(root)
@@ -202,11 +207,22 @@ def files(root: int | None = None, kind: str | None = None, project: int | None 
         where.append("f.id IN (SELECT file_id FROM project_files WHERE project_id=?)"); args.append(project)
     if unassigned:
         where.append("f.id NOT IN (SELECT file_id FROM project_files)")
+    if after is not None:
+        where.append("f.mtime>=?"); args.append(after)
+    if before is not None:
+        where.append("f.mtime<?"); args.append(before)
+    if min_size is not None:
+        where.append("f.size>=?"); args.append(min_size)
+    if max_size is not None:
+        where.append("f.size<=?"); args.append(max_size)
     order = {"mtime": "f.mtime DESC", "name": "f.name COLLATE NOCASE", "size": "f.size DESC"}.get(sort, "f.mtime DESC")
     c = db.conn()
     base = c.execute(f"SELECT f.id, f.name, f.dom, f.pal FROM files f WHERE {' AND '.join(where)} ORDER BY {order}", args).fetchall()
     meta = {r["id"]: r for r in base}
     ids = [r["id"] for r in base]
+    if discover:
+        discovered = discover_mod.file_ids(discover)
+        ids = [i for i in ids if i in discovered]
     # filters that are computed (file-name source / pattern, colour) are applied here
     if source:
         ids = [i for i in ids if (names_mod.source_of(meta[i]["name"]) or "none") == source]
@@ -235,6 +251,11 @@ def files(root: int | None = None, kind: str | None = None, project: int | None 
         d["proposed"] = pn.get(i)
         out.append(d)
     return {"total": total, "files": out}
+
+
+@app.get("/api/discover")
+def discover():
+    return discover_mod.request_groups()
 
 
 @app.get("/api/sources")
@@ -549,11 +570,32 @@ def info(fid: int):
     d = _file_dict(r)
     d.update(colors=colors, projects=projs, proposed=pn["new_name"] if pn else None,
              folder=os.path.dirname(r["path"]), error=r["error"],
+             dimensions=_original_dimensions(r["path"], r["kind"], r["mtime"] or 0),
              meta=names_mod.parse(r["name"]),
              tags=tags_mod.for_vector(np.frombuffer(r["vec"], dtype=np.float32)) if r["vec"] is not None else [],
              swatches=[{"key": k, "share": v, "swatch": dict((x, h) for x, _, h in colors_mod.SWATCHES)[k]}
                        for k, v in colors_mod.shares(r["pal"]).items() if v >= 0.06][:5])
     return d
+
+
+@lru_cache(maxsize=4096)
+def _original_dimensions(path: str, kind: str, mtime: float) -> list[int] | None:
+    """Read dimensions from the original only when its details are opened."""
+    try:
+        if kind == "image":
+            from PIL import Image
+            with Image.open(path) as image:
+                return list(image.size)
+        if kind == "video":
+            probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                                    "stream=width,height", "-of", "json", path], capture_output=True,
+                                   text=True, timeout=5, check=True)
+            stream = json.loads(probe.stdout).get("streams", [{}])[0]
+            if stream.get("width") and stream.get("height"):
+                return [int(stream["width"]), int(stream["height"])]
+    except (OSError, ValueError, IndexError, KeyError, subprocess.SubprocessError):
+        pass
+    return None
 
 
 @app.get("/api/wave/{fid}")
