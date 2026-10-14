@@ -25,6 +25,12 @@ CATEGORIES = (
     ("vehicles", "Vehicles", "Cars, bikes and transport", "cars, motorcycles, bicycles, trains and vehicles"),
     ("patterns", "Patterns & texture", "Repeating shapes and surfaces", "abstract pattern, geometric shapes, material texture, repetition"),
     ("interiors", "Inside spaces", "Rooms and interiors", "interior photography, rooms, furniture, indoor spaces"),
+    ("animals", "Animals & wildlife", "Creatures and pets", "animals, pets, birds and wildlife in photographs or illustrations"),
+    ("street", "Street life", "Everyday city moments", "street photography, pedestrians, urban life and public spaces"),
+    ("water", "Water & coast", "Waves and reflections", "ocean, beach, rivers, rain and water reflections"),
+    ("minimal", "Quiet minimalism", "Simple compositions", "minimal composition, negative space, restrained colors and simple objects"),
+    ("sky", "Sky & weather", "Clouds and atmosphere", "dramatic clouds, sky, sunrise, sunset and atmospheric weather"),
+    ("craft", "Made by hand", "Materials and craft", "hands making art, crafts, tools, textiles and handmade objects"),
 )
 
 

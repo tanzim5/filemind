@@ -261,10 +261,10 @@ function drawProjects() {
   const list = S.spAll ? S.projects : [...S.projects.slice(0, 3), ...(active && !S.projects.slice(0, 3).includes(active) ? [active] : [])];
   $('#projects').innerHTML = (list.map(p => `<button class="row proj ${S.view === 'project' && S.project === p.id ? 'active' : ''}" data-id="${p.id}">${glyph(p.id)}<span>${esc(p.name)}</span><em>${p.count}</em></button>`).join('')
     || '<div class="hintrow">Spaces are virtual folders. Press + to make one.</div>')
-    + (S.projects.length > 3 ? `<button class="row more-spaces" id="spMore"><i data-ic="${S.spAll ? 'left' : 'layers'}"></i><span>${S.spAll ? 'Show fewer' : `View all ${S.projects.length} spaces`}</span></button>` : '');
+    + (S.projects.length ? `<button class="row more-spaces" id="spMore"><i data-ic="layers"></i><span>View all ${S.projects.length} spaces</span></button>` : '');
   hydrate($('#projects'));
 }
-$('#projects').onclick = e => { if (e.target.closest('#spMore')) { $('.label[data-sec="spaces"]').click(); return; } const b = e.target.closest('.proj'); if (b) go({ view: 'project', project: +b.dataset.id }); };
+$('#projects').onclick = e => { if (e.target.closest('#spMore')) { go({ view: 'spaces' }); return; } const b = e.target.closest('.proj'); if (b) go({ view: 'project', project: +b.dataset.id }); };
 $('#projects').oncontextmenu = async e => {
   const b = e.target.closest('.proj'); if (!b) return; e.preventDefault();
   const p = S.projects.find(x => x.id == b.dataset.id);
@@ -286,6 +286,7 @@ function applySidebar() {
 $$('.label[data-sec]').forEach(l => l.onclick = e => {
   if (e.target.closest('button') || !['colors', 'sources', 'spaces', 'folders', 'filters'].includes(l.dataset.sec)) return;
   const sec = l.dataset.sec, current = new Set(P.sideExpanded || []);
+  if (sec === 'spaces') { go({ view: 'spaces' }); return; }
   if (current.has(sec)) current.delete(sec); else current.add(sec);
   P.sideExpanded = [...current]; applyPrefs(); applySidebar();
   if (sec === 'sources') drawSources(); if (sec === 'spaces') { S.spAll = sideExpanded(sec); drawProjects(); } if (sec === 'folders') loadRoots(); if (sec === 'filters') drawFilterStatus();
@@ -520,12 +521,18 @@ function render() {
       ['Show a view from above', 'overhead and aerial views of places or objects', 'places'],
       ['Where are hands making things?', 'hands working, crafting and making something', 'people'],
       ['Find a calm place', 'peaceful quiet scenery and soft natural light', 'nature'],
+      ['Show the texture of the city', 'urban surfaces, street details, signs and architecture', 'architecture'],
+      ['Find soft morning light', 'gentle morning sunlight, warm quiet atmosphere', 'cinematic'],
+      ['What looks handmade?', 'handmade objects, crafts and tactile materials', 'products'],
+      ['Find striking silhouettes', 'strong silhouettes against bright backgrounds', 'cinematic'],
+      ['Where does water appear?', 'water, reflections, waves, rain and shorelines', 'places'],
+      ['Show playful compositions', 'playful colorful compositions and unexpected details', 'graphics'],
     ];
-    const circle = g => `<button class="discover-circle" data-discover="${esc(g.key)}"><span class="discover-circle-art">${g.sample?.length ? g.sample.slice(0, 3).map(t => `<img src="/api/thumb/${t.id}" alt="" loading="lazy">`).join('') : ic(g.icon)}</span><strong>${esc(g.title)}</strong><small>${g.count.toLocaleString()} files</small></button>`;
-    const card = g => `<button class="discover-card" data-discover="${esc(g.key)}"><span class="discover-art">${(g.sample || []).slice(0, 3).map(t => t.kind === 'audio' ? `<span class="discover-audio">${ic('music')}</span>` : `<img src="/api/thumb/${t.id}" alt="" loading="lazy">`).join('') || `<span class="discover-icon">${ic(g.icon)}</span>`}</span><span class="discover-card-body"><span class="discover-card-copy"><strong>${esc(g.title)}</strong><small>${esc(g.detail)}</small></span><em>${g.count.toLocaleString()}</em></span></button>`;
-    $('#grid').innerHTML = `<div class="discover"><div class="discover-head"><span class="discover-over">SEE YOUR LIBRARY DIFFERENTLY</span><h1>Discover what’s already here.</h1><p>Fresh paths through the files File Mind has read, shaped by visual similarity and file metadata.</p></div>
-      ${themes.length ? `<section class="discover-section"><div class="discover-section-head"><h2>Visual themes</h2><p>Explore what the images show</p></div><div class="discover-circles">${themes.map(circle).join('')}</div></section>` : ''}
-      ${S.discoverGroups.length ? `<section class="discover-section"><div class="discover-section-head"><h2>Questions worth asking</h2><p>Open-ended searches for the files already in your library</p></div><div class="discover-prompts">${questions.map((q, i) => `<button class="discover-prompt" data-ex="${esc(q[1])}"><span class="prompt-index">${String(i + 1).padStart(2, '0')}</span><span class="prompt-text">${esc(q[0])}</span><span class="prompt-arrow" aria-hidden="true">↗</span></button>`).join('')}</div></section>` : ''}
+    const circle = g => `<button class="discover-circle" data-discover="${esc(g.key)}"><span class="discover-circle-art">${g.sample?.length ? `<img class="theme-main" src="/api/thumb/${g.sample[0].id}" alt="" loading="lazy">${g.sample.slice(1, 3).map((t, i) => `<img class="theme-mini m${i}" src="/api/thumb/${t.id}" alt="" loading="lazy">`).join('')}` : ic(g.icon)}</span><strong>${esc(g.title)}</strong><small>${g.count.toLocaleString()} files</small></button>`;
+    const card = g => `<button class="discover-card" data-discover="${esc(g.key)}"><span class="discover-art">${(g.sample || []).slice(0, 3).map((t, i) => t.kind === 'audio' ? `<span class="discover-audio d${i}">${ic('music')}</span>` : `<img class="d${i}" src="/api/thumb/${t.id}" alt="" loading="lazy">`).join('') || `<span class="discover-icon">${ic(g.icon)}</span>`}</span><span class="discover-card-body"><span class="discover-card-copy"><strong>${esc(g.title)}</strong><small>${g.count.toLocaleString()} files</small></span><span class="discover-card-arrow">↗</span></span></button>`;
+    $('#grid').innerHTML = `<div class="discover"><div class="discover-head"><h1>Discover what’s already here.</h1></div>
+      ${themes.length ? `<section class="discover-section"><div class="discover-section-head"><h2>Visual themes</h2></div><div class="discover-circles">${themes.map(circle).join('')}</div></section>` : ''}
+      ${S.discoverGroups.length ? `<section class="discover-section"><div class="discover-section-head"><h2>Questions worth asking</h2></div><div class="discover-prompts">${questions.map(q => `<button class="discover-prompt" data-ex="${esc(q[1])}"><span class="prompt-text">${esc(q[0])}</span><span class="prompt-arrow" aria-hidden="true">↗</span></button>`).join('')}</div></section>` : ''}
       ${P.ideas && S.ideas.length ? `<section class="discover-section"><div class="discover-section-head"><h2>Try a thought</h2><p>Search your library by meaning</p></div><div class="discover-queries">${[...S.ideas, ...S.ideas].slice(S.ideaAt, S.ideaAt + Math.min(5, S.ideas.length)).map((x, i) => ideaChip(x, i)).join('')}<button class="idea more" id="moreDiscover">${ic('redo')}<span>More</span></button></div></section>` : ''}
       ${kinds.length ? `<section class="discover-section"><div class="discover-section-head"><h2>By file type</h2><p>Quick ways into your collection</p></div><div class="discover-cards">${kinds.map(card).join('')}</div></section>` : ''}
       ${origins.length ? `<section class="discover-section"><div class="discover-section-head"><h2>Where it came from</h2><p>Apps and cameras detected from names and photo data</p></div><div class="discover-origins">${origins.map(g => `<button data-discover="${esc(g.key)}">${ic(g.key.startsWith('camera:') ? 'image' : g.icon)}<span>${esc(g.title)}</span><em>${g.count.toLocaleString()}</em></button>`).join('')}</div></section>` : ''}
