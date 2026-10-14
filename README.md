@@ -32,7 +32,8 @@ your own computer. No account, no cloud, no uploads.
 | 🖱️ **Drag originals into other apps (Windows desktop)** | Drag a tile, the image/video in the viewer, or the viewer's **Drag file** handle into an app that accepts that file type. Video drags carry the original MP4, not its poster frame. Select several tiles to drag them together. Originals stay in place. |
 | 🎵 **Audio playback and transcripts** | Scrub a waveform in the viewer. For recordings with speech, choose **Transcribe audio** in the right panel to make a copyable, timestamped transcript in the detected language. Transcription runs on your device. |
 | 🎞️ **Copy a video frame** | Pause or scrub a video in the viewer, then choose **Copy frame** to paste that still as a PNG into another app. |
-| 🗂️ **Spaces and renames** | Group files into spaces and draft clearer file names. Open **Customize → Preview file changes** to commit them, or **Undo changes** to review history. Nothing on disk changes until you commit. |
+| 🗂️ **Spaces and renames** | Group files into spaces and draft clearer file names. Open **Customize → Preview file changes** to commit staged renames or moves, or **Undo changes** to review history. The Spaces gallery previews each collection as a stack of its files. |
+| 🗃️ **Direct file actions** | Right-click a tile to copy or move the original to a folder, or send it to the system Trash. These actions happen immediately after you choose a destination or confirm deletion. Copy and move never overwrite an existing file. Add to space stays in a compact submenu. |
 | 🌗 **Make it yours** | Ten themes including dark Night and Ink, accent colours, four gallery layouts (masonry, rows, contact sheet and storyboard), tile size, and a sidebar menu you can reorder or hide from Customize. |
 
 <p align="center"><img src="docs/search-2026.jpg" alt="Semantic search results in the Ink theme" width="49%"> <img src="docs/discover-2026.jpg" alt="Discover visual themes and questions" width="49%"></p>
@@ -87,7 +88,7 @@ Intel Macs aren't supported by the AI libraries. On Linux, [run it from source](
 
 - Everything runs on your computer. Your files, the index and every search stay there.
 - The only network use is downloading models from Hugging Face when needed. The speech transcription model downloads only if you choose **Transcribe audio** (~148 MB); the audio and transcript remain on your device.
-- File Mind only **reads** your folders. Renames and moves happen only when you press commit, and can be undone.
+- Indexing only reads your folders. Staged renames and moves happen when you press commit and can be undone. Explicit right-click Copy, Move, and Move to Trash actions act immediately; deletion uses the system Trash.
 - The index lives in a `data` folder next to the app. Delete it to forget everything.
 
 ## Run from source (macOS, Linux, Windows)
