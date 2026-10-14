@@ -595,14 +595,18 @@ body.head-sans .sphead h1{font-style:normal;font-size:44px}
 .filter-sizes{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .filter-reset{justify-self:start;color:var(--ink3);font-size:11px;padding:3px 0}
 .filter-reset:hover{color:var(--ink)}
-.side-bottom{position:relative;bottom:auto;z-index:auto;display:block;flex:none;padding:9px 5px 0;margin:0;background:var(--side-bg)}
+.side-bottom{position:relative;bottom:auto;z-index:auto;display:flex;align-items:center;gap:6px;flex:none;padding:10px 4px 0;margin:0;background:var(--side-bg)}
 .grow{display:none}
-.local{min-height:32px;padding:5px 3px;border:0;border-radius:0;background:none;gap:8px;color:var(--ink3);font-size:11px;white-space:nowrap}
-.local>span:last-child{overflow:hidden;text-overflow:ellipsis}
-.local small{font-size:inherit;color:var(--ink3)}
-.privacy-icon{width:17px;height:17px;border-radius:0;background:none;color:var(--ink2)}
+.local{flex:1;min-width:0;min-height:28px;padding:0;border:0;border-radius:0;background:none;gap:7px;color:var(--ink3);font-size:11px;white-space:nowrap}
+.local>span:nth-child(2){display:block;min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.local strong{font-size:11px;font-weight:600;color:var(--ink2)}
+.local small{font-size:10px;color:var(--ink3)}
+.privacy-icon{width:15px;height:15px;flex:none;border-radius:0;background:none;color:var(--ink2)}
 .privacy-icon i[data-ic],.privacy-icon svg.ic{width:15px;height:15px}
-.privacy-icon svg{width:15px;height:15px}
+.privacy-icon svg{display:block;width:15px;height:15px}
+.side-bottom>.foot-action{width:26px;height:26px;flex:none;border-color:transparent;background:transparent;color:var(--ink3)}
+.side-bottom>.foot-action:hover{border-color:var(--line2);background:var(--hov)}
+.side-bottom>.foot-action svg{width:13px;height:13px}
 
 /* The query chips and editable text occupy the same baseline in every view. */
 #searchForm.tagged{display:flex;min-height:80px;gap:13px}
