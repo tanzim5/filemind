@@ -108,6 +108,24 @@ def embed_image_file(path: str) -> np.ndarray:
         prepped.unlink(missing_ok=True)
 
 
+def embed_reference(path: Path, kind: str, text: str = "") -> np.ndarray:
+    """One joint image/video/audio-and-text query in EmbeddingGemma 2's shared space."""
+    prepared = prepare(path, kind, path.name)
+    try:
+        prompt = "task: search result | query: " + text.strip()
+        if kind == "image":
+            item = {"text": prompt + " <|image|>", "image": [prepared["image"]]}
+        elif kind == "video" and prepared.get("frames"):
+            item = {"text": prompt + " " + " ".join("<|image|>" for _ in prepared["frames"]), "image": prepared["frames"]}
+        elif kind == "audio" and prepared.get("clip"):
+            item = {"text": prompt + " <|audio|>", "audio": prepared["clip"]}
+        else:
+            raise ValueError("This file could not be prepared as a reference")
+        return _norm(_encode(get_model(), item, normalize_embeddings=True))
+    finally:
+        discard(prepared)
+
+
 class GPUError(RuntimeError):
     """The graphics card reported an error that did not go away when retried."""
 
