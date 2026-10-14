@@ -32,12 +32,12 @@ your own computer. No account, no cloud, no uploads.
 | 🖱️ **Drag originals into other apps (Windows desktop)** | Drag a tile, the image/video in the viewer, or the viewer's **Drag file** handle into an app that accepts that file type. Video drags carry the original MP4, not its poster frame. Select several tiles to drag them together. Originals stay in place. |
 | 🎵 **Audio playback and transcripts** | Scrub a waveform in the viewer. For recordings with speech, choose **Transcribe audio** in the right panel to make a copyable, timestamped transcript in the detected language. Transcription runs on your device. |
 | 🎞️ **Copy a video frame** | Pause or scrub a video in the viewer, then choose **Copy frame** to paste that still as a PNG into another app. |
-| 🗂️ **Spaces and renames** | Group files into spaces and draft clearer file names. Open **Customize → Preview file changes** to commit staged renames or moves, or **Undo changes** to review history. The Spaces gallery previews each collection as a stack of its files. |
+| 🗂️ **Spaces and renames** | Open **All spaces** from the main sidebar. Each collection appears as a stack of its files and follows your selected theme. **Auto-group** suggests broad, named collections with covers; review them before replacing older regular Spaces. The originals stay in place, and a local backup lets you restore the previous Spaces. Draft file names separately, then use **Customize → Preview file changes** before changing files. |
 | ✨ **Live Spaces** | Save a search or filter as a Space that includes matching files added later. Choose **Keep snapshot** if you want a fixed collection instead. |
 | 🎛️ **Media filters** | Narrow the library by date, size, image/video dimensions, aspect ratio, duration, frame rate or codec from the inline sidebar. Media details are read locally in the background. |
 | 🪞 **Review duplicates** | Discover → **Review duplicates** shows byte-identical copies and possible visual matches. This is a review list; it never deletes files on its own. |
 | 🖼️ **Search with a reference** | Open any image, video or audio file and choose **Search with this file**, then optionally describe what you want. Discover also lets you choose an image from outside the library. |
-| ⏱️ **Find moments** | In a video or audio viewer, choose **Find moments → Analyze moments** to create a time-stamped local index for that file. Discover → **Find a moment** searches only clips you have opted in; results open at the matching time. |
+| ⏱️ **Find moments** | Discover → **Find a moment** lists video and audio clips you can choose to analyze, then searches their time-stamped local index. You can also analyze a clip from its viewer. Results open at the matching time. |
 | 🗃️ **Direct file actions** | Right-click a tile to copy or move the original to a folder, or send it to the system Trash. These actions happen immediately after you choose a destination or confirm deletion. Copy and move never overwrite an existing file. Add to space stays in a compact submenu. |
 | 🌗 **Make it yours** | Ten themes including dark Night and Ink, accent colours, four gallery layouts (masonry, rows, contact sheet and storyboard), tile size, and a sidebar menu you can reorder or hide from Customize. |
 
@@ -184,7 +184,7 @@ MLX, set `FILEMIND_BACKEND=torch` (it then downloads the original 1.5 GB model).
 
 To build the apps yourself, see `packaging/build_windows.py` and `packaging/build_macos.py`. GitHub Actions
 builds three separate downloads for every `v*` tag: standard Windows, NVIDIA Windows, and Apple Silicon Mac.
-You can also run the **Release builds** workflow manually and download the three artifacts from that run.
+You can also run the **Release builds** workflow manually and download the three artifacts from that run. To publish a GitHub Release from a manual run, supply an existing `v*` tag in its `release_tag` input.
 The workflow checks the contents of every archive and smoke-tests the standard Windows and Mac apps.
 NVIDIA support is packaged and checked, but its first-run CUDA download and GPU use require testing on an NVIDIA PC.
 

@@ -37,7 +37,7 @@ const glyph = id => {
 /* ================================================================ state */
 /* user settings (Customize) — kept in this browser only */
 const PDEF = { tile: 300, gap: 12, rad: 10, names: false, hover: true, accent: '#ff5a1f', layout: 'cols', theme: 'ink', tstyle: 'lift', head: 'serif', ideas: true,
-  sideOrder: ['types', 'colors', 'sources', 'spaces', 'folders', 'filters'], sideHidden: [], navOrder: ['all', 'discover', 'unassigned', 'renames', 'spaces'], navHidden: ['unassigned', 'renames', 'spaces'], sideExpanded: [] };
+  sideOrder: ['types', 'colors', 'sources', 'folders', 'filters'], sideHidden: [], navOrder: ['all', 'discover', 'spaces', 'unassigned', 'renames'], navHidden: ['unassigned', 'renames'], sideExpanded: [] };
 const THEMES = [['blush', 'Blush', '#f5f6f9', 'linear-gradient(180deg,#f1e8ea,#e8e2ea)'], ['paper', 'Paper', '#fbfaf8', '#f3f1ec'], ['mist', 'Mist', '#f6f8fb', 'linear-gradient(180deg,#e8eef7,#e1e8f3)'],
   ['sage', 'Sage', '#f7f8f4', 'linear-gradient(180deg,#e8eee2,#dfe8da)'], ['sand', 'Sand', '#faf7f1', 'linear-gradient(180deg,#f3eadc,#ece0cc)'], ['lilac', 'Lilac', '#f8f7fc', 'linear-gradient(180deg,#eeeaf8,#e5dff3)'],
   ['peach', 'Peach', '#fdf8f5', 'linear-gradient(180deg,#fbe8dd,#f5dfe0)'], ['studio', 'Studio', '#ffffff', '#f5f5f6'],
@@ -53,6 +53,12 @@ if (!P.sidebarRevision || P.sidebarRevision < 2) {
 if (P.sidebarRevision < 3) {
   P.sideOrder = [...new Set([...(P.sideOrder || []), ...PDEF.sideOrder])].filter(k => !['spaces', 'folders', 'filters'].includes(k)).concat(['spaces', 'folders', 'filters']);
   P.sidebarRevision = 3;
+}
+if (P.sidebarRevision < 4) {
+  P.navOrder = ['all', 'discover', 'spaces', ...P.navOrder.filter(k => !['all', 'discover', 'spaces'].includes(k))];
+  P.navHidden = (P.navHidden || []).filter(k => k !== 'spaces');
+  P.sideOrder = (P.sideOrder || []).filter(k => k !== 'spaces');
+  P.sidebarRevision = 4;
 }
 function applyPrefs() {
   const d = document.documentElement, r = d.style; r.setProperty('--gap', P.gap + 'px'); r.setProperty('--rad', P.rad + 'px'); r.setProperty('--accent', P.accent);
@@ -255,7 +261,7 @@ async function loadStats() {
   drawTypes(); drawColors(); drawSources();
 }
 async function loadProjects() {
-  S.projects = await api('/projects');
+  [S.projects, S.regroupBackup] = await Promise.all([api('/projects'), api('/projects/regroup/latest').catch(() => null)]);
   drawProjects();
   $('#projSelect').innerHTML = S.projects.filter(p => !p.smart).map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
   $('#cSp').textContent = S.projects.length || '';
@@ -283,7 +289,7 @@ const NAV_NAMES = { all: 'Library', discover: 'Discover', unassigned: 'Unsorted'
 function sideExpanded(sec) { return (P.sideExpanded || []).includes(sec); }
 function applySidebar() {
   const sections = $('#sideSections'), nav = $('#mainNav');
-  [...new Set([...(P.sideOrder || []), ...Object.keys(SIDE_NAMES)])].forEach(k => { const el = $(`[data-side-section="${k}"]`); if (el) { sections.append(el); el.hidden = (P.sideHidden || []).includes(k); el.classList.toggle('expanded', sideExpanded(k)); } });
+  [...new Set([...(P.sideOrder || []), ...Object.keys(SIDE_NAMES)])].forEach(k => { const el = $(`[data-side-section="${k}"]`); if (el) { if (k === 'spaces') { el.hidden = true; return; } sections.append(el); el.hidden = (P.sideHidden || []).includes(k); el.classList.toggle('expanded', sideExpanded(k)); } });
   [...new Set([...(P.navOrder || []), ...Object.keys(NAV_NAMES)])].forEach(k => { const el = $(`#mainNav [data-view="${k}"]`); if (el) { nav.append(el); el.hidden = (P.navHidden || []).includes(k); } });
   $('[data-more="colors"]').textContent = sideExpanded('colors') ? 'Show fewer colors' : 'Show all colors';
 }
@@ -491,13 +497,14 @@ function spacesHTML() {
   const card = p => { const c = p.cover || [];
     const fan = c.length ? c.map((t, i) => t.kind === 'audio' ? `<span class="k${i}">${ic('music')}</span>` : `<img class="k${i}" src="/api/thumb/${t.id}" alt="" loading="lazy">`).join('') : `<span class="none">Empty</span>`;
     return `<button class="space" data-sp="${p.id}"><div class="fan n${c.length}">${fan}</div><div class="spname"><span class="ring" style="--c:${HUES[p.id % HUES.length]}"></span>${esc(p.name)}${p.smart ? '<small class="live-mark">Live</small>' : ''}<em>${p.count}</em></div></button>`; };
-  return `<div class="spaces"><div class="sphead"><h1 class="d-head">All Spaces</h1><div class="acts"><button class="btn ghost sm" id="spAuto">${ic('sparkle')}<span>Auto-group</span></button><button class="btn dark sm" id="spNew"><span class="ring" style="--c:var(--accent)"></span><span>Create a new space</span></button></div></div>
+  return `<div class="spaces"><div class="sphead"><h1 class="d-head">All Spaces</h1><div class="acts">${S.regroupBackup ? `<button class="btn ghost sm" id="spRestore">Restore previous ${S.regroupBackup.count} Spaces</button>` : ''}<button class="btn ghost sm" id="spAuto">${ic('sparkle')}<span>Auto-group</span></button><button class="btn dark sm" id="spNew"><span class="ring" style="--c:var(--accent)"></span><span>Create a new space</span></button></div></div>
     <div class="spgrid">${S.projects.map(card).join('')}<button class="space add" id="spNew2"><div class="fan"><span class="none">${ic('plus')}</span></div><div class="spname">New space</div></button></div></div>`;
 }
 function bindSpaces() {
   $$('#grid [data-sp]').forEach(b => b.onclick = () => go({ view: 'project', project: +b.dataset.sp }));
   ['#spNew', '#spNew2'].forEach(s => $(s).onclick = async () => { const name = prompt('Name your new space:'); if (!name) return; await api('/projects', { method: 'POST', body: { name } }); await loadProjects(); render(); });
   $('#spAuto').onclick = autoGroup;
+  $('#spRestore')?.addEventListener('click', async () => { await api(`/projects/regroup/${S.regroupBackup.id}/restore`, { method: 'POST' }); await refreshAll(); go({ view: 'spaces' }); toast('Previous Spaces restored'); });
 }
 async function loadIdeas() { try { const r = await api('/ideas?n=36'); if (r.ideas.length) { S.ideas = shuffleIdeas(r.ideas); S.ideaAt = 0; if (S.view === 'discover') render(); else if (!S.searching) drawHero(); } } catch { } }
 async function saveAsSpace() {
@@ -542,7 +549,7 @@ function render() {
     const card = g => `<button class="discover-card" data-discover="${esc(g.key)}"><span class="discover-art">${(g.sample || []).slice(0, 3).map((t, i) => t.kind === 'audio' ? `<span class="discover-audio d${i}">${ic('music')}</span>` : `<img class="d${i}" src="/api/thumb/${t.id}" alt="" loading="lazy">`).join('') || `<span class="discover-icon">${ic(g.icon)}</span>`}</span><span class="discover-card-body"><span class="discover-card-copy"><strong>${esc(g.title)}</strong><small>${g.count.toLocaleString()} files</small></span><span class="discover-card-arrow">↗</span></span></button>`;
     $('#grid').innerHTML = `<div class="discover"><div class="discover-head"><h1>Discover what’s already here.</h1></div>
       ${themes.length ? `<section class="discover-section"><div class="discover-section-head"><h2>Visual themes</h2></div><div class="discover-circles">${themes.map(circle).join('')}</div></section>` : ''}
-      ${S.discoverGroups.length ? `<section class="discover-section"><div class="discover-section-head"><h2>Questions worth asking</h2></div><div class="discover-prompts">${questions.map(q => `<button class="discover-prompt" data-ex="${esc(q[1])}"><span class="prompt-text">${esc(q[0])}</span><span class="prompt-arrow" aria-hidden="true">↗</span></button>`).join('')}</div></section>` : ''}
+      ${S.discoverGroups.length ? `<section class="discover-section"><div class="discover-section-head"><h2>Questions worth asking</h2><button class="discover-more" id="moreQuestions">${S.showAllQuestions ? 'Show fewer' : 'See all questions'} ↗</button></div><div class="discover-prompts">${questions.slice(0, S.showAllQuestions ? questions.length : 9).map(q => `<button class="discover-prompt" data-ex="${esc(q[1])}"><span class="prompt-text">${esc(q[0])}</span><span class="prompt-arrow" aria-hidden="true">↗</span></button>`).join('')}</div></section>` : ''}
       <section class="discover-section"><div class="discover-section-head"><h2>Explore deeper</h2></div><div class="discover-tools"><button id="discoverDuplicates">${ic('layers')}<span><strong>Review duplicates</strong><small>See exact copies and possible visual matches</small></span><b>↗</b></button><button id="discoverMoments">${ic('film')}<span><strong>Find a moment</strong><small>Search clips you chose to analyze</small></span><b>↗</b></button><button id="discoverReference">${ic('image')}<span><strong>Search with an image</strong><small>Choose a picture and add a description</small></span><b>↗</b></button></div></section>
       ${P.ideas && S.ideas.length ? `<section class="discover-section"><div class="discover-section-head"><h2>Try a thought</h2><p>Search your library by meaning</p></div><div class="discover-queries">${[...S.ideas, ...S.ideas].slice(S.ideaAt, S.ideaAt + Math.min(5, S.ideas.length)).map((x, i) => ideaChip(x, i)).join('')}<button class="idea more" id="moreDiscover">${ic('redo')}<span>More</span></button></div></section>` : ''}
       ${kinds.length ? `<section class="discover-section"><div class="discover-section-head"><h2>By file type</h2><p>Quick ways into your collection</p></div><div class="discover-cards">${kinds.map(card).join('')}</div></section>` : ''}
@@ -550,6 +557,7 @@ function render() {
       ${!S.discoverGroups.length ? (S.discoverBuilding ? `<div class="discover-zero"><h2>Finding connections…</h2><p>Reading your existing index and photo metadata.</p></div>` : `<div class="discover-zero"><h2>Groups appear as files are read.</h2><p>Add a folder to start discovering connections in your library.</p><button class="btn dark" id="discoverAdd">Add a folder</button></div>`) : `<p class="discover-note">${S.discoverBuilding ? 'Finding more visual themes and camera groups…' : 'People in frame finds pictures that appear to show people; it does not identify individuals.'}</p>`}</div>`;
     $$('#grid [data-discover]').forEach(b => b.onclick = () => go({ view: 'discover-group', discover: b.dataset.discover }));
     $$('#grid [data-ex]').forEach(b => b.onclick = () => { S.view = 'all'; S.discover = null; searchTags([{ q: b.dataset.ex }]); });
+    $('#moreQuestions')?.addEventListener('click', () => { S.showAllQuestions = !S.showAllQuestions; render(); });
     $('#moreDiscover')?.addEventListener('click', () => { S.ideaAt = (S.ideaAt + 5) % S.ideas.length; render(); });
     $('#discoverAdd')?.addEventListener('click', addFolderModal);
     $('#discoverDuplicates').onclick = duplicateModal;
@@ -1037,14 +1045,26 @@ function reviewGroups(title, intro, groups, nameOf, extraBtn) {
     await api('/projects', { method: 'POST', body: { name: el.querySelector('.nm').value || nameOf(g), file_ids: g.file_ids } }); n++; } closeModal(); await refreshAll(); toast(`Created ${n} spaces`); };
 }
 function autoGroup() {
-  modal(`<div class="mh"><h3>Find the patterns</h3><p>Groups files that look or sound alike, across images, video and audio. Rename them, untick the ones you don't want. Nothing touches your disk.</p></div>
-    <div class="mb"><div class="line"><span class="hint">Tighter</span><input id="loose" type="range" min="0.1" max="0.9" step="0.05" value="0.5" style="flex:1"><span class="hint">Broader</span></div><div class="line"><button class="btn dark" id="go">${ic('sparkle')}Find groups</button></div>
-    <label class="hint"><input type="checkbox" id="unas" checked> Only files not already in a space</label><div id="clres"></div></div>`, { w: 480 });
+  modal(`<div class="mh"><h3>Find the patterns</h3><p>Make a smaller set of Spaces from the visual themes and sources in your library. Each suggestion has files and a cover.</p></div>
+    <div class="mb"><div class="line"><button class="btn dark" id="go">${ic('sparkle')}Find groups</button></div><div id="clres"></div></div>`, { w: 480 });
   $('#go').onclick = async () => {
     $('#clres').innerHTML = '<p class="hint">Reading the shape of your files…</p>';
-    const r = await api('/cluster', { method: 'POST', body: { root: S.root, looseness: +$('#loose').value, unassigned: $('#unas').checked } });
-    if (!r.clusters.length) return $('#clres').innerHTML = '<p class="hint">No groups found — slide towards Broader, or read more files first.</p>';
-    reviewGroups('Find the patterns', `${r.clusters.length} groups · ${r.leftover} files left ungrouped. Rename, untick, then create.`, r.clusters, g => g.name, false);
+    try {
+      const r = await api('/cluster', { method: 'POST', body: { root: S.root, unassigned: false } });
+      if (!r.clusters.length) return $('#clres').innerHTML = '<p class="hint">No useful groups yet. Read more files first.</p>';
+      const replaceable = S.projects.filter(p => !p.smart);
+      modal(`<div class="mh"><h3>Suggested Spaces</h3><p>${r.clusters.length} named groups with covers. Review them before saving; your files stay where they are.</p></div><div class="mb"><div class="group-review">${r.clusters.map((g, i) => `<label class="group-choice" data-i="${i}"><input type="checkbox" class="use" checked><span class="group-preview">${g.sample.slice(0, 3).map(f => f.kind === 'audio' ? `<span class="group-audio">${ic('music')}</span>` : `<img src="/api/thumb/${f.id}" alt="">`).join('')}</span><span><input class="nm" value="${esc(g.name)}"><small>${g.count} files</small></span></label>`).join('')}</div>${replaceable.length ? `<label class="replace-spaces"><input type="checkbox" id="replaceOld" ${replaceable.length >= 80 ? 'checked' : ''}> Replace ${replaceable.length} existing regular Spaces with these suggestions</label><p class="hint">The old Space names and memberships are backed up on this device and can be restored.</p>` : ''}<div class="line"><button class="btn dark" id="acceptGroups">Create selected Spaces</button><button class="btn" id="cancelGroups">Cancel</button></div></div>`, { w: 520 });
+      $('#cancelGroups').onclick = closeModal;
+      $('#acceptGroups').onclick = async () => {
+        const groups = $$('.group-choice').filter(el => el.querySelector('.use').checked).map(el => { const g = r.clusters[+el.dataset.i]; return { name: el.querySelector('.nm').value.trim(), file_ids: g.file_ids }; }).filter(g => g.name);
+        if (!groups.length) return toast('Select at least one Space', 'x', true);
+        $('#acceptGroups').disabled = true;
+        try { const result = await api('/projects/regroup', { method: 'POST', body: { groups, replace_ids: $('#replaceOld')?.checked ? replaceable.map(p => p.id) : [] } });
+          closeModal(); await refreshAll(); go({ view: 'spaces' });
+          toast(`Created ${result.created.length} Spaces`);
+        } catch (error) { toast(error.message, 'x', true); $('#acceptGroups').disabled = false; }
+      };
+    } catch (error) { $('#clres').textContent = error.message; }
   };
 }
 async function nameGroups() {
@@ -1126,7 +1146,8 @@ function fileMomentsModal(f) {
   }; refresh();
 }
 function momentSearchModal() {
-  modal(`<div class="mh"><h3>Find a moment</h3><p>Search the videos and audio files you have chosen to analyze.</p></div><div class="mb"><div class="line"><input id="momentWords" placeholder="e.g. a motorcycle on a city street" style="flex:1"><button class="btn dark" id="searchMoments">Search</button></div><div id="momentResults"><p class="hint">Open a video or audio file and choose “Find moments” to prepare it.</p></div></div>`, { w: 540 });
+  modal(`<div class="mh"><h3>Find a moment</h3><p>Choose clips to analyze here, then search for a specific scene or sound.</p></div><div class="mb"><div class="line"><input id="momentWords" placeholder="e.g. a motorcycle on a city street" style="flex:1"><button class="btn dark" id="searchMoments">Search</button></div><div id="momentResults"><p class="hint">Search the clips you have analyzed.</p></div><div id="momentClips"><p class="hint">Finding your clips…</p></div></div>`, { w: 540 });
+  api('/moment-clips').then(files => { if (!$('#momentClips') || $('#modal').hidden) return; $('#momentClips').innerHTML = `<h4>Choose a clip to analyze</h4>${files.map(f => `<button class="moment-result" data-analyze="${f.id}"><span class="moment-thumb">${f.kind === 'video' ? `<img src="/api/thumb/${f.id}" alt="">` : ic('music')}</span><span><strong>${esc(f.name)}</strong><small>${f.moment_status === 'ready' ? 'Ready to search' : 'Analyze on this device'}</small></span><b>↗</b></button>`).join('') || '<p class="hint">Add a folder with video or audio files first.</p>'}`; $$('#momentClips [data-analyze]').forEach(b => b.onclick = async () => { const id = +b.dataset.analyze; const f = files.find(x => x.id === id); fileMomentsModal(f); }); }).catch(error => { if ($('#momentClips')) $('#momentClips').textContent = error.message; });
   const submit = async () => { const q = $('#momentWords').value.trim(); if (!q) return; $('#momentResults').innerHTML = '<p class="hint">Searching analyzed clips…</p>';
     try { const result = await api('/moments/search', { method: 'POST', body: { q } }); if ($('#modal').hidden) return;
       $('#momentResults').innerHTML = result.moments.length ? result.moments.map(m => `<button class="moment-result" data-file="${m.file_id}" data-seek="${m.start}"><span class="moment-thumb">${m.kind === 'video' ? `<img src="/api/thumb/${m.file_id}" alt="">` : ic('music')}</span><span><strong>${esc(m.name)}</strong><small>${audioTime(m.start)}–${audioTime(m.end)}</small></span><b>↗</b></button>`).join('') : '<p class="hint">No analyzed moments matched. Open a clip and choose “Find moments” to add more.</p>';

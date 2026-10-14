@@ -624,6 +624,11 @@ def duplicate_candidates():
             "total_exact": result["total_exact"], "total_visual": result["total_visual"]}
 
 
+@app.post("/api/moments/search")
+def search_moments(body: dict = Body(...)):
+    return {"moments": moments_mod.search(body.get("q", ""), int(body.get("limit", 40)))}
+
+
 @app.get("/api/moments/{fid}")
 def moment_status(fid: int):
     try:
@@ -632,17 +637,23 @@ def moment_status(fid: int):
         raise HTTPException(404, str(exc)) from exc
 
 
+@app.get("/api/moment-clips")
+def moment_clips():
+    """Offer playable files in the Discover tool so it can be used without finding a viewer first."""
+    c = db.conn()
+    rows = c.execute("SELECT f.*, COALESCE(r.status,'new') AS moment_status FROM files f "
+                     "LEFT JOIN moment_runs r ON r.file_id=f.id AND r.size=f.size AND r.mtime=f.mtime "
+                     "WHERE f.status='done' AND f.kind IN ('video','audio') "
+                     "ORDER BY CASE WHEN r.status='ready' THEN 0 ELSE 1 END, f.mtime DESC LIMIT 24").fetchall()
+    return [{**_file_dict(row), "moment_status": row["moment_status"]} for row in rows]
+
+
 @app.post("/api/moments/{fid}")
 def analyze_moments(fid: int):
     try:
         return moments_mod.start(fid)
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc)) from exc
-
-
-@app.post("/api/moments/search")
-def search_moments(body: dict = Body(...)):
-    return {"moments": moments_mod.search(body.get("q", ""), int(body.get("limit", 40)))}
 
 
 @app.get("/api/info/{fid}")
@@ -836,11 +847,11 @@ def projects():
         if smart_ids is None:
             n = c.execute("SELECT COUNT(*) FROM project_files WHERE project_id=?", (p["id"],)).fetchone()[0]
             cover = c.execute("SELECT f.id, f.kind FROM project_files pf JOIN files f ON f.id=pf.file_id "
-                              "WHERE pf.project_id=? AND f.thumb IS NOT NULL AND f.thumb!='' ORDER BY f.mtime DESC LIMIT 3", (p["id"],)).fetchall()
+                              "WHERE pf.project_id=? AND ((f.thumb IS NOT NULL AND f.thumb!='') OR f.kind='audio') ORDER BY f.mtime DESC LIMIT 3", (p["id"],)).fetchall()
         else:
             n = len(smart_ids)
             cover = c.execute(f"SELECT id,kind FROM files WHERE id IN ({','.join('?' for _ in smart_ids) or 'NULL'}) "
-                              "AND thumb IS NOT NULL AND thumb!='' ORDER BY mtime DESC LIMIT 3", tuple(smart_ids)).fetchall()
+                              "AND ((thumb IS NOT NULL AND thumb!='') OR kind='audio') ORDER BY mtime DESC LIMIT 3", tuple(smart_ids)).fetchall()
         out.append({"id": p["id"], "name": p["name"], "count": n, "smart": smart_ids is not None,
                     "cover": [{"id": r["id"], "kind": r["kind"]} for r in cover]})
     return out
@@ -981,48 +992,113 @@ def _suggest_name(rows) -> str:
 
 @app.post("/api/cluster")
 def cluster(body: dict = Body(...)):
-    """Group similar files. `looseness` 0.2 (tight) .. 0.8 (broad). Nothing is saved until the user accepts."""
-    from sklearn.cluster import AgglomerativeClustering, KMeans
+    """Propose broad, named visual and source collections; never create tiny unnamed clusters."""
     root = body.get("root")
-    looseness = float(body.get("looseness", 0.5))
-    only_unassigned = body.get("unassigned", True)
-    ids, mat = indexer.matrix()
     c = db.conn()
-    sel = []
-    assigned = {r[0] for r in c.execute("SELECT DISTINCT file_id FROM project_files")} if only_unassigned else set()
-    for i, fid in enumerate(ids):
-        r = c.execute("SELECT root_id FROM files WHERE id=?", (int(fid),)).fetchone()
-        if r and (not root or r["root_id"] == root) and int(fid) not in assigned:
-            sel.append(i)
-    if len(sel) < 4:
-        return {"clusters": []}
-    X = mat[sel]
-    if len(sel) > 6000:
-        k = max(8, int(len(sel) ** 0.5 / 1.5))
-        labels = KMeans(n_clusters=k, n_init=3, random_state=0).fit_predict(X)
-    else:
-        # Cosine distances in this space are compressed, so a fixed cut-off is meaningless. Instead the
-        # threshold is a low percentile of this collection's own pairwise distances (slider: ~0.5% .. ~10%).
-        iu = np.triu_indices(len(X), 1)
-        vals = 1.0 - (X @ X.T)[iu]
-        if len(vals) > 400_000:
-            vals = np.random.default_rng(0).choice(vals, 400_000, replace=False)
-        thr = float(np.percentile(vals, 0.5 + looseness * 9.5))
-        labels = AgglomerativeClustering(n_clusters=None, metric="cosine", linkage="average",
-                                         distance_threshold=thr).fit_predict(X)
-    groups: dict[int, list[int]] = {}
-    for pos, lab in zip(sel, labels):
-        groups.setdefault(int(lab), []).append(int(ids[pos]))
+    eligible = {int(r["id"]): r for r in c.execute(
+        "SELECT * FROM files WHERE status='done' AND (? IS NULL OR root_id=?)", (root, root))}
+    if body.get("unassigned", False):
+        assigned = {int(r[0]) for r in c.execute("SELECT DISTINCT file_id FROM project_files")}
+        eligible = {fid: row for fid, row in eligible.items() if fid not in assigned}
+    if len(eligible) < 5:
+        return {"clusters": [], "leftover": len(eligible)}
+    discover_mod.groups()
+    theme_groups = [g for g in discover_mod._cache["groups"] if g["key"].startswith("theme:")]
+    source_groups = [g for g in discover_mod._cache["groups"] if g["key"].startswith("source:")]
+    media_groups = [g for g in discover_mod._cache["groups"] if g["key"] in ("type:video", "type:audio")]
+    groups = theme_groups + source_groups[:14] + media_groups
+    claimed = set()
     out = []
-    for lab, fids in groups.items():
-        if len(fids) < 2:
+    for group in groups:
+        fids = [fid for fid in discover_mod.file_ids(group["key"]) if fid in eligible and fid not in claimed]
+        fids.sort(key=lambda fid: eligible[fid]["mtime"] or 0, reverse=True)
+        with_cover = [fid for fid in fids if eligible[fid]["thumb"] or eligible[fid]["kind"] == "audio"]
+        if len(fids) < 5 or not with_cover:
             continue
-        rows = [c.execute("SELECT * FROM files WHERE id=?", (f,)).fetchone() for f in fids]
-        out.append({"label": lab, "name": _suggest_name(rows), "count": len(fids),
-                    "file_ids": fids, "sample": [_file_dict(r) for r in rows[:8]]})
+        claimed.update(fids)
+        out.append({"name": group["title"], "count": len(fids), "file_ids": fids,
+                    "sample": [_file_dict(eligible[fid]) for fid in with_cover[:8]]})
     out.sort(key=lambda g: -g["count"])
-    leftover = len(sel) - sum(g["count"] for g in out)
-    return {"clusters": out, "leftover": leftover}
+    return {"clusters": out[:40], "leftover": len(eligible) - len(claimed)}
+
+
+@app.post("/api/projects/regroup")
+def regroup_projects(body: dict = Body(...)):
+    """Replace selected spaces atomically and keep a complete local undo snapshot."""
+    groups = body.get("groups") or []
+    replace_ids = [int(pid) for pid in body.get("replace_ids") or []]
+    if len(groups) > 40 or any(not isinstance(g.get("name"), str) or not g["name"].strip()
+                              or len(g.get("file_ids", [])) < 5 for g in groups):
+        raise HTTPException(400, "Select up to 40 named groups of at least five files")
+    c = db.conn()
+    existing = {int(r[0]) for r in c.execute("SELECT id FROM projects")}
+    if not set(replace_ids) <= existing:
+        raise HTTPException(400, "One or more Spaces no longer exist")
+    c.execute("CREATE TABLE IF NOT EXISTS regroup_backups (id INTEGER PRIMARY KEY, created REAL NOT NULL, payload TEXT NOT NULL)")
+    snapshot = []
+    for pid in replace_ids:
+        p = c.execute("SELECT id,name,created FROM projects WHERE id=?", (pid,)).fetchone()
+        smart = c.execute("SELECT 1 FROM smart_spaces WHERE project_id=?", (pid,)).fetchone()
+        if smart:
+            raise HTTPException(400, "Live Spaces cannot be replaced by auto-group")
+        snapshot.append({"id": pid, "name": p["name"], "created": p["created"],
+                         "file_ids": [int(r[0]) for r in c.execute("SELECT file_id FROM project_files WHERE project_id=?", (pid,))]})
+    c.execute("INSERT INTO regroup_backups(created,payload) VALUES(?,?)", (time.time(), json.dumps({"old": snapshot, "new": []})))
+    backup_id = c.execute("SELECT last_insert_rowid()").fetchone()[0]
+    for pid in replace_ids:
+        c.execute("DELETE FROM project_files WHERE project_id=?", (pid,))
+        c.execute("DELETE FROM projects WHERE id=?", (pid,))
+    created = []
+    for group in groups:
+        pid = c.execute("INSERT INTO projects(name,created) VALUES(?,?)", (group["name"].strip()[:80], time.time())).lastrowid
+        for fid in set(group["file_ids"]):
+            if c.execute("SELECT 1 FROM files WHERE id=?", (int(fid),)).fetchone():
+                c.execute("INSERT OR IGNORE INTO project_files VALUES(?,?)", (pid, int(fid)))
+        created.append(pid)
+    c.execute("UPDATE regroup_backups SET payload=? WHERE id=?", (json.dumps({"old": snapshot, "new": created}), backup_id))
+    c.commit()
+    return {"created": created, "backup_id": backup_id, "replaced": len(replace_ids)}
+
+
+@app.post("/api/projects/regroup/{backup_id}/restore")
+def restore_regroup(backup_id: int):
+    c = db.conn()
+    backup = c.execute("SELECT payload FROM regroup_backups WHERE id=?", (backup_id,)).fetchone()
+    if not backup:
+        raise HTTPException(404, "Backup not found")
+    snapshot = json.loads(backup["payload"])
+    for pid in snapshot["new"]:
+        c.execute("DELETE FROM project_files WHERE project_id=?", (int(pid),))
+        c.execute("DELETE FROM projects WHERE id=?", (int(pid),))
+    restored = 0
+    for p in snapshot["old"]:
+        if c.execute("SELECT 1 FROM projects WHERE id=?", (p["id"],)).fetchone():
+            continue
+        c.execute("INSERT INTO projects(id,name,created) VALUES(?,?,?)", (p["id"], p["name"], p["created"]))
+        for fid in p["file_ids"]:
+            c.execute("INSERT OR IGNORE INTO project_files VALUES(?,?)", (p["id"], fid))
+        restored += 1
+    snapshot["restored"] = True
+    c.execute("UPDATE regroup_backups SET payload=? WHERE id=?", (json.dumps(snapshot), backup_id))
+    c.commit()
+    return {"restored": restored}
+
+
+@app.get("/api/projects/regroup/latest")
+def latest_regroup():
+    c = db.conn()
+    if not c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='regroup_backups'").fetchone():
+        return None
+    row = c.execute("SELECT id,payload FROM regroup_backups ORDER BY id DESC LIMIT 1").fetchone()
+    if not row:
+        return None
+    snapshot = json.loads(row["payload"])
+    if snapshot.get("restored") or not snapshot["old"] or not snapshot["new"]:
+        return None
+    existing = {int(r[0]) for r in c.execute("SELECT id FROM projects")}
+    if not all(pid in existing for pid in snapshot["new"]):
+        return None
+    return {"id": row["id"], "count": len(snapshot["old"])}
 
 
 # ---------------------------------------------------------------- commit / undo
