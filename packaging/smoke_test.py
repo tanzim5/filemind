@@ -104,6 +104,14 @@ def main():
             print(f"  {'OK  ' if hit else 'FAIL'} {q!r} -> {names}")
         if errors or not ok:
             raise SystemExit(f"smoke test failed (indexing errors: {errors})")
+        audio = next(f for f in call("/api/search", {"q": "a beeping tone", "limit": 3})["files"] if f["name"] == "beep.wav")
+        call(f"/api/transcript/{audio['id']}", {})
+        def transcribed():
+            state = call(f"/api/transcript/{audio['id']}")
+            if state["status"] == "error":
+                raise SystemExit(f"audio transcription failed: {state['error']}")
+            return state["status"] == "done"
+        wait("offline audio transcription", transcribed, 900)
         print("smoke test passed")
     except BaseException:
         log = root / "data" / "filemind.log"

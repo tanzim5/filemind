@@ -7,7 +7,7 @@ async function setup(native = true) {
   const handlers = {}, calls = [], toast = [], classes = { toggle() {}, add() {}, remove() {} };
   class Element {
     constructor(matches = {}, tagName = 'DIV') { this.matches = matches; this.tagName = tagName; }
-    closest(s) { return this.matches[s] || null; }
+    closest(s) { return this.matches[s] || s.split(',').map(x => this.matches[x.trim()]).find(Boolean) || null; }
     getBoundingClientRect() { return { bottom: 500 }; }
   }
   const on = (n, f) => (handlers[n] ||= []).push(f);
@@ -51,7 +51,7 @@ test('viewer handle exports current file without the grid selection', async () =
 });
 test('video controls remain interactive and the video picture is draggable', async () => {
   const t = await setup(); const video = new t.Element({}, 'VIDEO');
-  video.matches['#stage img, #stage video'] = video;
+  video.matches['#stage video'] = video;
   t.fire('pointerdown', t.event(video, { clientY: 480 }));
   t.fire('pointermove', t.event(video, { clientX: 30, clientY: 480 })); assert.equal(t.calls.length, 0);
   t.fire('pointerdown', t.event(video, { clientY: 150 }));
@@ -59,7 +59,7 @@ test('video controls remain interactive and the video picture is draggable', asy
 });
 test('native video drag cancels Chromium media-frame dragging', async () => {
   const t = await setup(), video = new t.Element({}, 'VIDEO');
-  video.matches['#stage img, #stage video'] = video;
+  video.matches['#stage video'] = video;
   const drag = t.fire('dragstart', t.event(video, { clientY: 150 }));
   assert.equal(drag.prevented, true);
   assert.equal(t.calls.length, 0);
@@ -80,4 +80,15 @@ test('browser video fallback carries an MP4 URL instead of a still image', async
   const h = new t.Element({ '#dragFile': {} });
   t.fire('dragstart', t.event(h, { dataTransfer: { clearData() {}, setData: (k,v) => payload[k] = v } }));
   assert.equal(payload.DownloadURL, 'video/mp4:movie.mp4:http://localhost/api/file/9');
+});
+test('viewer image and audio card can drag original file in browser fallback', async () => {
+  const t = await setup(false), payload = {};
+  const image = new t.Element(); image.matches['#stage img'] = image;
+  t.c.S.cur = { id: 9, name: 'photo.jpg', kind: 'image', ext: '.jpg' };
+  t.fire('dragstart', t.event(image, { dataTransfer: { clearData() {}, setData: (k,v) => payload[k] = v } }));
+  assert.equal(payload.DownloadURL, 'image/jpeg:photo.jpg:http://localhost/api/file/9');
+  const audio = new t.Element(); audio.matches['#stage .audio-player'] = audio;
+  t.c.S.cur = { id: 9, name: 'song.mp3', kind: 'audio', ext: '.mp3' };
+  t.fire('dragstart', t.event(audio, { dataTransfer: { clearData() {}, setData: (k,v) => payload[k] = v } }));
+  assert.equal(payload.DownloadURL, 'audio/mpeg:song.mp3:http://localhost/api/file/9');
 });

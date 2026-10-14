@@ -12,6 +12,8 @@ scikit-learn
 numpy
 soundfile
 librosa
+faster-whisper==1.2.1
+av==15.1.0
 pywebview; sys_platform != "linux"
 # Apple Silicon Macs run the model on the GPU through MLX (5-bit weights) instead of the slow PyTorch CPU route.
 # mlx-vlm needs the commit that adds EmbeddingGemma 2 (not on PyPI yet); the zip archive means no git is required.

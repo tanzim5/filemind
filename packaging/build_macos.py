@@ -18,7 +18,8 @@ ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
 
 COLLECT_ALL = ["transformers", "sentence_transformers", "tokenizers", "safetensors", "huggingface_hub",
-               "accelerate", "librosa", "soundfile", "uvicorn", "webview", "mlx", "mlx_vlm", "mlx_audio"]
+               "accelerate", "librosa", "soundfile", "uvicorn", "webview", "mlx", "mlx_vlm", "mlx_audio",
+               "faster_whisper", "ctranslate2", "av", "onnxruntime"]
 METADATA = ["numpy", "tqdm", "regex", "requests", "packaging", "filelock", "pyyaml", "pillow", "scipy",
             "scikit-learn", "torch", "mlx", "mlx-vlm"]
 HIDDEN = ["objc", "Foundation", "AppKit", "WebKit", "PyObjCTools.AppHelper", "typing_extensions"]
