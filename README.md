@@ -17,7 +17,7 @@ by describing it. It understands **what is in** your photos, videos and sounds u
 [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2), a multimodal AI model that runs entirely on
 your own computer. No account, no cloud, no uploads.
 
-![File Mind](docs/empty.png)
+![File Mind library in the Ink theme](docs/library-2026.jpg)
 
 ## What it does
 
@@ -29,12 +29,14 @@ your own computer. No account, no cloud, no uploads.
 | 🏷️ **Tags and colour palettes** | Every file gets automatic tags and its main colours. Click any of them to find more like it. |
 | ✨ **More like this** | Open a file and keep following similar ones, endlessly. |
 | 🧭 **Discover** | Browse compact visual themes such as people in frame, illustrations, architecture and products, or start from a suggested question. Groups also show file types, sources and camera metadata. Visual themes use existing embeddings; they do not identify individual people. |
-| 🖱️ **Drag originals into other apps (Windows desktop)** | Drag a tile, the image/video in the viewer, or the viewer's **Drag file** handle into an app that accepts that file type. Select several tiles to drag them together. Originals stay in place. |
+| 🖱️ **Drag originals into other apps (Windows desktop)** | Drag a tile, the image/video in the viewer, or the viewer's **Drag file** handle into an app that accepts that file type. Video drags carry the original MP4, not its poster frame. Select several tiles to drag them together. Originals stay in place. |
 | 🎞️ **Copy a video frame** | Pause or scrub a video in the viewer, then choose **Copy frame** to paste that still as a PNG into another app. |
 | 🗂️ **Spaces and renames** | Group files into spaces and draft clearer file names. Nothing on disk changes until you review and commit — and every commit can be undone. |
 | 🌗 **Make it yours** | Ten themes including dark Night and Ink, accent colours, four gallery layouts (masonry, rows, contact sheet and storyboard), tile size, and a sidebar menu you can reorder or hide from Customize. |
 
-<p align="center"><img src="docs/dark.png" alt="File Mind in the Night theme" width="49%"> <img src="docs/themes.png" alt="Customize panel with themes and accent colours" width="49%"></p>
+<p align="center"><img src="docs/search-2026.jpg" alt="Semantic search results in the Ink theme" width="49%"> <img src="docs/discover-2026.jpg" alt="Discover visual themes and questions" width="49%"></p>
+
+<p align="center"><img src="docs/customize-2026.jpg" alt="Customize themes, layouts, spacing and sidebar" width="75%"></p>
 
 ## Download (Windows and Mac)
 
@@ -135,9 +137,11 @@ opens in your browser.
 
 **Dragging files out.** For original-file drops into Photoshop, After Effects, Explorer, and other desktop
 apps, launch the Windows desktop window with `run.bat` (without `--browser`). The destination decides
-which formats and drop locations it accepts. Drag the preview picture itself, or use **Drag file** for
-any media type; video playback controls still work. Browser mode offers a download drag where the
-browser supports it, but cannot provide the same native file drop. macOS/Linux native export is not yet supported.
+which formats and drop locations it accepts. Drag a tile, the preview itself, or use **Drag file** for
+any media type; video playback controls still work. This sends the original file path using the Windows
+file-drop format, including for MP4 video. Browser mode offers a download drag where the browser supports
+it, but cannot provide the same native file drop to editors such as After Effects. macOS/Linux native
+export is not yet supported.
 The **Copy frame** action works in the Windows desktop viewer; other environments may offer a browser download instead.
 
 New installations use the **Ink** theme. Saved theme choices are kept, and can be changed in Customize.

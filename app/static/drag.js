@@ -28,7 +28,7 @@ document.addEventListener('pointerdown', e => {
   if (!nativeFileDrag || dragBusy || e.button !== 0 || e.pointerType === 'touch') return;
   const source = dragSource(e.target, e.clientY);
   if (source) { e.preventDefault(); dragGesture = { ...source, x: e.clientX, y: e.clientY }; }
-});
+}, true);
 document.addEventListener('pointermove', e => {
   if (!dragGesture || dragBusy) return;
   if (!(e.buttons & 1)) { dragGesture = null; return; }
@@ -51,11 +51,18 @@ document.addEventListener('dragstart', e => {
   if (nativeFileDrag) { e.preventDefault(); return; }
   const f = S.files.find(f => f.id === source.id) || F.files.find(f => f.id === source.id) || (S.cur?.id === source.id ? S.cur : null);
   if (!f || !e.dataTransfer) { e.preventDefault(); return; }
-  // Chromium supports DownloadURL; browsers cannot expose arbitrary local paths as OS files.
+  // Remove Chromium's default image/video-frame payload. Browser DownloadURL is
+  // a fallback; the Windows desktop bridge above supplies the actual shell file.
+  e.dataTransfer.clearData();
+  const ext = f.ext?.replace(/^\./, '').toLowerCase();
+  const mime = ({ mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', mkv: 'video/x-matroska',
+    mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', flac: 'audio/flac', ogg: 'audio/ogg',
+    png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif',
+    tif: 'image/tiff', tiff: 'image/tiff', svg: 'image/svg+xml' })[ext] || 'application/octet-stream';
   e.dataTransfer.effectAllowed = 'copy';
-  e.dataTransfer.setData('DownloadURL', `application/octet-stream:${f.name}:${location.origin}/api/file/${source.id}`);
+  e.dataTransfer.setData('DownloadURL', `${mime}:${f.name}:${location.origin}/api/file/${source.id}`);
   e.dataTransfer.setData('text/uri-list', `${location.origin}/api/file/${source.id}`);
-});
+}, true);
 $('#dragFile').addEventListener('click', () => toast(nativeFileDrag
   ? 'Hold and drag this button into another app'
   : 'Use the Windows desktop app to drag original files into other apps', 'move'));
