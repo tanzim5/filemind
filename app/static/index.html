@@ -27,7 +27,7 @@ try {
 
   <nav class="grp" id="mainNav">
     <button class="row active" data-view="all"><i data-ic="library"></i><span>Library</span><em id="cAll"></em></button>
-    <button class="row" data-view="discover"><i data-ic="sparkle"></i><span>Discover</span></button>
+    <button class="row" data-view="discover"><i data-ic="scan"></i><span>Discover</span></button>
     <button class="row" data-view="unassigned"><i data-ic="inbox"></i><span>Unsorted</span><em id="cUn"></em></button>
     <button class="row" data-view="renames"><i data-ic="pencil"></i><span>Pending renames</span><em id="cRen"></em></button>
     <button class="row" data-view="spaces"><i data-ic="layers"></i><span>All spaces</span><em id="cSp"></em></button>
@@ -51,19 +51,22 @@ try {
 
   <section class="side-section" data-side-section="spaces"><div class="label" data-sec="spaces"><span>Spaces</span><button class="plus" id="newProject" title="New space"><i data-ic="plus"></i></button></div>
   <nav class="grp" id="projects"></nav>
-  <nav class="grp"><button class="row" id="autoGroup"><i data-ic="sparkle" style="color:#e0629f"></i><span>Auto-group by content</span></button></nav>
+  <nav class="grp"><button class="row" id="autoGroup"><i data-ic="layers" style="color:#e0629f"></i><span>Auto-group by content</span></button></nav>
   </section>
 
   <section class="side-section" data-side-section="folders"><div class="label" data-sec="folders"><span>Folders</span><button class="plus" id="addSide" title="Add a folder"><i data-ic="plus"></i></button></div>
   <nav class="grp" id="roots"></nav>
   <nav class="grp"><button class="row addrow" id="addRow"><i data-ic="folderplus"></i><span>Add a folder…</span></button></nav>
   </section>
-  <section class="side-section" data-side-section="filters"><div class="label" data-sec="filters"><span>Filters</span><button class="mini-link" id="filterOpen" title="Show date and size filters">Set filters</button></div>
+  <section class="side-section" data-side-section="filters"><div class="label" data-sec="filters"><span>Find by details</span><button class="mini-link" id="filterOpen" title="Describe the files you need">Try it</button></div>
     <div class="inline-filters" id="filterFields" hidden>
-      <label>From date<input name="from" type="date"></label>
-      <label>Through date<input name="through" type="date"></label>
-      <div class="filter-sizes"><label>Min MB<input name="min" type="number" min="0" step="0.1" placeholder="Any"></label><label>Max MB<input name="max" type="number" min="0" step="0.1" placeholder="Any"></label></div>
-      <details class="media-filter-more"><summary>Media details</summary>
+      <form id="smartFilterForm" class="smart-filter-form"><input id="smartFilterInput" placeholder="e.g. 4K videos of motorcycles" aria-label="Describe files to find"><button type="submit" aria-label="Find files"><i data-ic="search"></i></button></form>
+      <div class="smart-filter-examples"><button data-smart="4K videos">4K videos</button><button data-smart="vertical clips under 30 seconds">Short vertical clips</button><button data-smart="images larger than 20 MB">Large images</button></div>
+      <div id="smartFilterStatus" class="smart-filter-status" hidden></div>
+      <details class="media-filter-more"><summary>Fine-tune exact details</summary>
+        <label>From date<input name="from" type="date"></label>
+        <label>Through date<input name="through" type="date"></label>
+        <div class="filter-sizes"><label>Min MB<input name="min" type="number" min="0" step="0.1" placeholder="Any"></label><label>Max MB<input name="max" type="number" min="0" step="0.1" placeholder="Any"></label></div>
         <div class="filter-sizes"><label>Min width (px)<input name="min_width" type="number" min="0" placeholder="Any"></label><label>Min height (px)<input name="min_height" type="number" min="0" placeholder="Any"></label></div>
         <div class="filter-sizes"><label>Min length (s)<input name="min_duration" type="number" min="0" step="0.1" placeholder="Any"></label><label>Max length (s)<input name="max_duration" type="number" min="0" step="0.1" placeholder="Any"></label></div>
         <label>Minimum frame rate<input name="min_fps" type="number" min="0" step="0.1" placeholder="Any"></label>
@@ -162,6 +165,7 @@ try {
 <div id="ctx" hidden></div>
 <div id="toast" hidden></div>
 <script src="icons.js"></script>
+<script src="smart-filter.js"></script>
 <script src="app.js"></script>
 <script src="drag.js"></script>
 </body>
