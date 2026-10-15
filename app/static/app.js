@@ -37,7 +37,7 @@ const glyph = id => {
 /* ================================================================ state */
 /* user settings (Customize) — kept in this browser only */
 const PDEF = { tile: 300, gap: 12, rad: 10, names: false, hover: true, accent: '#ff5a1f', layout: 'cols', theme: 'ink', tstyle: 'lift', head: 'serif', ideas: true,
-  sideOrder: ['types', 'colors', 'sources', 'folders', 'filters'], sideHidden: [], navOrder: ['all', 'discover', 'spaces', 'unassigned', 'renames'], navHidden: ['unassigned', 'renames'], sideExpanded: [] };
+  sideOrder: ['types', 'colors', 'sources', 'folders', 'filters'], sideHidden: [], navOrder: ['all', 'discover', 'spaces', 'unassigned', 'renames'], navHidden: ['unassigned', 'renames'], sideExpanded: ['filters'] };
 const THEMES = [['blush', 'Blush', '#f5f6f9', 'linear-gradient(180deg,#f1e8ea,#e8e2ea)'], ['paper', 'Paper', '#fbfaf8', '#f3f1ec'], ['mist', 'Mist', '#f6f8fb', 'linear-gradient(180deg,#e8eef7,#e1e8f3)'],
   ['sage', 'Sage', '#f7f8f4', 'linear-gradient(180deg,#e8eee2,#dfe8da)'], ['sand', 'Sand', '#faf7f1', 'linear-gradient(180deg,#f3eadc,#ece0cc)'], ['lilac', 'Lilac', '#f8f7fc', 'linear-gradient(180deg,#eeeaf8,#e5dff3)'],
   ['peach', 'Peach', '#fdf8f5', 'linear-gradient(180deg,#fbe8dd,#f5dfe0)'], ['studio', 'Studio', '#ffffff', '#f5f5f6'],
@@ -52,6 +52,7 @@ if (!P.sidebarRevision || P.sidebarRevision < 2) {
 }
 if (P.sidebarRevision < 3) {
   P.sideOrder = [...new Set([...(P.sideOrder || []), ...PDEF.sideOrder])].filter(k => !['spaces', 'folders', 'filters'].includes(k)).concat(['spaces', 'folders', 'filters']);
+  P.sideExpanded = [...new Set([...(P.sideExpanded || []), 'filters'])];
   P.sidebarRevision = 3;
 }
 if (P.sidebarRevision < 4) {
@@ -59,6 +60,10 @@ if (P.sidebarRevision < 4) {
   P.navHidden = (P.navHidden || []).filter(k => k !== 'spaces');
   P.sideOrder = (P.sideOrder || []).filter(k => k !== 'spaces');
   P.sidebarRevision = 4;
+}
+if (P.sidebarRevision < 5) {
+  P.sideExpanded = [...new Set([...(P.sideExpanded || []), 'filters'])];
+  P.sidebarRevision = 5;
 }
 function applyPrefs() {
   const d = document.documentElement, r = d.style; r.setProperty('--gap', P.gap + 'px'); r.setProperty('--rad', P.rad + 'px'); r.setProperty('--accent', P.accent);
@@ -199,8 +204,8 @@ $('#colors').onclick = e => { const b = e.target.closest('[data-color]'); if (b)
 $('#rainbow').onclick = () => { S.sort = S.sort === 'color' ? 'mtime' : 'color'; drawColors(); if (!S.searching) { S.animNext = true; loadFiles(true); } };
 function drawSources() {
   const list = sideExpanded('sources') ? S.sources : S.sources.slice(0, 3);
-  const sourceIcon = { camera: 'image', screenshot: 'scan', whatsapp: 'send', elevenlabs: 'music', midjourney: 'sparkle', chatgpt: 'quote', nanobanana: 'palette', dreamina: 'wand', higgsfield: 'film', comfyui: 'shapes', firefly: 'star', runway: 'video', sora: 'play', flow: 'layers', kling: 'clapperboard', seedance: 'clapperboard', krea: 'pipette', openart: 'palette', creation: 'package', hailuo: 'eye', luma: 'expand', leonardo: 'pencil', ideogram: 'type' };
-  $('#sources').innerHTML = list.map(s => `<button class="row ${S.source === s.key ? 'active' : ''}" data-source="${esc(s.key)}" title="${esc(s.label)}"><span class="sourceicon" style="--source-color:${s.color}"><i data-ic="${sourceIcon[s.key] || 'sparkle'}"></i></span><span>${esc(s.label)}</span><em>${s.count.toLocaleString()}</em></button>`).join('')
+  const sourceIcon = { camera: 'image', screenshot: 'scan', whatsapp: 'send', elevenlabs: 'music', midjourney: 'image', chatgpt: 'quote', nanobanana: 'palette', dreamina: 'image', higgsfield: 'film', comfyui: 'shapes', firefly: 'image', runway: 'video', sora: 'play', flow: 'layers', kling: 'clapperboard', seedance: 'clapperboard', krea: 'pipette', openart: 'palette', creation: 'package', hailuo: 'eye', luma: 'expand', leonardo: 'pencil', ideogram: 'type' };
+  $('#sources').innerHTML = list.map(s => `<button class="row ${S.source === s.key ? 'active' : ''}" data-source="${esc(s.key)}" title="${esc(s.label)}"><span class="sourceicon" style="--source-color:${s.color}"><i data-ic="${sourceIcon[s.key] || 'image'}"></i></span><span>${esc(s.label)}</span><em>${s.count.toLocaleString()}</em></button>`).join('')
     + (S.sources.length > 3 ? `<button class="row" id="srcMore"><i data-ic="${sideExpanded('sources') ? 'left' : 'dots'}" style="color:var(--ink3)"></i><span style="color:var(--ink3)">${sideExpanded('sources') ? 'Show fewer' : `${S.sources.length - 3} more sources`}</span></button>` : '')
     || '<div class="hintrow">Detected from file names — Midjourney, ChatGPT, Higgsfield…</div>';
   hydrate($('#sources'));
@@ -210,15 +215,33 @@ $('#moodToggle').onclick = () => { const show = $('#moods').hidden; $('#moods').
 $('#moods').hidden = true;
 function drawFilterStatus() {
   const n = Object.values(S.filters).filter(Boolean).length;
-  $('#filterOpen').textContent = n ? `${n} active` : 'Set filters';
-  $('#clearFilters').hidden = !n;
+  $('#filterOpen').textContent = n ? `${n} active` : 'Try it';
+  $('#clearFilters').hidden = !n && !S.smartFilterQuery;
+  $('#smartFilterStatus').hidden = !S.smartFilterLabel;
+  $('#smartFilterStatus').textContent = S.smartFilterLabel || '';
   const date = t => t ? new Date(t * 1000).toISOString().slice(0, 10) : '';
   const values = { from: date(S.filters.after), through: date(S.filters.before ? S.filters.before - 86400 : null), min: S.filters.min_size ? S.filters.min_size / 1e6 : '', max: S.filters.max_size ? S.filters.max_size / 1e6 : '',
     min_width: S.filters.min_width ?? '', min_height: S.filters.min_height ?? '', min_duration: S.filters.min_duration ?? '', max_duration: S.filters.max_duration ?? '', min_fps: S.filters.min_fps ?? '', aspect: S.filters.aspect || '', codec: S.filters.codec || '' };
   Object.entries(values).forEach(([key, value]) => { $(`#filterFields [name="${key}"]`).value = value; });
-  $('#filterFields').hidden = !sideExpanded('filters');
+  $('#filterFields').hidden = false;
 }
-$('#filterOpen').onclick = () => $('.label[data-sec="filters"]').click();
+$('#filterOpen').onclick = () => $('#smartFilterInput').focus();
+function applySmartFilter(sentence) {
+  const parsed = parseSmartFilter(sentence);
+  if (!parsed.understood.length && !parsed.query) return toast('Try “4K videos” or describe what is in the files', 'search', true);
+  if (S.smartFilterKind && S.kind === S.smartFilterKind) S.kind = 'all';
+  S.smartFilterKind = null;
+  S.filters = parsed.filters;
+  S.smartFilterQuery = parsed.query;
+  S.smartFilterLabel = parsed.understood.join(' · ') + (parsed.query ? ` · ${parsed.query}` : '');
+  if (parsed.kind) { S.kind = parsed.kind; S.smartFilterKind = parsed.kind; }
+  $('#smartFilterInput').value = sentence;
+  drawFilterStatus(); record();
+  if (parsed.query) runSearch({ qs: [parsed.query] }, parsed.query);
+  else { S.searching = false; S.search = null; loadFiles(true); }
+}
+$('#smartFilterForm').onsubmit = e => { e.preventDefault(); applySmartFilter($('#smartFilterInput').value); };
+$$('[data-smart]').forEach(b => b.onclick = () => applySmartFilter(b.dataset.smart));
 $('#filterFields').addEventListener('change', () => {
   const val = n => $(`#filterFields [name="${n}"]`).value;
   const epoch = s => s ? Math.floor(new Date(s + 'T00:00:00').getTime() / 1000) : null;
@@ -228,11 +251,11 @@ $('#filterFields').addEventListener('change', () => {
   if (min && max && +max < +min) return toast('Maximum size must be larger than minimum', 'x', true);
   if (val('min_duration') && val('max_duration') && +val('max_duration') < +val('min_duration')) return toast('Maximum length must be larger than minimum', 'x', true);
   const num = name => val(name) === '' ? null : +val(name);
-  S.filters = { after, before: through ? through + 86400 : null, min_size: min ? Math.round(+min * 1e6) : null, max_size: max ? Math.round(+max * 1e6) : null,
+  S.filters = { after, before: through ? through + 86400 : null, min_size: min ? Math.round(+min * 1e6) : null, max_size: max ? Math.round(+max * 1e6) : null, min_pixels: S.filters.min_pixels ?? null,
     min_width: num('min_width'), min_height: num('min_height'), min_duration: num('min_duration'), max_duration: num('max_duration'), min_fps: num('min_fps'), aspect: val('aspect') || null, codec: val('codec') || null };
-  drawFilterStatus(); record(); loadFiles(true);
+  drawFilterStatus(); record(); if (S.searching) runSearch(S.search.body, S.search.label, { tags: S.search.tags, rec: 'none' }); else loadFiles(true);
 });
-$('#clearFilters').onclick = () => { S.filters = {}; drawFilterStatus(); record(); loadFiles(true); };
+$('#clearFilters').onclick = () => { const hadSmartQuery = !!S.smartFilterQuery; S.filters = {}; if (S.smartFilterKind && S.kind === S.smartFilterKind) S.kind = 'all'; S.smartFilterKind = null; S.smartFilterQuery = ''; S.smartFilterLabel = ''; $('#smartFilterInput').value = ''; if (hadSmartQuery) { S.searching = false; S.search = null; } drawFilterStatus(); record(); if (S.searching) runSearch(S.search.body, S.search.label, { tags: S.search.tags, rec: 'none' }); else loadFiles(true); };
 drawFilterStatus();
 let polling = false;
 async function poll() {
@@ -269,7 +292,7 @@ async function loadProjects() {
 function drawProjects() {
   const active = S.projects.find(p => S.view === 'project' && S.project === p.id);
   const list = S.spAll ? S.projects : [...S.projects.slice(0, 3), ...(active && !S.projects.slice(0, 3).includes(active) ? [active] : [])];
-  $('#projects').innerHTML = (list.map(p => `<button class="row proj ${S.view === 'project' && S.project === p.id ? 'active' : ''}" data-id="${p.id}">${p.smart ? ic('sparkle') : glyph(p.id)}<span>${esc(p.name)}${p.smart ? ' <small class="live-mark">Live</small>' : ''}</span><em>${p.count}</em></button>`).join('')
+  $('#projects').innerHTML = (list.map(p => `<button class="row proj ${S.view === 'project' && S.project === p.id ? 'active' : ''}" data-id="${p.id}">${p.smart ? ic('layers') : glyph(p.id)}<span>${esc(p.name)}${p.smart ? ' <small class="live-mark">Live</small>' : ''}</span><em>${p.count}</em></button>`).join('')
     || '<div class="hintrow">Spaces are virtual folders. Press + to make one.</div>')
     + (S.projects.length ? `<button class="row more-spaces" id="spMore"><i data-ic="layers"></i><span>View all ${S.projects.length} spaces</span></button>` : '');
   hydrate($('#projects'));
@@ -284,7 +307,7 @@ $('#projects').oncontextmenu = async e => {
 };
 $('#newProject').onclick = async () => { const name = prompt('Name your new space:'); if (!name) return; await api('/projects', { method: 'POST', body: { name } }); await loadProjects(); };
 $$('.row[data-view]').forEach(b => b.onclick = () => go({ view: b.dataset.view }));
-const SIDE_NAMES = { types: 'Types', colors: 'Colors', filters: 'Filters', sources: 'Sources', spaces: 'Spaces', folders: 'Folders' };
+const SIDE_NAMES = { types: 'Types', colors: 'Colors', filters: 'Find by details', sources: 'Sources', spaces: 'Spaces', folders: 'Folders' };
 const NAV_NAMES = { all: 'Library', discover: 'Discover', unassigned: 'Unsorted', renames: 'Pending renames', spaces: 'All spaces' };
 function sideExpanded(sec) { return (P.sideExpanded || []).includes(sec); }
 function applySidebar() {
@@ -297,6 +320,7 @@ $$('.label[data-sec]').forEach(l => l.onclick = e => {
   if (e.target.closest('button') || !['colors', 'sources', 'spaces', 'folders', 'filters'].includes(l.dataset.sec)) return;
   const sec = l.dataset.sec, current = new Set(P.sideExpanded || []);
   if (sec === 'spaces') { go({ view: 'spaces' }); return; }
+  if (sec === 'filters') { $('#smartFilterInput').focus(); return; }
   if (current.has(sec)) current.delete(sec); else current.add(sec);
   P.sideExpanded = [...current]; applyPrefs(); applySidebar();
   if (sec === 'sources') drawSources(); if (sec === 'spaces') { S.spAll = sideExpanded(sec); drawProjects(); } if (sec === 'folders') loadRoots(); if (sec === 'filters') drawFilterStatus();
@@ -396,7 +420,7 @@ function tileInner(f) {
 function tile(f, w, h, i, animate) {
   const extra = (f.score !== undefined ? `<span class="score">${(f.score * 100).toFixed(0)}%</span>` : '') + (f.proposed ? `<div class="prop">→ ${esc(f.proposed)}</div>` : '');
   return `<div draggable="true" class="tile ${S.selected.has(f.id) ? 'sel' : ''} ${animate ? 'rise' : ''}" data-id="${f.id}" data-kind="${f.kind}" style="width:${w}px;height:${h}px;${f.kind !== 'audio' && f.dom ? `background:${f.dom};` : ''}${animate ? `--i:${Math.min(i, 40)}` : ''}">
-    <div class="chk" data-chk>${ic('check', '', 2.8)}</div><div class="qa"><button data-qa="reveal" title="Show in ${FM}">${ic('explorer')}</button><button data-qa="similar" title="Find similar">${ic('sparkle')}</button></div><span class="tile-drag-cue" title="Drag the original file into another app">${ic('move')}</span>${extra}${tileInner(f)}</div>`;
+    <div class="chk" data-chk>${ic('check', '', 2.8)}</div><div class="qa"><button data-qa="reveal" title="Show in ${FM}">${ic('explorer')}</button><button data-qa="similar" title="Find similar">${ic('scan')}</button></div><span class="tile-drag-cue" title="Drag the original file into another app">${ic('move')}</span>${extra}${tileInner(f)}</div>`;
 }
 /* masonry: equal-width columns, each tile keeps its own shape; new pages drop into the shortest column */
 function masonry(W) { const gap = P.gap, cn = Math.max(2, Math.round((W + gap) / (P.tile + gap))), w = Math.floor((W - gap * (cn - 1)) / cn); return { gap, cn, w }; }
@@ -445,7 +469,7 @@ function drawHero() {
   const hasLib = S.roots.length || S.files.length; $('.hero').style.display = hasLib && S.view !== 'spaces' && S.view !== 'discover' ? '' : 'none';
   const fl = filterLabel(); let h = ''; drawBar();
   const u = S.searching && S.understood || {}, read = [u.kind && `only ${KIND[u.kind].label.toLowerCase()}`, u.source && `from ${u.source}`, u.without && `leaving out ${u.without.map(w => `“${w}”`).join(', ')}`].filter(Boolean);
-  if (read.length) h += `<span class="und">${ic('sparkle')}Read as ${esc(read.join(' · '))}</span>`;
+  if (read.length) h += `<span class="und">${ic('scan')}Read as ${esc(read.join(' · '))}</span>`;
   if (S.searching && S.related.length && P.ideas) h += `<span class="rel">${ic('plus')}Narrow with</span>${S.related.map((x, i) => ideaChip(x, i, 'add')).join('')}`;
   if ((fl || S.searching || S.kind !== 'all' || S.view === 'discover-group') && S.files.length) h += `<button class="chipb save" id="saveSpace" title="Save this set of files as a space">${ic('folderplus')}<span>Save view as space</span><em>${(S.searching ? S.files.length : S.total).toLocaleString()}</em></button>`;
   $('#overline').textContent = '';
@@ -468,7 +492,7 @@ function shuffleIdeas(list) {             // strongest ideas are likelier to com
 function ideasHTML() {
   const pool = S.ideas.length ? S.ideas : EXAMPLES.map(q => ({ q, top: [] }));
   const n = pool.length, at = S.ideaAt % n, page = [...pool, ...pool].slice(at, at + Math.min(IDEAS_SHOWN, n));
-  return `<span>${ic('sparkle')}Ideas</span>${page.map((x, i) => ideaChip(x, i)).join('')}${n > IDEAS_SHOWN ? `<button class="idea more" id="moreIdeas" title="Show other ideas">${ic('redo')}<span>More</span></button>` : ''}`;
+  return `<span>${ic('search')}Ideas</span>${page.map((x, i) => ideaChip(x, i)).join('')}${n > IDEAS_SHOWN ? `<button class="idea more" id="moreIdeas" title="Show other ideas">${ic('redo')}<span>More</span></button>` : ''}`;
 }
 /* ---- the search bar holds tags: words, moods, colours, sources and types, all combined */
 const curTags = () => S.searching && S.search?.tags ? S.search.tags : [];
@@ -478,7 +502,7 @@ function drawBar() {
   const fl = filterLabel(), x = `<button data-x title="Remove">${ic('x')}</button>`, out = [];
   if (fl) out.push(`<span class="qt" data-clear="${fl.clear}">${fl.dot ? `<i class="d" style="background:${fl.dot}"></i>` : ic(fl.icon)}${esc(fl.text)}${x}</span>`);
   if (S.kind !== 'all') out.push(`<span class="qt" data-clear="kind">${kicon(S.kind)}${KIND[S.kind].label}${x}</span>`);
-  if (S.searching && !S.search?.tags) out.push(`<span class="qt" data-clear="search">${ic('sparkle')}${esc(S.search?.label || 'Search')}${x}</span>`);
+  if (S.searching && !S.search?.tags) out.push(`<span class="qt" data-clear="search">${ic('search')}${esc(S.search?.label || 'Search')}${x}</span>`);
   curTags().forEach((t, i) => out.push(`<span class="qt${t.voice ? ' vo' : ''}" data-tag="${i}" title="${t.voice ? 'Spoken search' : 'Click to edit'}">${t.mood ? `<i class="d" style="background:${MOOD_TINT[t.mood]}"></i>` : t.voice ? ic('mic') : ''}${esc(t.label || t.q)}${x}</span>`));
   $('#qtags').innerHTML = out.join(''); hydrate($('#qtags'));
   $('#searchForm').classList.toggle('tagged', out.length > 0);
@@ -497,7 +521,7 @@ function spacesHTML() {
   const card = p => { const c = p.cover || [];
     const fan = c.length ? c.map((t, i) => t.kind === 'audio' ? `<span class="k${i}">${ic('music')}</span>` : `<img class="k${i}" src="/api/thumb/${t.id}" alt="" loading="lazy">`).join('') : `<span class="none">Empty</span>`;
     return `<button class="space" data-sp="${p.id}"><div class="fan n${c.length}">${fan}</div><div class="spname"><span class="ring" style="--c:${HUES[p.id % HUES.length]}"></span>${esc(p.name)}${p.smart ? '<small class="live-mark">Live</small>' : ''}<em>${p.count}</em></div></button>`; };
-  return `<div class="spaces"><div class="sphead"><h1 class="d-head">All Spaces</h1><div class="acts">${S.regroupBackup ? `<button class="btn ghost sm" id="spRestore">Restore previous ${S.regroupBackup.count} Spaces</button>` : ''}<button class="btn ghost sm" id="spAuto">${ic('sparkle')}<span>Auto-group</span></button><button class="btn dark sm" id="spNew"><span class="ring" style="--c:var(--accent)"></span><span>Create a new space</span></button></div></div>
+  return `<div class="spaces"><div class="sphead"><h1 class="d-head">All Spaces</h1><div class="acts">${S.regroupBackup ? `<button class="btn ghost sm" id="spRestore">Restore previous ${S.regroupBackup.count} Spaces</button>` : ''}<button class="btn ghost sm" id="spAuto">${ic('layers')}<span>Auto-group</span></button><button class="btn dark sm" id="spNew"><span class="ring" style="--c:var(--accent)"></span><span>Create a new space</span></button></div></div>
     <div class="spgrid">${S.projects.map(card).join('')}<button class="space add" id="spNew2"><div class="fan"><span class="none">${ic('plus')}</span></div><div class="spname">New space</div></button></div></div>`;
 }
 function bindSpaces() {
@@ -510,7 +534,7 @@ async function loadIdeas() { try { const r = await api('/ideas?n=36'); if (r.ide
 async function saveAsSpace() {
   const fl = filterLabel(); const suggested = S.searching ? (S.search?.label || 'Search').replace(/[“”]/g, '') : fl ? fl.text.replace('Name: ', '') : 'Collection';
   const canLive = !S.searching || !!S.search?.body?.qs;
-  modal(`<div class="mh"><h3>Save as a Space</h3><p>A live Space updates as your library grows. A snapshot keeps only the current results.</p></div><div class="mb"><label class="line"><span class="k">Name</span><input id="spaceName" value="${esc(suggested)}" style="flex:1"></label><div class="line"><button class="btn dark" id="makeLive" ${canLive ? '' : 'disabled'}>${ic('sparkle')}<span>Live Space</span></button><button class="btn" id="makeSnapshot">Keep snapshot</button></div>${canLive ? '' : '<p class="hint">Reference searches can be saved as snapshots.</p>'}</div>`, { w: 460 });
+  modal(`<div class="mh"><h3>Save as a Space</h3><p>A live Space updates as your library grows. A snapshot keeps only the current results.</p></div><div class="mb"><label class="line"><span class="k">Name</span><input id="spaceName" value="${esc(suggested)}" style="flex:1"></label><div class="line"><button class="btn dark" id="makeLive" ${canLive ? '' : 'disabled'}>${ic('layers')}<span>Live Space</span></button><button class="btn" id="makeSnapshot">Keep snapshot</button></div>${canLive ? '' : '<p class="hint">Reference searches can be saved as snapshots.</p>'}</div>`, { w: 460 });
   const create = async live => { const name = $('#spaceName').value.trim(); if (!name) return toast('Give this Space a name', 'x', true);
     const spec = { ...S.filters, root: S.root, kind: S.kind === 'all' ? null : S.kind, color: S.color, source: S.source, qs: S.searching ? (S.search?.body?.qs || []) : [] };
     try { const payload = live ? { name, smart: spec } : { name, file_ids: S.searching ? S.files.map(f => f.id) : (await api('/files?' + filterParams({ ids_only: 'true' }))).ids };
@@ -599,7 +623,7 @@ const warmed = new Map(); let warmTimer;
 const warmFile = e => {
   clearTimeout(warmTimer); const t = e.target.closest?.('.tile[data-kind="image"]'); if (!t || warmed.has(t.dataset.id)) return;
   warmTimer = setTimeout(() => { const im = new Image(); im.decoding = 'async'; im.src = '/api/file/' + t.dataset.id; warmed.set(t.dataset.id, im);   // keep a reference so it isn't cancelled
-    if (warmed.size > 40) warmed.delete(warmed.keys().next().value); }, 90);
+    if (warmed.size > 8) warmed.delete(warmed.keys().next().value); }, 90);
 };
 ['#grid', '#feed'].forEach(s => { $(s).addEventListener('mouseover', warmFile); $(s).addEventListener('pointerdown', warmFile); });
 ['#grid', '#feed'].forEach(s => { $(s).addEventListener('mouseover', hoverPreview); $(s).addEventListener('mouseleave', stopHover); });
@@ -630,7 +654,7 @@ function showCtx(e, id) {
   e.preventDefault();
   const ids = S.selected.has(id) ? [...S.selected] : [id];
   const m = $('#ctx');
-  m.innerHTML = `<button data-c="open">${ic('expand')}Open</button><button data-c="reveal">${ic('explorer')}Show in ${FM}</button><button data-c="path">${ic('copy')}Copy path</button><button data-c="similar">${ic('sparkle')}Find similar</button><hr>
+  m.innerHTML = `<button data-c="open">${ic('expand')}Open</button><button data-c="reveal">${ic('explorer')}Show in ${FM}</button><button data-c="path">${ic('copy')}Copy path</button><button data-c="similar">${ic('scan')}Find similar media</button><button data-c="duplicates">${ic('layers')}Find duplicates</button><hr>
     <button data-c="copy">${ic('copy')}Copy ${ids.length > 1 ? `${ids.length} files` : 'file'} to…</button><button data-c="move">${ic('move')}Move ${ids.length > 1 ? `${ids.length} files` : 'file'} to…</button><button data-c="delete" class="danger">${ic('trash')}Move to Trash</button><hr>
     <button data-c="spaces" aria-expanded="false">${ic('layers')}Add to space ${ic('right')}</button>
     <div class="ctx-submenu" hidden><input id="ctxSpaceSearch" placeholder="Find a space…" aria-label="Find a space"><div class="ctx-space-list"></div><button data-c="new">${ic('folderplus')}New space…</button></div>`;
@@ -646,6 +670,7 @@ function showCtx(e, id) {
       if (c === 'reveal') reveal(id);
       if (c === 'path') { const i = await api(`/info/${id}`); copyText(i.path); }
       if (c === 'similar') go_similar(id);
+      if (c === 'duplicates') duplicateModal(id);
       if (c === 'add') { await api(`/projects/${b.dataset.p}/add`, { method: 'POST', body: { file_ids: ids } }); toast('Added to space'); await loadProjects(); await loadStats(); }
       if (c === 'new') { const n = prompt('Name your new space:'); if (n) { await api('/projects', { method: 'POST', body: { name: n, file_ids: ids } }); await refreshAll(); toast('Space created'); } }
       if (['copy', 'move', 'delete'].includes(c)) {
@@ -704,7 +729,7 @@ async function runSearch(body, label, opt = {}) {
   if (opt.rec !== 'none') record();
   try {
     const mine = S.search;
-    const r = await api('/search', { method: 'POST', body: { ...body, root: S.root, kinds: S.kind === 'all' ? null : [S.kind], color: S.color, source: S.source, project: S.view === 'project' ? S.project : null, limit: 200 } });
+    const r = await api('/search', { method: 'POST', body: { ...body, root: S.root, kinds: S.kind === 'all' ? null : [S.kind], color: S.color, source: S.source, project: S.view === 'project' ? S.project : null, filters: S.filters, limit: 200 } });
     if (S.search !== mine) return;
     S.files = r.files; S.related = []; S.understood = r.understood || {}; $('#more').hidden = true; $('#scroller').scrollTop = 0; render(); drawMoods();
     const have = new Set((tags || []).map(t => t.q.toLowerCase()));
@@ -958,6 +983,9 @@ function settingsModal() {
     <h6>Corners <output id="oRad"></output></h6><input type="range" id="sRad" min="0" max="28" step="1">
     <h6>Tiles</h6>${seg('sStyle', [['lift', 'Lift'], ['soft', 'Shadow'], ['outline', 'Outline'], ['flat', 'Flat']])}
     <h6>Show</h6>${tog('sNames', 'File names', 'under every tile, not just on hover')}${tog('sHover', 'Video preview on hover', 'plays muted after a moment')}${tog('sIdeas', 'Search ideas', 'suggestions picked from your library')}
+    <h6>Desktop app</h6><p class="hint" id="sDesktopHint">These options are available in the Windows and macOS desktop app.</p>
+    ${tog('sBackground', 'Keep running after closing the window', 'reopen File Mind without reloading the model')}
+    ${tog('sStartup', 'Start at login', 'launch quietly in the background when you sign in')}
     <h6>Sidebar menu</h6><p class="hint">Choose what appears and move items up or down. Hidden items stay available here.</p><div id="sNavItems" class="sidebar-settings"></div>
     <h6>Sidebar sections</h6><div id="sSideItems" class="sidebar-settings"></div>
     <h6>File changes</h6><p class="hint">Apply drafted names and space moves only when you choose to.</p>
@@ -992,6 +1020,22 @@ function settingsModal() {
   $('#sAcc').onclick = e => { const c = e.target.dataset.c; if (c) { P.accent = c; commit(false); } }; $('#sAccAny').oninput = e => { P.accent = e.target.value; commit(false); };
   $('#sNames').onclick = () => { P.names = !P.names; commit(false); }; $('#sHover').onclick = () => { P.hover = !P.hover; commit(false); };
   $('#sIdeas').onclick = () => { P.ideas = !P.ideas; commit(false); if (S.view === 'discover') render(); else drawHero(); };
+  const desktop = window.pywebview?.api;
+  if (desktop?.desktop_preferences && desktop?.set_desktop_preferences) {
+    let desktopState = null;
+    const paintDesktop = state => { desktopState = state; $('#sBackground')?.classList.toggle('on', state.background); $('#sStartup')?.classList.toggle('on', state.startup); };
+    desktop.desktop_preferences().then(paintDesktop).catch(e => { if ($('#sDesktopHint')) $('#sDesktopHint').textContent = e.message; });
+    $('#sDesktopHint').textContent = 'Only this device is affected. Both options are off until you turn them on.';
+    const setDesktop = async (background, startup) => {
+      if (!desktopState) return;
+      try { paintDesktop(await desktop.set_desktop_preferences(background, startup)); }
+      catch (e) { toast(e.message || 'Could not change the desktop setting', 'x', true); }
+    };
+    $('#sBackground').onclick = () => setDesktop(!desktopState.background, null);
+    $('#sStartup').onclick = () => setDesktop(desktopState.startup ? null : true, !desktopState.startup);
+  } else {
+    $('#sBackground').disabled = true; $('#sStartup').disabled = true;
+  }
   $('#sVol').oninput = e => { S.vol = +e.target.value; S.muted = S.vol === 0; saveVol(); applyVol(); sync(); };
   $('#sReset').onclick = () => { Object.assign(P, structuredClone(PDEF)); S.spAll = false; commit(); applySidebar(); drawProjects(); drawSources(); loadRoots(); paintSidebarSettings(); drawHero(); };
   $('#sReview').onclick = openCommitModal;
@@ -1046,7 +1090,7 @@ function reviewGroups(title, intro, groups, nameOf, extraBtn) {
 }
 function autoGroup() {
   modal(`<div class="mh"><h3>Find the patterns</h3><p>Make a smaller set of Spaces from the visual themes and sources in your library. Each suggestion has files and a cover.</p></div>
-    <div class="mb"><div class="line"><button class="btn dark" id="go">${ic('sparkle')}Find groups</button></div><div id="clres"></div></div>`, { w: 480 });
+    <div class="mb"><div class="line"><button class="btn dark" id="go">${ic('layers')}Find groups</button></div><div id="clres"></div></div>`, { w: 480 });
   $('#go').onclick = async () => {
     $('#clres').innerHTML = '<p class="hint">Reading the shape of your files…</p>';
     try {
@@ -1107,14 +1151,17 @@ async function openHistoryModal() {
 }
 
 /* ================================================================ deeper library tools */
-async function duplicateModal() {
-  modal(`<div class="mh"><h3>Review duplicates</h3><p>Exact copies and possible visual matches. Nothing is removed automatically.</p></div><div class="mb"><p class="hint">Comparing files on this device…</p></div>`, { w: 520 });
+async function duplicateModal(focusId = null) {
+  if (typeof focusId !== 'number') focusId = null;
+  modal(`<div class="mh"><h3>${focusId ? 'Find duplicates' : 'Review duplicates'}</h3><p>Exact copies and possible visual matches. Nothing is removed automatically.</p></div><div class="mb"><p class="hint">Comparing files on this device…</p></div>`, { w: 520 });
   try {
-    const result = await api('/duplicates'); if ($('#modal').hidden) return;
+    const result = await api('/duplicates' + (focusId ? `?focus=${focusId}` : '')); if ($('#modal').hidden) return;
     const group = (files, title) => `<div class="duplicate-group"><strong>${title}</strong><div class="duplicate-members">${files.map(f => `<button data-duplicate="${f.id}">${f.kind === 'audio' ? ic('music') : `<img src="/api/thumb/${f.id}" alt="">`}<span title="${esc(f.name)}">${esc(f.name)}</span><small>${fmtSize(f.size)}</small></button>`).join('')}</div></div>`;
-    const exact = result.exact.map(g => group(g, 'Exact copies')).join('');
-    const visual = result.visual.map(g => group(g, 'Possible visual matches')).join('');
-    $('#modalBox').innerHTML = `<div class="mh"><h3>Review duplicates</h3><p>${result.total_exact} exact groups · ${result.total_visual} possible visual groups. Compare before taking any file action.</p></div><div class="mb duplicate-list">${exact || visual ? exact + visual : '<p class="hint">No duplicates found in the current library.</p>'}</div>`;
+    const matching = groups => focusId ? groups.filter(g => g.some(f => f.id === focusId)) : groups;
+    const exactGroups = matching(result.exact), visualGroups = matching(result.visual);
+    const exact = exactGroups.map(g => group(g, 'Exact copies')).join('');
+    const visual = visualGroups.map(g => group(g, 'Possible visual matches')).join('');
+    $('#modalBox').innerHTML = `<div class="mh"><h3>${focusId ? 'Find duplicates' : 'Review duplicates'}</h3><p>${exactGroups.length} exact groups · ${visualGroups.length} possible visual groups. Compare before taking any file action.</p></div><div class="mb duplicate-list">${exact || visual ? exact + visual : `<p class="hint">${focusId ? 'No duplicate match found for this file.' : 'No duplicates found in the current library.'}</p>`}</div>`;
     $('#modalBox').querySelectorAll('[data-duplicate]').forEach(button => button.onclick = () => { const id = +button.dataset.duplicate; closeModal(); openViewer(id); });
     hydrate($('#modalBox'));
   } catch (error) { $('#modalBox .mb').innerHTML = `<p class="hint">${esc(error.message)}</p>`; }
@@ -1138,7 +1185,7 @@ function fileMomentsModal(f) {
       const state = await api(`/moments/${f.id}`); const box = $('#momentsBody');
       box.innerHTML = state.status === 'running' ? `<p class="hint">Analyzing ${state.done} of ${state.total || '…'} moments on this device…</p>` : state.status === 'ready' ?
         `<p class="hint">${state.segments.length} searchable moments are ready.</p><div class="moment-segments">${state.segments.map(s => `<button data-moment-seek="${s.start}">${ic('play')} ${audioTime(s.start)}–${audioTime(s.end)}</button>`).join('')}</div><button class="btn" id="rebuildMoments">Analyze again</button>` :
-        `<p class="hint">${state.status === 'error' ? esc(state.error || 'Analysis failed') : 'This file has not been analyzed yet.'}</p><button class="btn dark" id="analyzeMoments">${ic('sparkle')}<span>Analyze moments</span></button>`;
+        `<p class="hint">${state.status === 'error' ? esc(state.error || 'Analysis failed') : 'This file has not been analyzed yet.'}</p><button class="btn dark" id="analyzeMoments">${ic('film')}<span>Analyze moments</span></button>`;
       box.querySelectorAll('[data-moment-seek]').forEach(button => button.onclick = () => { const seek = +button.dataset.momentSeek; closeModal(); openViewer(f.id, { seek, rec: 'replace' }); });
       const start = box.querySelector('#analyzeMoments,#rebuildMoments'); if (start) start.onclick = async () => { start.disabled = true; await api(`/moments/${f.id}`, { method: 'POST' }); refresh(); };
       if (state.status === 'running') setTimeout(refresh, 1200);
@@ -1268,37 +1315,51 @@ function glide(redraw) {
 /* ================================================================ voice search
    The recording itself goes to EmbeddingGemma, which understands speech directly and puts it
    in the same space as typed words — no transcription, nothing leaves this PC. */
-const V = { rec: null, chunks: [], stream: null, timer: null, ctx: null, raf: 0 };
+const V = { rec: null, chunks: [], stream: null, timer: null, ctx: null, raf: 0, failed: false, sending: false };
 $('#micBtn').innerHTML = ic('mic') + '<span>Voice</span>';
 async function startVoice() {
+  if (V.rec || V.sending) return;
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return toast('Voice recording is unavailable in this browser', 'mic', true);
   try { V.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
   catch { return toast('Microphone is blocked — allow it in the address bar to search by voice', 'mic', true); }
-  V.chunks = []; V.rec = new MediaRecorder(V.stream); V.rec.ondataavailable = e => V.chunks.push(e.data); V.rec.onstop = sendVoice; V.rec.start();
+  try {
+    const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find(t => MediaRecorder.isTypeSupported?.(t));
+    V.chunks = []; V.failed = false; V.rec = new MediaRecorder(V.stream, mimeType ? { mimeType } : {});
+    V.rec.ondataavailable = e => { if (e.data.size) V.chunks.push(e.data); };
+    V.rec.onerror = () => { V.failed = true; stopVoice(); toast('Recording failed — try the microphone again', 'mic', true); };
+    V.rec.onstop = sendVoice; V.rec.start();
+  } catch { V.stream.getTracks().forEach(t => t.stop()); V.stream = null; return toast('Could not start the microphone', 'mic', true); }
   const b = $('#micBtn'); b.classList.add('on'); b.title = 'Listening… click to search'; b.querySelector('span').textContent = 'Listening';
   $('#q').placeholder = 'Listening… say what you are looking for';
-  V.ctx = new AudioContext(); const an = V.ctx.createAnalyser(); an.fftSize = 512; V.ctx.createMediaStreamSource(V.stream).connect(an);
+  let an;
+  try { V.ctx = new AudioContext(); an = V.ctx.createAnalyser(); an.fftSize = 512; V.ctx.createMediaStreamSource(V.stream).connect(an); }
+  catch { V.timer = setTimeout(stopVoice, 20000); return; }
   const buf = new Uint8Array(an.fftSize); let quiet = 0, heard = false, last = performance.now();
   const tick = now => {                      // the ring follows your voice; a pause after speaking stops it
     an.getByteTimeDomainData(buf); let peak = 0; for (const v of buf) peak = Math.max(peak, Math.abs(v - 128));
     const lvl = Math.min(1, peak / 60); b.style.setProperty('--lvl', lvl.toFixed(2));
-    if (lvl > .18) { heard = true; quiet = 0; } else if (heard) quiet += now - last; last = now;
+    if (lvl > .12) { heard = true; quiet = 0; } else if (heard) quiet += now - last; last = now;
     if (heard && quiet > 1300) return stopVoice();
     V.raf = requestAnimationFrame(tick);
   };
-  V.raf = requestAnimationFrame(tick); V.timer = setTimeout(stopVoice, 15000);
+  V.raf = requestAnimationFrame(tick); V.timer = setTimeout(stopVoice, 20000);
 }
 function stopVoice() {
   cancelAnimationFrame(V.raf); clearTimeout(V.timer);
   if (V.rec?.state === 'recording') V.rec.stop();
   V.stream?.getTracks().forEach(t => t.stop()); V.ctx?.close().catch(() => { }); V.ctx = null;
+  V.stream = null;
   const b = $('#micBtn'); b.classList.remove('on'); b.classList.add('busy'); b.style.removeProperty('--lvl'); b.title = 'Search by voice'; b.querySelector('span').textContent = 'Searching';
 }
 async function sendVoice() {
-  const fd = new FormData(); fd.append('file', new Blob(V.chunks, { type: V.rec.mimeType || 'audio/webm' }), 'voice.webm'); V.rec = null;
+  const recording = V.rec, chunks = V.chunks; V.rec = null; V.chunks = [];
+  if (V.failed || chunks.reduce((n, chunk) => n + chunk.size, 0) < 3000) { $('#micBtn').classList.remove('busy'); $('#micBtn').querySelector('span').textContent = 'Voice'; drawBar(); if (!V.failed) toast('No recording captured — try again closer to the mic', 'mic', true); return; }
+  V.sending = true;
+  const fd = new FormData(); fd.append('file', new Blob(chunks, { type: recording.mimeType || 'audio/webm' }), recording.mimeType.includes('mp4') ? 'voice.mp4' : 'voice.webm');
   try {
     const r = await api('/voice', { method: 'POST', body: fd });
     addTag({ q: 'voice:' + r.id, label: r.hint.slice(0, 2).join(' · '), voice: true });
   } catch (e) { toast(e.message, 'mic', true); }
-  finally { $('#micBtn').classList.remove('busy'); $('#micBtn').querySelector('span').textContent = 'Voice'; drawBar(); }
+  finally { V.sending = false; $('#micBtn').classList.remove('busy'); $('#micBtn').querySelector('span').textContent = 'Voice'; drawBar(); }
 }
 $('#micBtn').onclick = () => V.rec ? stopVoice() : startVoice();

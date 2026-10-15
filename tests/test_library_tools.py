@@ -52,11 +52,27 @@ class LibraryToolTests(unittest.TestCase):
         self.conn.commit()
         self.assertEqual(main.files(project=1, ids_only=True)["ids"], [4, 2, 1])
 
+    def test_semantic_search_respects_media_filters(self):
+        keep = main._search_filter({"filters": {"min_width": 90, "aspect": "landscape"}})
+        rows = self.conn.execute("SELECT * FROM files ORDER BY id").fetchall()
+        self.assertEqual([row["id"] for row in rows if keep(row)], [1, 2])
+        keep = main._search_filter({"filters": {"min_duration": 10}})
+        self.assertFalse(any(keep(row) for row in rows))
+
+    def test_rank_batches_metadata_and_returns_full_file_details(self):
+        vectors = np.eye(3, dtype=np.float32)
+        with patch.object(main.indexer, "matrix", return_value=(np.array([1, 2, 3]), vectors)):
+            result = main._rank(vectors[0], None, ["image"], 2,
+                                keep=main._search_filter({"filters": {"min_width": 90}}))
+        self.assertEqual([item["id"] for item in result], [1, 2])
+        self.assertIn("path", result[0])
+
     def test_exact_duplicates_are_reported_without_modifying_files(self):
         with patch.object(duplicates.extract, "THUMB_DIR", self.root):
             result = duplicates.groups()
         self.assertTrue(any(set(group) == {1, 2} for group in result["exact"]))
         self.assertEqual(len(list(self.root.glob("*.png"))), 3)
+        self.assertEqual(duplicates.groups(focus=1)["exact"], [[1, 2]])
 
     def test_invalid_live_space_does_not_create_project(self):
         with self.assertRaises(Exception):

@@ -589,6 +589,17 @@ body.head-sans .sphead h1{font-style:normal;font-size:44px}
 /* Inline sidebar filters and a quiet, single-line privacy footer. */
 .inline-filters{padding:4px 10px 12px;display:grid;gap:10px}
 .inline-filters[hidden]{display:none}
+.smart-filter-form{display:flex;gap:4px;align-items:center;min-width:0;border:1px solid var(--line2);border-radius:9px;background:var(--surface);padding:3px 4px 3px 0}
+.smart-filter-form:focus-within{border-color:var(--accent)}
+.smart-filter-form #smartFilterInput{flex:1;min-width:0;border:0;background:transparent;height:30px;padding-left:9px;font-size:11px;color:var(--ink);outline:0}
+.smart-filter-form button{display:grid;place-items:center;flex:none;width:28px;height:28px;border-radius:6px;color:var(--ink2)}
+.smart-filter-form button:hover{background:var(--hov);color:var(--ink)}
+.smart-filter-form svg{width:15px;height:15px}
+.smart-filter-examples{display:flex;flex-wrap:wrap;gap:5px}
+.smart-filter-examples button{padding:5px 7px;border:1px solid var(--line2);border-radius:6px;background:var(--surface);color:var(--ink2);font:500 10px var(--ui);text-align:left}
+.smart-filter-examples button:hover{color:var(--ink);border-color:var(--accent)}
+.smart-filter-status{font:500 10px/1.4 var(--ui);color:var(--accent)}
+.smart-filter-status[hidden]{display:none}
 .media-filter-more{border-top:1px solid var(--line2);padding-top:8px}.media-filter-more summary{cursor:pointer;color:var(--ink2);font-size:11px;font-weight:700}.media-filter-more[open]{display:grid;gap:9px}.media-filter-more .filter-sizes{margin-top:9px}.media-filter-more label{margin-top:8px}.inline-filters select{width:100%;height:32px;padding:0 8px;border:1px solid var(--line2);border-radius:7px;background:var(--surface);color:var(--ink);font:12px var(--ui)}
 .live-mark{margin-left:6px;padding:2px 5px;border-radius:5px;background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent);font:700 9px var(--ui);vertical-align:middle}.spaces .live-mark{background:#e0e7ef;color:#5e6678}
 .discover-tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.discover-tools>button{display:flex;align-items:center;gap:14px;padding:18px;text-align:left;border:1px solid var(--line2);border-radius:15px;background:var(--surface);color:var(--ink)}.discover-tools>button:hover{border-color:var(--accent)}.discover-tools svg{width:23px;height:23px;color:var(--accent)}.discover-tools span{display:grid;gap:4px;flex:1}.discover-tools strong{font-size:13px}.discover-tools small{color:var(--ink3);font-size:11px}.discover-tools b{color:var(--ink3)}

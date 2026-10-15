@@ -24,8 +24,35 @@ def _dhash(path):
     return bits, width / max(height, 1)
 
 
-def groups(limit=60):
+def groups(limit=60, focus=None):
     rows = db.conn().execute("SELECT id,path,size,kind,thumb FROM files WHERE status='done' ORDER BY mtime DESC").fetchall()
+    if focus is not None:
+        chosen = next((row for row in rows if row["id"] == focus), None)
+        if chosen is None:
+            return {"exact": [], "visual": [], "total_exact": 0, "total_visual": 0}
+        try:
+            digest = _digest(chosen["path"])
+            exact = [chosen["id"]] + [r["id"] for r in rows if r["id"] != focus and r["size"] == chosen["size"]
+                                           and r["kind"] == chosen["kind"] and _safe_digest(r["path"]) == digest]
+        except OSError:
+            exact = [chosen["id"]]
+        visual = [chosen["id"]]
+        if chosen["kind"] in ("image", "video") and chosen["thumb"]:
+            try:
+                bits, ratio = _dhash(extract.THUMB_DIR / chosen["thumb"])
+                for row in rows:
+                    if row["id"] == focus or row["id"] in exact or row["kind"] != chosen["kind"] or not row["thumb"]:
+                        continue
+                    try:
+                        other_bits, other_ratio = _dhash(extract.THUMB_DIR / row["thumb"])
+                    except OSError:
+                        continue
+                    if abs(ratio - other_ratio) <= .08 and (bits ^ other_bits).bit_count() <= 5:
+                        visual.append(row["id"])
+            except OSError:
+                pass
+        return {"exact": [exact] if len(exact) > 1 else [], "visual": [visual] if len(visual) > 1 else [],
+                "total_exact": int(len(exact) > 1), "total_visual": int(len(visual) > 1)}
     by_size = defaultdict(list)
     for row in rows:
         by_size[row["size"]].append(row)
@@ -74,3 +101,10 @@ def groups(limit=60):
     near.sort(key=len, reverse=True)
     return {"exact": exact[:limit], "visual": near[:limit],
             "total_exact": len(exact), "total_visual": len(near)}
+
+
+def _safe_digest(path):
+    try:
+        return _digest(path)
+    except OSError:
+        return None

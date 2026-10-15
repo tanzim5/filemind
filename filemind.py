@@ -3,6 +3,7 @@
 Used as FileMind.exe in the portable build. Everything (data, model) lives next to the executable,
 so the folder can be moved or deleted as a whole. Run from source with:  python filemind.py"""
 import os
+import secrets
 import socket
 import subprocess
 import sys
@@ -62,39 +63,73 @@ def _free(port):
 
 
 def main():
-    port, serve = PORT, True
+    port, serve, window_opened = PORT, True, False
     if not _free(PORT):
         if _ours(PORT):
             serve = False                                         # already running: just open another window
         else:
             with socket.socket() as s:
                 s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]
+    token_path = Path(os.environ["FILEMIND_DATA"]) / f"desktop-session-{port}"
     if serve:
         import uvicorn
+        from fastapi import Header, HTTPException
+        if "--background" in sys.argv:
+            os.environ["FILEMIND_LAZY_START"] = "1"
         from app.main import app
         server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
+        token = secrets.token_urlsafe(32)
+        token_path.parent.mkdir(parents=True, exist_ok=True)
+        token_path.write_text(token, encoding="ascii")
+        try:
+            token_path.chmod(0o600)
+        except OSError:
+            pass
+
+        def quit_background(x_filemind_desktop: str = Header(default="")):
+            if not secrets.compare_digest(x_filemind_desktop, token):
+                raise HTTPException(status_code=403)
+            threading.Timer(0.2, lambda: setattr(server, "should_exit", True)).start()
+            return {"ok": True}
+
+        app.add_api_route("/api/desktop/quit", quit_background, methods=["POST"], include_in_schema=False)
+        app.router.routes.insert(-1, app.router.routes.pop())  # ahead of the catch-all static mount
         threading.Thread(target=server.run, daemon=True).start()
         for _ in range(300):
             if _ours(port):
                 break
             time.sleep(0.1)
     url = f"http://127.0.0.1:{port}"
-    if "--browser" not in sys.argv and "--no-window" not in sys.argv:
+    if "--browser" not in sys.argv and "--no-window" not in sys.argv and "--background" not in sys.argv:
         try:
             _window(url)
-            os._exit(0)                                           # window closed: stop the server too
+            window_opened = True
+            if not serve:
+                from app.autostart import preferences
+                if not preferences()["background"]:
+                    try:
+                        request = urllib.request.Request(url + "/api/desktop/quit", data=b"",
+                            headers={"X-FileMind-Desktop": token_path.read_text(encoding="ascii")}, method="POST")
+                        urllib.request.urlopen(request, timeout=2).close()
+                    except (OSError, ValueError) as e:
+                        print(f"Could not stop background server: {e}")
+                os._exit(0)                                       # another process owns the local server
+            from app.autostart import preferences
+            if not preferences()["background"]:
+                os._exit(0)                                       # default: closing the window stops this server
         except Exception as e:                                    # no pywebview / no GUI toolkit (common on Linux)
             print(f"No app window available ({type(e).__name__}: {e}); opening your browser instead.")
-    if "--no-window" not in sys.argv:                             # --no-window: just serve (testing, remote use)
+    if not window_opened and "--no-window" not in sys.argv and "--background" not in sys.argv:
         import webbrowser
         webbrowser.open(url)
     if serve:
         print(f"File Mind is running at {url}  (press Ctrl+C here to quit)")
         try:
-            while True:
-                time.sleep(3600)
+            while not server.should_exit:
+                time.sleep(0.5)
         except KeyboardInterrupt:
             pass
+        token_path.unlink(missing_ok=True)
     os._exit(0)
 
 
@@ -121,6 +156,14 @@ def _window(url):
             if str(u).startswith("https://"):
                 import webbrowser
                 webbrowser.open(u)
+
+        def desktop_preferences(self):
+            from app.autostart import preferences
+            return preferences()
+
+        def set_desktop_preferences(self, background=None, startup=None):
+            from app.autostart import update
+            return update(background=background, startup=startup)
 
     png = BUNDLE / "app" / "static" / "icon.png"
     ico = BUNDLE / "app" / "static" / "favicon.ico"

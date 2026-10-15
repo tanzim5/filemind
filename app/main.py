@@ -204,7 +204,7 @@ def files(root: int | None = None, kind: str | None = None, project: int | None 
           pattern: str | None = None, discover: str | None = None,
           after: float | None = None, before: float | None = None,
           min_size: int | None = None, max_size: int | None = None,
-          min_width: int | None = None, min_height: int | None = None,
+          min_width: int | None = None, min_height: int | None = None, min_pixels: int | None = None,
           min_duration: float | None = None, max_duration: float | None = None,
           min_fps: float | None = None, aspect: str | None = None,
           codec: str | None = None, ids_only: bool = False):
@@ -233,6 +233,8 @@ def files(root: int | None = None, kind: str | None = None, project: int | None 
                                     ("fps", min_fps, ">=")):
         if value is not None:
             where.append(f"f.{column}{operator}?"); args.append(value)
+    if min_pixels is not None:
+        where.append("f.width*f.height>=?"); args.append(min_pixels)
     if aspect:
         aspect_sql = {"portrait": "f.width<f.height", "landscape": "f.width>f.height",
                       "square": "f.width*1.1>=f.height AND f.height*1.1>=f.width",
@@ -289,7 +291,7 @@ def _smart_space_ids(pid: int) -> set[int] | None:
     spec = json.loads(row["spec"])
     params = {key: spec[key] for key in ("root", "kind", "color", "source", "after", "before",
                                         "min_size", "max_size", "min_width", "min_height",
-                                        "min_duration", "max_duration", "min_fps", "aspect", "codec") if spec.get(key) is not None}
+                                        "min_pixels", "min_duration", "max_duration", "min_fps", "aspect", "codec") if spec.get(key) is not None}
     members = files(**params, ids_only=True)["ids"]
     if row["query_vec"] is None:
         return set(members)
@@ -350,6 +352,8 @@ def _warm_dims():
 
 
 def _warm_ideas():
+    if os.environ.get("FILEMIND_LAZY_START") == "1":
+        return                       # login startup stays lean until a search or indexing needs the model
     if not embedder.ready():          # first run: the model is fetched from the app, then this runs
         return
     try:
@@ -426,29 +430,43 @@ def _rank(qvec, root, kinds, limit, exclude_id=None, query_text=None, keep=None,
     tokens = [t for t in re.split(r"\W+", (query_text or "").lower()) if len(t) > 1]
     out = []
     # take a generous slice (everything when a filter may drop most of it), then filter + filename boost
-    for idx in (order if keep else order[: max(limit * 6, 600)]):
-        fid = int(ids[idx])
-        if exclude_id and fid == exclude_id:
-            continue
-        r = c.execute("SELECT * FROM files WHERE id=?", (fid,)).fetchone()
-        if not r or (root and r["root_id"] != root) or (kinds and r["kind"] not in kinds):
-            continue
-        if keep and not keep(r):
-            continue
-        score, key = float(sims[idx]), float(rank_by[idx])
-        if tokens and all(t in r["name"].lower() for t in tokens):
-            key += 1.0   # exact filename hits float to the top
-        out.append((key, score, r))
+    candidates = order if keep else order[: max(limit * 6, 600)]
+    for start in range(0, len(candidates), 512):
+        batch = candidates[start:start + 512]
+        batch_ids = [int(ids[idx]) for idx in batch]
+        rows = {r["id"]: r for r in c.execute(
+            f"SELECT id,name,root_id,kind,size,width,height,duration,fps,mtime,codec,pal FROM files "
+            f"WHERE id IN ({','.join('?' for _ in batch_ids)})", batch_ids)}
+        for idx, fid in zip(batch, batch_ids):
+            if exclude_id and fid == exclude_id:
+                continue
+            r = rows.get(fid)
+            if not r or (root and r["root_id"] != root) or (kinds and r["kind"] not in kinds):
+                continue
+            if keep and not keep(r):
+                continue
+            score, key = float(sims[idx]), float(rank_by[idx])
+            if tokens and all(t in r["name"].lower() for t in tokens):
+                key += 1.0   # exact filename hits float to the top
+            out.append((key, score, fid))
+            if keep and len(out) >= limit * 3:
+                break
         if keep and len(out) >= limit * 3:
             break
     out.sort(key=lambda x: -x[0])
-    return [_file_dict(r, s) for _, s, r in out[:limit]]
+    chosen = out[:limit]
+    if not chosen:
+        return []
+    full = {r["id"]: r for r in c.execute(
+        f"SELECT * FROM files WHERE id IN ({','.join('?' for _ in chosen)})", [fid for _, _, fid in chosen])}
+    return [_file_dict(full[fid], score) for _, score, fid in chosen if fid in full]
 
 
 def _search_filter(body):
-    """Colour, source and space filters can be combined with a search (they are tags too)."""
+    """Keep semantic results inside the same exact filters used by the library view."""
     color, source, project = body.get("color"), body.get("source"), body.get("project")
-    if not (color or source or project):
+    filters = body.get("filters") or {}
+    if not (color or source or project or any(value is not None for value in filters.values())):
         return None
     members = None
     if project:
@@ -457,6 +475,28 @@ def _search_filter(body):
             members = {r[0] for r in db.conn().execute("SELECT file_id FROM project_files WHERE project_id=?", (project,))}
 
     def keep(r):
+        for key, column, comparison in (("min_size", "size", lambda a, b: a >= b),
+                                        ("max_size", "size", lambda a, b: a <= b),
+                                        ("min_width", "width", lambda a, b: a >= b),
+                                        ("min_height", "height", lambda a, b: a >= b),
+                                        ("min_duration", "duration", lambda a, b: a >= b),
+                                        ("max_duration", "duration", lambda a, b: a <= b),
+                                        ("min_fps", "fps", lambda a, b: a >= b),
+                                        ("after", "mtime", lambda a, b: a >= b),
+                                        ("before", "mtime", lambda a, b: a < b)):
+            value = filters.get(key)
+            if value is not None and (r[column] is None or not comparison(r[column], value)):
+                return False
+        if filters.get("min_pixels") is not None and (r["width"] is None or r["height"] is None or r["width"] * r["height"] < filters["min_pixels"]):
+            return False
+        if filters.get("codec") and r["codec"] != filters["codec"].lower():
+            return False
+        shape = filters.get("aspect")
+        if shape:
+            w, h = r["width"], r["height"]
+            if not w or not h or not {"portrait": w < h, "landscape": w > h,
+                                      "square": .9 <= w / h <= 1.1, "wide": w >= h * 1.7}.get(shape, False):
+                return False
         if color and colors_mod.shares(r["pal"]).get(color, 0) < colors_mod.MIN_SHARE:
             return False
         if source and (names_mod.source_of(r["name"]) or "none") != source:
@@ -613,8 +653,8 @@ def stats():
 
 
 @app.get("/api/duplicates")
-def duplicate_candidates():
-    result = duplicates_mod.groups()
+def duplicate_candidates(focus: int | None = None):
+    result = duplicates_mod.groups(focus=focus)
     ids = {fid for category in ("exact", "visual") for group in result[category] for fid in group}
     c = db.conn()
     rows = {r["id"]: _file_dict(r) for r in c.execute(
@@ -875,7 +915,7 @@ def create_project(body: dict = Body(...)):
             if vectors:
                 vec = embedder._norm(np.mean(vectors, axis=0)).astype(np.float32).tobytes()
         allowed = {"qs", "root", "kind", "color", "source", "after", "before", "min_size", "max_size",
-                   "min_width", "min_height", "min_duration", "max_duration", "min_fps", "aspect", "codec"}
+                   "min_width", "min_height", "min_pixels", "min_duration", "max_duration", "min_fps", "aspect", "codec"}
         spec = {key: value for key, value in spec.items() if key in allowed and value is not None}
     c = db.conn()
     cur = c.execute("INSERT INTO projects(name, created) VALUES(?,?)", (name, time.time()))

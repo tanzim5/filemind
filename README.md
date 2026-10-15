@@ -27,19 +27,20 @@ your own computer. No account, no cloud, no uploads.
 | 🎙️ **Search by voice** | Click the mic and describe it. The recording itself is understood by the model — no speech-to-text, nothing sent anywhere. |
 | 🖼️ **Photos, videos and sounds** | Looks at images and video frames, listens to audio. Also filter by colour, by type, or by the AI tool a file came from. |
 | 🏷️ **Tags and colour palettes** | Every file gets automatic tags and its main colours. Click any of them to find more like it. |
-| ✨ **More like this** | Open a file and keep following similar ones, endlessly. |
+| 🔗 **More like this** | Open a file and keep following similar ones, endlessly. |
 | 🧭 **Discover** | Browse compact visual themes such as people in frame, illustrations, architecture and products, or start from a suggested question. Groups also show file types, sources and camera metadata. Visual themes use existing embeddings; they do not identify individual people. |
 | 🖱️ **Drag originals into other apps (Windows desktop)** | Drag a tile, the image/video in the viewer, or the viewer's **Drag file** handle into an app that accepts that file type. Video drags carry the original MP4, not its poster frame. Select several tiles to drag them together. Originals stay in place. |
 | 🎵 **Audio playback and transcripts** | Scrub a waveform in the viewer. For recordings with speech, choose **Transcribe audio** in the right panel to make a copyable, timestamped transcript in the detected language. Transcription runs on your device. |
 | 🎞️ **Copy a video frame** | Pause or scrub a video in the viewer, then choose **Copy frame** to paste that still as a PNG into another app. |
 | 🗂️ **Spaces and renames** | Open **All spaces** from the main sidebar. Each collection appears as a stack of its files and follows your selected theme. **Auto-group** suggests broad, named collections with covers; review them before replacing older regular Spaces. The originals stay in place, and a local backup lets you restore the previous Spaces. Draft file names separately, then use **Customize → Preview file changes** before changing files. |
-| ✨ **Live Spaces** | Save a search or filter as a Space that includes matching files added later. Choose **Keep snapshot** if you want a fixed collection instead. |
-| 🎛️ **Media filters** | Narrow the library by date, size, image/video dimensions, aspect ratio, duration, frame rate or codec from the inline sidebar. Media details are read locally in the background. |
-| 🪞 **Review duplicates** | Discover → **Review duplicates** shows byte-identical copies and possible visual matches. This is a review list; it never deletes files on its own. |
+| 🗂️ **Live Spaces** | Save a search or filter as a Space that includes matching files added later. Choose **Keep snapshot** if you want a fixed collection instead. |
+| 🎛️ **Find by details** | Type requests such as “4K videos of motorcycles”, “vertical clips under 30 seconds”, or “images larger than 20 MB”. File type and media details become exact local filters; remaining words search by meaning. Fine-tune exact fields in the sidebar when needed. |
+| 🪞 **Review duplicates** | Discover → **Review duplicates** shows byte-identical copies and possible visual matches. A file's context menu can find duplicates for that file or search for similar media. These actions never delete files on their own. |
 | 🖼️ **Search with a reference** | Open any image, video or audio file and choose **Search with this file**, then optionally describe what you want. Discover also lets you choose an image from outside the library. |
 | ⏱️ **Find moments** | Discover → **Find a moment** lists video and audio clips you can choose to analyze, then searches their time-stamped local index. You can also analyze a clip from its viewer. Results open at the matching time. |
 | 🗃️ **Direct file actions** | Right-click a tile to copy or move the original to a folder, or send it to the system Trash. These actions happen immediately after you choose a destination or confirm deletion. Copy and move never overwrite an existing file. Add to space stays in a compact submenu. |
 | 🌗 **Make it yours** | Ten themes including dark Night and Ink, accent colours, four gallery layouts (masonry, rows, contact sheet and storyboard), tile size, and a sidebar menu you can reorder or hide from Customize. |
+| 📌 **Keep it ready** | In the Windows or Mac desktop app, Customize can keep File Mind running after its window closes and optionally start it quietly at login. Both are off by default. Reopening the app uses the already-running local server and loaded model. |
 
 <p align="center"><img src="docs/search-2026.jpg" alt="Semantic search results in the Ink theme" width="49%"> <img src="docs/discover-2026.jpg" alt="Discover visual themes and questions" width="49%"></p>
 
@@ -62,7 +63,7 @@ your own computer. No account, no cloud, no uploads.
 Nothing to install: Python, ffmpeg and everything else are inside the folder. The first launch downloads the
 rest once into that same folder; after that File Mind works fully offline.
 While it reads your files, the banner says what it is running on (for example *on NVIDIA GeForce RTX 3060 (CUDA)*, *on CPU*). To watch the NVIDIA card work, open Task Manager → Performance → your NVIDIA GPU and change one of the graphs from *3D* to *Cuda*: the 3D graph stays quiet because AI work isn't graphics work.
-To remove File Mind, delete the folder. (If the NVIDIA version can't use your card, it quietly runs on the CPU instead.)
+To remove File Mind, turn off **Start at login** in Customize first, close it, then delete the folder. (If the NVIDIA version can't use your card, it quietly runs on the CPU instead.)
 
 <p align="center"><img src="docs/setup.png" alt="First launch: the model downloads once" width="70%"></p>
 
@@ -86,6 +87,7 @@ The first launch downloads the AI model once (~1.1 GB). On a Mac it runs on the 
 [MLX](https://github.com/ml-explore/mlx)** (the [5-bit MLX conversion](https://huggingface.co/mlx-community/embeddinggemma-2-5bit)),
 so reading a library is fast. Your index and the model live in `~/Library/Application Support/File Mind`;
 delete that folder to forget everything.
+If you enable **Start at login**, File Mind adds a per-user LaunchAgent. Turn the option off before moving or deleting the app so the login item points to the right location.
 
 Intel Macs aren't supported by the AI libraries. On Linux, [run it from source](#run-from-source-macos-linux-windows).
 

@@ -37,6 +37,11 @@ jobs:
           New-Item -ItemType Directory ffbin | Out-Null
           Get-ChildItem ffmpeg-dl -Recurse -Include ffmpeg.exe,ffprobe.exe | Copy-Item -Destination ffbin
 
+      - name: Check app behavior
+        run: |
+          python -m unittest discover -s tests -q
+          node --test tests/*.cjs
+
       - name: Build (CPU, works on every PC)
         run: python packaging/build_windows.py --ffmpeg ffbin --variant cpu
 
@@ -87,6 +92,11 @@ jobs:
           done
           chmod +x ffbin/ffmpeg ffbin/ffprobe
           ffbin/ffmpeg -version | head -1
+
+      - name: Check app behavior
+        run: |
+          python -m unittest discover -s tests -q
+          node --test tests/*.cjs
 
       - name: Build
         run: python packaging/build_macos.py --ffmpeg ffbin
@@ -141,4 +151,4 @@ jobs:
 
             After the first launch File Mind works fully offline. Made by [Tanzim](https://x.com/tanzim31). Intel Macs and Linux: [run from source](https://github.com/tanzim5/filemind#run-from-source-macos-linux-windows).
 
-            This version adds a waveform audio player and optional local speech transcription. The separate speech model (~148 MB) downloads only when you first choose **Transcribe audio**. Meaning-based audio search continues to work without a transcript. For real file drops into Photoshop or After Effects, use the Windows desktop app; browser tabs cannot provide the native Windows file-drop format.
+            This version adds plain-language media filters, file-specific duplicate review, improved voice recording, and opt-in background and start-at-login controls in the desktop app. Both startup controls are off by default. For real file drops into Photoshop or After Effects, use the Windows desktop app; browser tabs cannot provide the native Windows file-drop format.
