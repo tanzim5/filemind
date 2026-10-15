@@ -1,167 +1,131 @@
 <p align="center"><img src="docs/banner.png" alt="File Mind — search your own photos, videos and sounds by what's in them, fully offline" width="100%"></p>
 
+<h3 align="center">Find any photo, video or sound by describing it.<br>Runs entirely on your computer. No account, no cloud, no uploads.</h3>
+
 <p align="center">
-  <a href="https://github.com/tanzim5/filemind/releases/latest"><b>⬇ Download for Windows &amp; Mac</b></a> ·
-  <a href="#what-it-does">What it does</a> ·
-  <a href="#privacy">Privacy</a> ·
-  <a href="#run-from-source-macos-linux-windows">Run from source</a> ·
-  <a href="https://x.com/tanzim31">Follow @tanzim31 on X</a>
+  <a href="https://github.com/tanzim5/filemind/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/tanzim5/filemind?style=for-the-badge&color=ff5a1f&labelColor=111114"></a>
+  <img alt="Platforms" src="https://img.shields.io/badge/Windows%20·%20macOS-111114?style=for-the-badge">
+  <img alt="Offline" src="https://img.shields.io/badge/100%25-offline-111114?style=for-the-badge">
+  <a href="https://github.com/tanzim5/filemind/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/tanzim5/filemind?style=for-the-badge&color=ff5a1f&labelColor=111114"></a>
 </p>
 
-<p align="center"><sub>Made by <b>Tanzim</b> · <a href="https://x.com/tanzim31">@tanzim31</a> on X</sub></p>
+<p align="center">
+  <a href="https://github.com/tanzim5/filemind/releases/latest"><b>⬇ Download</b></a> &nbsp;·&nbsp;
+  <a href="#features">Features</a> &nbsp;·&nbsp;
+  <a href="#get-started">Get started</a> &nbsp;·&nbsp;
+  <a href="#privacy">Privacy</a> &nbsp;·&nbsp;
+  <a href="#run-from-source">Run from source</a> &nbsp;·&nbsp;
+  <a href="https://x.com/tanzim31">@tanzim31</a>
+</p>
 
----
+<p align="center"><img src="docs/library-2026.jpg" alt="File Mind library in the Ink theme" width="100%"></p>
 
-File Mind reads a folder on your device — Downloads, Pictures, a project drive — and lets you find anything in it
-by describing it. It understands **what is in** your photos, videos and sounds using Google's
-[EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2), a multimodal AI model that runs entirely on
-your own computer. No account, no cloud, no uploads.
+File Mind reads a folder — Downloads, Pictures, a project drive — and understands **what is in** your photos, videos
+and sounds using Google's [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2), a multimodal AI model
+that runs on your own machine. Type what you remember ("red logo on black", "a man running at night") and it finds it.
 
-![File Mind library in the Ink theme](docs/library-2026.jpg)
+## Features
 
-## What it does
+### 🔎 Find anything
+- **Search in plain language.** Stack several searches as tags to narrow down.
+- **Search by voice.** The recording itself is understood by the model: no speech-to-text, nothing sent anywhere.
+- **Search with a reference.** Open any image, video or audio file and choose *Search with this file*, optionally adding words.
+- **Find by details.** "4K videos of motorcycles", "vertical clips under 30 seconds", "images larger than 20 MB": media details become exact filters, the rest searches by meaning.
+- **Find moments.** Search inside videos and sounds and open the result at the matching time.
+- **More like this.** Keep following similar files, endlessly.
+- **Automatic tags and colours** on every file. Filter by colour, type, source tool, date or size.
 
-| | |
-|---|---|
-| 🔎 **Search in plain language** | "videos of a man running without text", "photos from Midjourney", "red logo on black". Stack several searches as tags. |
-| 🎙️ **Search by voice** | Click the mic and describe it. The recording itself is understood by the model — no speech-to-text, nothing sent anywhere. |
-| 🖼️ **Photos, videos and sounds** | Looks at images and video frames, listens to audio. Also filter by colour, by type, or by the AI tool a file came from. |
-| 🏷️ **Tags and colour palettes** | Every file gets automatic tags and its main colours. Click any of them to find more like it. |
-| 🔗 **More like this** | Open a file and keep following similar ones, endlessly. |
-| 🧭 **Discover** | Browse compact visual themes such as people in frame, illustrations, architecture and products, or start from a suggested question. Groups also show file types, sources and camera metadata. Visual themes use existing embeddings; they do not identify individual people. |
-| 🖱️ **Drag originals into other apps (Windows desktop)** | Drag a tile, the image/video in the viewer, or the viewer's **Drag file** handle into an app that accepts that file type. Video drags carry the original MP4, not its poster frame. Select several tiles to drag them together. Originals stay in place. |
-| 🎵 **Audio playback and transcripts** | Scrub a waveform in the viewer. For recordings with speech, choose **Transcribe audio** in the right panel to make a copyable, timestamped transcript in the detected language. Transcription runs on your device. |
-| 🎞️ **Copy a video frame** | Pause or scrub a video in the viewer, then choose **Copy frame** to paste that still as a PNG into another app. |
-| 🗂️ **Spaces and renames** | Open **All spaces** from the main sidebar. Each collection appears as a stack of its files and follows your selected theme. **Auto-group** suggests broad, named collections with covers; review them before replacing older regular Spaces. The originals stay in place, and a local backup lets you restore the previous Spaces. Draft file names separately, then use **Customize → Preview file changes** before changing files. |
-| 🗂️ **Live Spaces** | Save a search or filter as a Space that includes matching files added later. Choose **Keep snapshot** if you want a fixed collection instead. |
-| 🎛️ **Find by details** | Type requests such as “4K videos of motorcycles”, “vertical clips under 30 seconds”, or “images larger than 20 MB”. File type and media details become exact local filters; remaining words search by meaning. Fine-tune exact fields in the sidebar when needed. |
-| 🪞 **Review duplicates** | Discover → **Review duplicates** shows byte-identical copies and possible visual matches. A file's context menu can find duplicates for that file or search for similar media. These actions never delete files on their own. |
-| 🖼️ **Search with a reference** | Open any image, video or audio file and choose **Search with this file**, then optionally describe what you want. Discover also lets you choose an image from outside the library. |
-| ⏱️ **Find moments** | Discover → **Find a moment** lists video and audio clips you can choose to analyze, then searches their time-stamped local index. You can also analyze a clip from its viewer. Results open at the matching time. |
-| 🗃️ **Direct file actions** | Right-click a tile to copy or move the original to a folder, or send it to the system Trash. These actions happen immediately after you choose a destination or confirm deletion. Copy and move never overwrite an existing file. Add to space stays in a compact submenu. |
-| 🌗 **Make it yours** | Ten themes including dark Night and Ink, accent colours, four gallery layouts (masonry, rows, contact sheet and storyboard), tile size, and a sidebar menu you can reorder or hide from Customize. |
-| 📌 **Keep it ready** | In the Windows or Mac desktop app, Customize can keep File Mind running after its window closes and optionally start it quietly at login. Both are off by default. Reopening the app uses the already-running local server and loaded model. |
+### 🧭 Explore your library
+- **Discover** visual themes (architecture, products, illustrations…) or start from a suggested question.
+- **Spaces.** Group files into collections. *Live* spaces keep matching files added later; *snapshots* stay fixed. **Auto-group** suggests named collections for you to review.
+- **Review duplicates**: byte-identical copies and visually similar matches. Nothing is deleted for you.
+
+### 🖱️ Work with your files
+- **Drag originals into other apps** (Windows desktop): Photoshop, After Effects, Explorer and more. Drag a tile, the viewer's image or video, or the **Drag file** handle. Select several tiles to drag them together.
+- **Copy a video frame** as a PNG straight from the viewer.
+- **Audio playback and transcripts**: scrub a waveform, then transcribe speech on your device in the detected language.
+- **File actions**: copy or move the original, or send it to the system Trash. Copy and move never overwrite.
+- **Preview renames** before anything on disk changes; commits can be undone.
+
+### 🎨 Make it yours
+- Ten themes (including dark **Night** and **Ink**), accent colours, four gallery layouts (masonry, rows, contact sheet, storyboard), tile size and a sidebar you can reorder or hide.
+- Optionally keep File Mind running after you close the window, or start it quietly at login. Both are off by default.
 
 <p align="center"><img src="docs/search-2026.jpg" alt="Semantic search results in the Ink theme" width="49%"> <img src="docs/discover-2026.jpg" alt="Discover visual themes and questions" width="49%"></p>
-
 <p align="center"><img src="docs/customize-2026.jpg" alt="Customize themes, layouts, spacing and sidebar" width="75%"></p>
 
-## Download (Windows and Mac)
+## Get started
 
-### Windows
+Nothing to install: Python, ffmpeg and everything else are inside the download. The first launch fetches the AI model once; after that File Mind works fully offline.
 
-1. Download one zip from the [latest release](https://github.com/tanzim5/filemind/releases/latest):
+| Your computer | Download | First launch also downloads |
+|---|---|---|
+| **Windows**, any PC | `FileMind-Windows-portable.zip` | AI model (~1.5 GB) |
+| **Windows** with an NVIDIA card (GTX 16 / RTX 20 series or newer) | `FileMind-Windows-NVIDIA.zip`: several times faster indexing | AI model (~1.5 GB) + GPU support (~2.8 GB) |
+| **Mac**, Apple Silicon (M1+, macOS 14+) | `FileMind-macOS-arm64.zip`: runs on the GPU through [MLX](https://github.com/ml-explore/mlx) | AI model (~1.1 GB) |
 
-   | Download | Pick it if | First launch downloads |
-   |---|---|---|
-   | **`FileMind-Windows-portable.zip`** | You're not sure. Works on every PC. | the AI model (~1.5 GB) |
-   | **`FileMind-Windows-NVIDIA.zip`** | You have an NVIDIA graphics card (GTX 16-series, RTX 20-series or newer) with an up-to-date driver. Reads your library several times faster. | the AI model (~1.5 GB) + GPU support (~2.8 GB) |
+➡ Get them from the **[latest release](https://github.com/tanzim5/filemind/releases/latest)**.
 
-2. Unzip it anywhere (Desktop, a USB stick…).
-3. Double-click **`FileMind.exe`**.
+<details>
+<summary><b>Windows steps</b></summary>
 
-Nothing to install: Python, ffmpeg and everything else are inside the folder. The first launch downloads the
-rest once into that same folder; after that File Mind works fully offline.
-While it reads your files, the banner says what it is running on (for example *on NVIDIA GeForce RTX 3060 (CUDA)*, *on CPU*). To watch the NVIDIA card work, open Task Manager → Performance → your NVIDIA GPU and change one of the graphs from *3D* to *Cuda*: the 3D graph stays quiet because AI work isn't graphics work.
-To remove File Mind, turn off **Start at login** in Customize first, close it, then delete the folder. (If the NVIDIA version can't use your card, it quietly runs on the CPU instead.)
+1. Unzip anywhere (Desktop, a USB stick…) and double-click **`FileMind.exe`**.
+2. Windows may show "Windows protected your PC" because the app isn't code-signed: click **More info → Run anyway**.
+3. While it reads your files, the banner shows what it runs on (for example *on NVIDIA GeForce RTX 3060 (CUDA)* or *on CPU*). To watch the card work, open Task Manager → Performance → your NVIDIA GPU and switch a graph from *3D* to *Cuda*.
+
+**Requirements:** Windows 10/11 (64-bit), about 8 GB RAM. No graphics card needed. Searching is instant; reading a new library is a one-time job of a few seconds per photo (more for videos), you can keep using the app meanwhile, and it resumes where it left off.
+
+**Uninstall:** turn off *Start at login* in Customize, close the app, delete the folder. If the NVIDIA version can't use your card, it quietly runs on the CPU.
 
 <p align="center"><img src="docs/setup.png" alt="First launch: the model downloads once" width="70%"></p>
+</details>
 
-**Requirements:** Windows 10 or 11 (64-bit) and about 8 GB of RAM. No graphics card needed.
-Searching is instant. Reading a new library is a one-time job of a few seconds per photo (more for videos);
-you can keep using File Mind while it works, and it picks up where it left off if you close it.
+<details>
+<summary><b>Mac steps</b></summary>
 
-Windows may show "Windows protected your PC" the first time, because the app isn't code-signed:
-click **More info → Run anyway**.
+1. Unzip, drag **`FileMind.app`** into Applications and open it.
+2. The app isn't notarized by Apple, so macOS first says it can't verify it. Open **System Settings → Privacy & Security** and click **Open Anyway** (or run once: `xattr -dr com.apple.quarantine /Applications/FileMind.app`).
 
-### Mac (Apple Silicon)
-
-1. Download **`FileMind-macOS-arm64.zip`** from the [latest release](https://github.com/tanzim5/filemind/releases/latest)
-   (needs an M1 or newer Mac on macOS 14 Sonoma or later).
-2. Unzip it, drag **`FileMind.app`** into Applications and open it.
-3. The app isn't notarized by Apple, so the first time macOS says it can't verify it. Open
-   **System Settings → Privacy & Security**, scroll down and click **Open Anyway**.
-   (Or, once, in Terminal: `xattr -dr com.apple.quarantine /Applications/FileMind.app`.)
-
-The first launch downloads the AI model once (~1.1 GB). On a Mac it runs on the **GPU through
-[MLX](https://github.com/ml-explore/mlx)** (the [5-bit MLX conversion](https://huggingface.co/mlx-community/embeddinggemma-2-5bit)),
-so reading a library is fast. Your index and the model live in `~/Library/Application Support/File Mind`;
-delete that folder to forget everything.
-If you enable **Start at login**, File Mind adds a per-user LaunchAgent. Turn the option off before moving or deleting the app so the login item points to the right location.
-
-Intel Macs aren't supported by the AI libraries. On Linux, [run it from source](#run-from-source-macos-linux-windows).
+The index and model live in `~/Library/Application Support/File Mind`; delete that folder to forget everything. *Start at login* adds a per-user LaunchAgent: turn it off before moving or deleting the app. Intel Macs aren't supported; on Linux, [run from source](#run-from-source).
+</details>
 
 ## Privacy
 
 - Everything runs on your computer. Your files, the index and every search stay there.
-- The only network use is downloading models from Hugging Face when needed. The speech transcription model downloads only if you choose **Transcribe audio** (~148 MB); the audio and transcript remain on your device.
-- Indexing only reads your folders. Staged renames and moves happen when you press commit and can be undone. Explicit right-click Copy, Move, and Move to Trash actions act immediately; deletion uses the system Trash.
+- The only network use is downloading models from Hugging Face when needed. The speech model (~148 MB) downloads only if you choose **Transcribe audio**.
+- Indexing only reads your folders. Staged renames and moves happen when you press commit and can be undone. Right-click Copy, Move and Move to Trash act immediately; deletion uses the system Trash.
 - The index lives in a `data` folder next to the app. Delete it to forget everything.
 
-## Run from source (macOS, Linux, Windows)
+## Run from source
 
-Any computer with Python can run File Mind straight from this repository. It's the same app, opening in
-its own window or in your browser.
+Any computer with Python can run File Mind from this repository: the same app, in its own window or your browser.
 
-**You need**
+**You need:** Python 3.10–3.13 (**3.12 recommended**; 3.14 is too new for some AI libraries), about 8 GB RAM and 6 GB disk, and **ffmpeg** for videos, sounds and voice search. On a Mac: Apple Silicon and macOS 14+.
 
-- **Python 3.10 to 3.13** ([python.org](https://www.python.org/downloads/); on Linux, your distribution's `python3`).
-  **3.12 is the best choice**: it's what File Mind is built and tested with. `./run.sh` picks 3.12 (then 3.13, 3.11,
-  3.10) automatically if several are installed, or use `PYTHON=python3.12 ./run.sh`. Python 3.14 is too new: some
-  of the AI libraries don't ship wheels for it yet.
-- **On a Mac: Apple Silicon (M1 or newer) and macOS 14 or newer.** PyTorch and MLX don't publish builds for Intel Macs
-  or older macOS.
-- **ffmpeg**, for videos, sounds and voice search (photos work without it):
-
-  | System | Install ffmpeg |
-  |---|---|
-  | macOS | `brew install ffmpeg` ([Homebrew](https://brew.sh)) |
-  | Debian / Ubuntu / Mint | `sudo apt install ffmpeg python3-venv` |
-  | Fedora | `sudo dnf install ffmpeg` (from [RPM Fusion](https://rpmfusion.org/Configuration)) |
-  | Arch | `sudo pacman -S ffmpeg` |
-  | Windows | `winget install Gyan.FFmpeg` |
-
-- About **8 GB of RAM** and **6 GB of disk** (Python packages plus the 1.5 GB model).
-
-**macOS and Linux** — one command sets everything up on the first run and starts File Mind:
+| System | Install ffmpeg |
+|---|---|
+| macOS | `brew install ffmpeg` |
+| Debian / Ubuntu / Mint | `sudo apt install ffmpeg python3-venv` |
+| Fedora | `sudo dnf install ffmpeg` ([RPM Fusion](https://rpmfusion.org/Configuration)) |
+| Arch | `sudo pacman -S ffmpeg` |
+| Windows | `winget install Gyan.FFmpeg` |
 
 ```bash
 git clone https://github.com/tanzim5/filemind.git
 cd filemind
-./run.sh
+./run.sh          # Windows: run.bat
 ```
 
-**Windows**
-
-```bat
-git clone https://github.com/tanzim5/filemind.git
-cd filemind
-run.bat
-```
-
-The first run creates a private Python environment in `.venv` and installs the packages (a few minutes).
-Then File Mind opens and downloads the AI model once. Later runs start in seconds; just run `./run.sh` or
-`run.bat` again. Add `--browser` to use your web browser instead of the app window. On Linux it always
-opens in your browser.
-
-**Dragging files out.** For original-file drops into Photoshop, After Effects, Explorer, and other desktop
-apps, launch the Windows desktop window with `run.bat` (without `--browser`). The destination decides
-which formats and drop locations it accepts. Drag a tile, the preview itself, or use **Drag file** for
-any media type; video playback controls still work. This sends the original file path using the Windows
-file-drop format, including for MP4 video. Browser mode offers a download drag where the browser supports
-it, but cannot provide the same native file drop to editors such as After Effects. macOS/Linux native
-export is not yet supported.
-The **Copy frame** action works in the Windows desktop viewer; other environments may offer a browser download instead.
-
-**Audio transcription.** File Mind's EmbeddingGemma 2 understands audio for meaning-based search without
-turning speech into text. The optional **Transcribe audio** action uses a separate multilingual speech model
-for a copyable transcript. Its first use downloads the model; later transcriptions run offline. Music and
-sound effects may have no usable transcript.
-
-New installations use the **Ink** theme. Saved theme choices are kept, and can be changed in Customize.
+The first run creates a private `.venv`, installs packages (a few minutes), opens File Mind and downloads the model once. Later runs start in seconds. Add `--browser` to use your web browser; on Linux it always does. `./run.sh` picks Python 3.12 automatically (or set `PYTHON=python3.12`).
 
 <details>
-<summary><b>Manual setup</b> (if you prefer to do each step yourself)</summary>
+<summary><b>Dragging files out, audio transcription and other details</b></summary>
+
+**Dragging files out.** For original-file drops into Photoshop, After Effects, Explorer and other desktop apps, launch the Windows desktop window with `run.bat` (without `--browser`). The destination decides which formats it accepts. The original file path is sent in the Windows file-drop format, including MP4 video. Browser mode offers a download drag where supported but can't provide a native file drop to editors such as After Effects. macOS/Linux native export isn't supported yet. **Copy frame** works in the Windows desktop viewer; elsewhere the browser may offer a download instead.
+
+**Audio transcription.** EmbeddingGemma 2 understands audio for search without turning speech into text. The optional **Transcribe audio** action uses a separate multilingual speech model for a copyable, timestamped transcript. Its first use downloads the model; later runs are offline. Music and sound effects may have no usable transcript.
+
+**Manual setup**
 
 ```bash
 python3 -m venv .venv
@@ -172,28 +136,18 @@ pip install -r requirements.txt
 python filemind.py                     # or: python -m uvicorn app.main:app --port 8765
 ```
 
-To put the model somewhere else, set `FILEMIND_MODELS`; to keep the index somewhere else, set `FILEMIND_DATA`.
-You can also place the model files in `models/embeddinggemma-2/` yourself instead of letting the app download them.
+Set `FILEMIND_MODELS` to put the model elsewhere and `FILEMIND_DATA` for the index. You can also place model files in `models/embeddinggemma-2/` yourself.
+
+**Speed.** Apple Silicon uses the GPU through MLX (installed by `./run.sh`, 1.1 GB 5-bit model). With an NVIDIA GPU and CUDA PyTorch, indexing is also much faster. Everything else runs on the CPU: search is instant, reading a new library takes a few seconds per photo. To force PyTorch on a Mac, set `FILEMIND_BACKEND=torch` (downloads the original 1.5 GB model).
+
+**Linux.** "Browse…" uses `zenity` or `kdialog` if installed; otherwise paste the folder path. "Show in folder" opens your file manager.
+
+**Building the apps.** See `packaging/build_windows.py` and `packaging/build_macos.py`. GitHub Actions builds three downloads (standard Windows, NVIDIA Windows, Apple Silicon Mac) for every `v*` tag, checks each archive's contents and smoke-tests the standard Windows and Mac apps. You can also run the **Release builds** workflow manually; to publish from a manual run, give it an existing `v*` tag in `release_tag`. NVIDIA first-run CUDA download and GPU use need testing on an NVIDIA PC.
 </details>
-
-**Speed.** Apple Silicon Macs use the GPU through MLX (installed automatically by `./run.sh`, with the 1.1 GB
-5-bit model). With an NVIDIA GPU (and CUDA PyTorch), indexing is also much faster. Everything else runs on the CPU:
-search is instant, and reading a new library takes a few seconds per photo. To force PyTorch on a Mac instead of
-MLX, set `FILEMIND_BACKEND=torch` (it then downloads the original 1.5 GB model).
-
-**Notes for Linux.** "Browse…" uses `zenity` or `kdialog` if one is installed; otherwise paste the folder path.
-"Show in folder" opens your file manager.
-
-To build the apps yourself, see `packaging/build_windows.py` and `packaging/build_macos.py`. GitHub Actions
-builds three separate downloads for every `v*` tag: standard Windows, NVIDIA Windows, and Apple Silicon Mac.
-You can also run the **Release builds** workflow manually and download the three artifacts from that run. To publish a GitHub Release from a manual run, supply an existing `v*` tag in its `release_tag` input.
-The workflow checks the contents of every archive and smoke-tests the standard Windows and Mac apps.
-NVIDIA support is packaged and checked, but its first-run CUDA download and GPU use require testing on an NVIDIA PC.
 
 ## Licence
 
-The EmbeddingGemma 2 weights are Apache-2.0. The Windows and Mac apps bundle [FFmpeg](https://ffmpeg.org) (LGPL/GPL).
-Interface fonts: Inter and Instrument Serif (SIL OFL).
+The EmbeddingGemma 2 weights are Apache-2.0. The Windows and Mac apps bundle [FFmpeg](https://ffmpeg.org) (LGPL/GPL). Interface fonts: Inter and Instrument Serif (SIL OFL).
 
 ---
 
