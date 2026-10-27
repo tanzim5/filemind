@@ -1,0 +1,21 @@
+{
+  "about": "Engine editions the native app can install. The native app picks 'nvidia' when CUDA is usable, otherwise 'cpu'.",
+  "version": "0.4.9",
+  "editions": {
+    "cpu": {
+      "title": "CPU",
+      "url": "https://github.com/tanzim5/filemind/releases/download/v0.4.9/FileMind-Windows-portable.zip",
+      "size": 513094374,
+      "sha256": "81ece2cfb9db10032c6d4539d52b36120c7a34025f8335e734403f83e698834c",
+      "folder": "FileMind"
+    },
+    "nvidia": {
+      "title": "NVIDIA CUDA",
+      "url": "https://github.com/tanzim5/filemind/releases/download/v0.4.9/FileMind-Windows-NVIDIA.zip",
+      "size": 418209894,
+      "sha256": "00b3f1043ff9958789baf95c68af0ddc78eabe9e4eaaf6278bb1758ebf122718",
+      "folder": "FileMind-NVIDIA"
+    }
+  },
+  "cuda": { "minDriverVersion": 12080, "minComputeCapability": 7.0 }
+}

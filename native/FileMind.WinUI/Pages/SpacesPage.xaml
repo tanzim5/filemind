@@ -1,0 +1,23 @@
+<Page x:Class="FileMind.Pages.SpacesPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:local="using:FileMind.Pages">
+  <Grid>
+    <ScrollViewer VerticalScrollBarVisibility="Hidden">
+      <StackPanel Padding="40,34,40,60" Spacing="26">
+        <Grid>
+          <StackPanel Spacing="4">
+            <TextBlock Text="All spaces" Style="{StaticResource TitleText}" FontSize="34"/>
+            <TextBlock x:Name="Summary" Style="{StaticResource SecondaryText}"/>
+          </StackPanel>
+          <Button Style="{StaticResource GlassAccentButton}" HorizontalAlignment="Right" VerticalAlignment="Top" Padding="14,8" CornerRadius="6" Click="NewSpace_Click">
+            <StackPanel Orientation="Horizontal" Spacing="8"><local:LineIcon Kind="plus" Size="14"/><TextBlock Text="Create a new space" FontSize="13"/></StackPanel>
+          </Button>
+        </Grid>
+        <local:WrapPanel x:Name="Grid" Spacing="22"/>
+        <TextBlock x:Name="Note" Style="{StaticResource SecondaryText}" TextWrapping="Wrap"/>
+      </StackPanel>
+    </ScrollViewer>
+    <Rectangle Height="26" VerticalAlignment="Top" IsHitTestVisible="False" Fill="{StaticResource FadeTopBrush}"/>
+  </Grid>
+</Page>

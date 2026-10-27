@@ -1,0 +1,103 @@
+<Page x:Class="FileMind.Pages.ViewerPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:local="using:FileMind.Pages">
+  <Grid>
+    <ScrollViewer x:Name="Scroll" VerticalScrollBarVisibility="Hidden" ViewChanged="Scroll_ViewChanged">
+      <StackPanel Padding="20,0,20,90" Spacing="0">
+
+        <!-- top bar: back, title, folder -->
+        <Grid Height="60" Padding="0,10,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <Button x:Name="BackButton" Style="{StaticResource GlassButton}" Width="34" Height="34" Padding="0" CornerRadius="6" Click="Back_Click" ToolTipService.ToolTip="Back (Esc)">
+              <local:LineIcon Kind="back" Size="16"/>
+            </Button>
+          </StackPanel>
+          <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <TextBlock x:Name="TitleBox" FontSize="14" FontWeight="SemiBold" TextAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="760"/>
+            <TextBlock x:Name="SubtitleBox" FontSize="11" TextAlignment="Center" Foreground="{StaticResource GlassTextTertiaryBrush}"/>
+          </StackPanel>
+          <Button Grid.Column="2" Style="{StaticResource GlassButton}" Width="34" Height="34" Padding="0" CornerRadius="6" Click="Reveal_Click" ToolTipService.ToolTip="Show in Explorer">
+            <local:LineIcon Kind="library" Size="16"/>
+          </Button>
+        </Grid>
+
+        <!-- stage + details -->
+        <Grid ColumnSpacing="14">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+
+          <Border x:Name="StageCard" Height="640" Background="Transparent" CornerRadius="8" BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1">
+            <Grid>
+              <Grid x:Name="StageHost" Margin="26,26,26,86" CornerRadius="4">
+                <Grid x:Name="MediaHost" RenderTransformOrigin="0.5,0.5">
+                  <Grid.RenderTransform><ScaleTransform x:Name="ZoomTransform" ScaleX="1" ScaleY="1"/></Grid.RenderTransform>
+                </Grid>
+              </Grid>
+
+              <Button x:Name="PrevButton" Style="{StaticResource GlassButton}" Width="38" Height="38" Padding="0" CornerRadius="7" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="12,0,0,40" Click="Prev_Click">
+                <local:LineIcon Kind="back" Size="16"/>
+              </Button>
+              <Button x:Name="NextButton" Style="{StaticResource GlassButton}" Width="38" Height="38" Padding="0" CornerRadius="7" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,40" Click="Next_Click">
+                <local:LineIcon Kind="fwd" Size="16"/>
+              </Button>
+
+              <!-- native-feeling control pill -->
+              <Border Style="{StaticResource GlassPill}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,22" Padding="6">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Button x:Name="DragButton" Style="{StaticResource GlassButton}" Padding="12,6" CornerRadius="6" CanDrag="True" DragStarting="Drag_Starting" ToolTipService.ToolTip="Drag this file into any app or folder">
+                    <StackPanel Orientation="Horizontal" Spacing="6"><local:LineIcon Kind="file" Size="14"/><TextBlock Text="Drag file" FontSize="12"/></StackPanel>
+                  </Button>
+                  <Button x:Name="CopyFrameButton" Style="{StaticResource GlassButton}" Padding="12,6" CornerRadius="6" Click="CopyFrame_Click" ToolTipService.ToolTip="Copy the current frame as a picture">
+                    <StackPanel Orientation="Horizontal" Spacing="6"><local:LineIcon Kind="photo" Size="14"/><TextBlock x:Name="CopyFrameText" Text="Copy frame" FontSize="12"/></StackPanel>
+                  </Button>
+                  <Border x:Name="ZoomBox" Background="{StaticResource GlassFillBrush}" CornerRadius="6" Padding="4,2">
+                    <StackPanel Orientation="Horizontal" Spacing="2">
+                      <Button Style="{StaticResource GlassButton}" Width="28" Height="28" Padding="0" CornerRadius="5" Click="ZoomOut_Click"><local:LineIcon Kind="minus" Size="13"/></Button>
+                      <TextBlock x:Name="ZoomText" Text="100%" FontSize="12" Width="46" TextAlignment="Center" VerticalAlignment="Center" Tapped="ZoomReset_Tapped"/>
+                      <Button Style="{StaticResource GlassButton}" Width="28" Height="28" Padding="0" CornerRadius="5" Click="ZoomIn_Click"><local:LineIcon Kind="plus" Size="13"/></Button>
+                    </StackPanel>
+                  </Border>
+                  <Border x:Name="VolumeBox" Background="{StaticResource GlassFillBrush}" CornerRadius="6" Padding="12,2">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <local:LineIcon Kind="audio" Size="14" VerticalAlignment="Center" Tapped="Mute_Tapped"/>
+                      <Slider x:Name="VolumeSlider" Width="96" Minimum="0" Maximum="100" Value="60" VerticalAlignment="Center" ValueChanged="Volume_Changed"/>
+                      <TextBlock x:Name="VolumeText" Text="60%" FontSize="12" Width="34" VerticalAlignment="Center"/>
+                    </StackPanel>
+                  </Border>
+                </StackPanel>
+              </Border>
+            </Grid>
+          </Border>
+
+          <!-- details -->
+          <Border Grid.Column="1" Width="350" Height="640" Background="{StaticResource SurfaceBrush}" CornerRadius="8" BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1">
+            <ScrollViewer VerticalScrollBarVisibility="Hidden">
+              <StackPanel x:Name="Details" Padding="22,20,22,22" Spacing="16"/>
+            </ScrollViewer>
+          </Border>
+        </Grid>
+
+        <!-- more like this -->
+        <Grid Margin="0,34,0,14">
+          <StackPanel>
+            <TextBlock Text="More like this" Style="{StaticResource TitleText}" FontSize="38"/>
+            <TextBlock x:Name="MoreNote" Text="Closest first, by what is in them. Keep scrolling; click any to follow it." FontSize="12" Foreground="{StaticResource GlassTextTertiaryBrush}"/>
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+            <Button Style="{StaticResource GlassButton}" Padding="14,7" CornerRadius="6" Click="OpenAsResults_Click"><TextBlock Text="Open as results" FontSize="12"/></Button>
+            <Button Style="{StaticResource GlassAccentButton}" Padding="14,7" CornerRadius="6" Click="MakeCollection_Click"><TextBlock Text="Make a collection" FontSize="12"/></Button>
+          </StackPanel>
+        </Grid>
+        <local:WrapPanel x:Name="More" Spacing="10"/>
+      </StackPanel>
+    </ScrollViewer>
+
+    <Rectangle Height="20" VerticalAlignment="Top" IsHitTestVisible="False" Fill="{StaticResource FadeTopBrush}"/>
+    <Rectangle Height="70" VerticalAlignment="Bottom" IsHitTestVisible="False" Fill="{StaticResource FadeBottomBrush}"/>
+  </Grid>
+</Page>

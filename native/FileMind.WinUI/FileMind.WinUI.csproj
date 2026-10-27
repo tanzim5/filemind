@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows10.0.22621.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <RootNamespace>FileMind</RootNamespace>
+    <AssemblyName>FileMind</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\filemind.ico</ApplicationIcon>
+    <Platforms>x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <UseWinUI>true</UseWinUI>
+    <!-- Unpackaged + self-contained: a plain folder you can zip. No MSIX and no separate runtime install. -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <Version>0.5.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260921001" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.9169" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\FileMind.Core\FileMind.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="engine-manifest.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <!-- Unpackaged publish leaves out the app's own compiled XAML (.xbf) and resource index (.pri); without them the
+       app dies at startup with "Cannot locate resource from ms-appx:///MainWindow.xaml". Copy them in after publish. -->
+  <Target Name="CopyXamlToPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <_Xbf Include="$(OutDir)**\*.xbf" />
+    </ItemGroup>
+    <Copy SourceFiles="$(OutDir)FileMind.pri" DestinationFolder="$(PublishDir)" />
+    <Copy SourceFiles="@(_Xbf)" DestinationFiles="@(_Xbf->'$(PublishDir)%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
+</Project>

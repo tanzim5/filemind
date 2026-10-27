@@ -10,3 +10,4 @@ dist/
 *.spec
 .claude/
 .venv_backup/
+core/target/

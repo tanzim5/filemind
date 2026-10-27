@@ -17,7 +17,7 @@ SKIP_DIRS = {"node_modules", ".git", "__pycache__", "$RECYCLE.BIN", "System Volu
 SKIP_FILES = {"desktop.ini", "thumbs.db", ".ds_store"}
 SKIP_EXT = {".crdownload", ".part", ".tmp", ".partial"}   # unfinished downloads
 
-MEDIA_KINDS = ("image", "video", "audio")   # only things with something to look at or listen to
+MEDIA_KINDS = ("image", "video", "audio", "doc", "text")   # things with something to look at, listen to or read
 MIN_BYTES = 4096                              # skip empty / stub files
 
 state = {
@@ -110,6 +110,12 @@ def _run(root_id: int, root: str):
                 t = extract.make_thumb(p, r["kind"])
                 if t:
                     c.execute("UPDATE files SET thumb=? WHERE id=?", (t, r["id"]))
+        for r in c.execute("SELECT id, path, kind FROM files WHERE root_id=? AND status='done' "
+                           "AND kind IN ('doc','text','code') AND (thumb IS NULL OR thumb='')", (root_id,)).fetchall():
+            p = Path(r["path"])
+            t = extract.make_thumb(p, r["kind"]) if p.exists() else None
+            if t:
+                c.execute("UPDATE files SET thumb=? WHERE id=?", (t, r["id"]))
         c.commit()
         if not pending:                       # nothing new: finish quietly, no model load, no banner
             state.update(phase="idle", message="Up to date.")
@@ -184,8 +190,9 @@ def _run(root_id: int, root: str):
                         state["errors"] += 1
                     else:
                         vec, mode = res
-                        dom = extract.dominant_color(thumb) if thumb else None
-                        pal = _pal(thumb)
+                        vis = r["kind"] in ("image", "video")
+                        dom = extract.dominant_color(thumb) if thumb and vis else None
+                        pal = _pal(thumb) if vis else None
                         c.execute("UPDATE files SET vec=?, embed_mode=?, thumb=?, dom=?, pal=?, status='done', error=NULL WHERE id=?",
                                   (vec.astype(np.float32).tobytes(), mode, thumb, dom, pal, r["id"]))
                     state["done"] += 1
@@ -243,7 +250,7 @@ def backfill_colors():
         c.execute("UPDATE files SET pal=NULL")
         c.commit()
         ver.write_text(colors.PALETTE_VERSION)
-    rows = c.execute("SELECT id, thumb, dom FROM files WHERE status='done' AND thumb IS NOT NULL AND thumb!='' "
+    rows = c.execute("SELECT id, thumb, dom FROM files WHERE status='done' AND kind IN ('image','video') AND thumb IS NOT NULL AND thumb!='' "
                      "AND (dom IS NULL OR pal IS NULL)").fetchall()
     for i, r in enumerate(rows):
         dom = r["dom"] if r["dom"] is not None else (extract.dominant_color(r["thumb"]) or "")

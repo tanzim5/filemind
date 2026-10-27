@@ -101,9 +101,60 @@ def make_thumb(path: Path, kind: str) -> str | None:
                      "-frames:v", "1", "-vf", "scale=480:-2", str(out)],
                     capture_output=True, timeout=60)
             return out.name if out.exists() else None
+        if path.suffix.lower() == ".pdf":
+            import fitz  # pymupdf
+            with fitz.open(path) as doc:
+                page = doc[0]
+                zoom = 480 / max(page.rect.width, 1)
+                pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+                pix.save(str(out), jpg_quality=82)
+            return out.name
+        if kind in ("text", "code", "doc"):
+            return _text_card(path, kind, out)
     except Exception:
         return None
     return None
+
+
+def _text_card(path: Path, kind: str, out: Path) -> str | None:
+    """A small page-like card showing the start of a text, code or Word file."""
+    from PIL import ImageDraw, ImageFont
+    if path.suffix.lower() == ".docx":
+        import docx
+        raw = "\n".join(p.text for p in docx.Document(str(path)).paragraphs)
+    else:
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            raw = f.read(4000)
+    lines = [ln.rstrip().replace("	", "    ") for ln in raw.splitlines()]
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    if not any(ln.strip() for ln in lines):
+        return None
+    dark = kind == "code"
+    bg, fg, sub = ((30, 34, 41), (206, 212, 222), (110, 118, 130)) if dark else ((247, 245, 240), (52, 56, 64), (150, 150, 150))
+    w, h, pad = 420, 540, 26
+    im = Image.new("RGB", (w, h), bg)
+    d = ImageDraw.Draw(im)
+    mono = kind != "doc" and path.suffix.lower() not in (".md", ".txt", ".rtf")
+    try:
+        font = ImageFont.truetype("consola.ttf" if mono else "segoeui.ttf", 15 if mono else 16)
+    except Exception:
+        font = ImageFont.load_default()
+    y, step = pad, 21
+    for ln in lines:
+        if y > h - pad - step:
+            break
+        if not ln.strip():
+            y += step // 2
+            continue
+        cols = 40 if mono else 46
+        for part in (ln[i:i + cols] for i in range(0, min(len(ln), cols), cols)):
+            if y > h - pad - step:
+                break
+            d.text((pad, y), part, font=font, fill=sub if part.lstrip().startswith(("#", "//")) and dark else fg)
+            y += step
+    im.save(out, "JPEG", quality=85)
+    return out.name
 
 
 def dominant_color(thumb_name: str) -> str | None:

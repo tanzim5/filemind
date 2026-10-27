@@ -34,8 +34,8 @@ STATIC = Path(__file__).parent / "static"
 def _startup():
     db.init()
     c = db.conn()
-    # Media only: forget index rows for zips, docs, code, etc. (index entries only; files on disk are never touched)
-    c.execute("DELETE FROM files WHERE kind NOT IN ('image','video','audio')")
+    # Forget index rows for kinds we do not read (zips, installers, code...). Index entries only; files on disk are never touched.
+    c.execute("DELETE FROM files WHERE kind NOT IN ('image','video','audio','doc','text')")
     c.execute("UPDATE files SET status='error', error='Could not be decoded' "
               "WHERE kind IN ('image','video') AND status='done' AND (thumb IS NULL OR thumb='')")
     c.execute("DELETE FROM project_files WHERE file_id NOT IN (SELECT id FROM files)")
@@ -637,7 +637,10 @@ async def search_by_image(file: UploadFile = File(...), root: int | None = None,
     tmp = extract.TMP_DIR / f"query_{int(time.time()*1000)}{Path(file.filename).suffix}"
     tmp.write_bytes(await file.read())
     try:
-        q = embedder.embed_reference(tmp, "image", text[:300])
+        kind = extract.kind_of(Path(file.filename).suffix.lower())
+        if kind not in ("image", "video", "audio"):
+            raise HTTPException(400, "Drop a picture, a video clip or a sound to find things that look or sound like it")
+        q = embedder.embed_reference(tmp, kind, text[:300])
     finally:
         tmp.unlink(missing_ok=True)
     return {"files": _rank(q, root, None, limit)}
