@@ -18,7 +18,8 @@
   <a href="https://x.com/tanzim31">@tanzim31</a>
 </p>
 
-<p align="center"><img src="docs/library-2026.jpg" alt="File Mind library in the Ink theme" width="100%"></p>
+<p align="center"><img src="docs/library-2026.jpg" alt="The File Mind Windows app: the library with type, source, colour and look filters" width="100%"></p>
+<p align="center"><img src="docs/sounds-2026.jpg" alt="Sounds in the library: every file is a waveform you can play and scrub right on its tile" width="100%"></p>
 
 File Mind reads a folder — Downloads, Pictures, a project drive — and understands **what is in** your photos, videos
 and sounds using Google's [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2), a multimodal AI model
@@ -43,7 +44,8 @@ that runs on your own machine. Type what you remember ("red logo on black", "a m
 ### 🖱️ Work with your files
 - **Drag originals into other apps** (Windows desktop): Photoshop, After Effects, Explorer and more. Drag a tile, the viewer's image or video, or the **Drag file** handle. Select several tiles to drag them together.
 - **Copy a video frame** as a PNG straight from the viewer.
-- **Audio playback and transcripts**: scrub a waveform, then transcribe speech on your device in the detected language.
+- **Audio playback and transcripts**: play and scrub a waveform right on its tile, then transcribe speech on your device in the detected language.
+- **Previews for documents too**: PDFs show their first page, text, Markdown and Word files show a text card, and each opens in a viewer.
 - **File actions**: copy or move the original, or send it to the system Trash. Copy and move never overwrite.
 - **Preview renames** before anything on disk changes; commits can be undone.
 
@@ -60,7 +62,8 @@ Nothing to install: Python, ffmpeg and everything else are inside the download. 
 
 | Your computer | Download | First launch also downloads |
 |---|---|---|
-| **Windows**, any PC | `FileMind-Windows-portable.zip` | AI model (~1.5 GB) |
+| **Windows 11**, native app (recommended) | `FileMind-Windows-App.zip`: the new native WinUI app; it picks and downloads the right engine for your PC on first launch | Engine (~0.4 GB, or ~0.3 GB for NVIDIA) + AI model (~1.5 GB) |
+| **Windows**, any PC (classic all-in-one) | `FileMind-Windows-portable.zip` | AI model (~1.5 GB) |
 | **Windows** with an NVIDIA card (GTX 16 / RTX 20 series or newer) | `FileMind-Windows-NVIDIA.zip`: several times faster indexing | AI model (~1.5 GB) + GPU support (~2.8 GB) |
 | **Mac**, Apple Silicon (M1+, macOS 14+) | `FileMind-macOS-arm64.zip`: runs on the GPU through [MLX](https://github.com/ml-explore/mlx) | AI model (~1.1 GB) |
 
