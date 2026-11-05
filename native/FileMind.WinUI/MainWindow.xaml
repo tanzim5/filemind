@@ -12,13 +12,17 @@
     <Grid x:Name="TitleBar" Padding="20,0,0,0">
       <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
         <Image Source="ms-appx:///Assets/icon.png" Width="20" Height="20"/>
-        <TextBlock Text="File Mind" FontFamily="Segoe UI Variable Display" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center"/>
+        <TextBlock Text="File Mind" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center"/>
+        <ToggleButton x:Name="SettingsRail" Style="{StaticResource GlassChip}" Click="OpenSettings_Click" AutomationProperties.Name="Settings" ToolTipService.ToolTip="Settings (Ctrl+,)"
+                      Padding="7" MinHeight="0" Margin="6,0,0,0" CornerRadius="6" Background="Transparent" VerticalAlignment="Center">
+          <p:LineIcon Kind="settings" Size="15"/>
+        </ToggleButton>
       </StackPanel>
     </Grid>
 
     <Grid x:Name="Shell" Grid.Row="1" Visibility="Collapsed">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="256"/>
+        <ColumnDefinition Width="284"/>
         <ColumnDefinition Width="*"/>
       </Grid.ColumnDefinitions>
 
@@ -35,14 +39,6 @@
         <StackPanel x:Name="NavStack" Grid.Row="2" Spacing="1" Margin="0,4,0,18"/>
         <ContentControl x:Name="SidebarHost" Grid.Row="3" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
 
-        <Grid Grid.Row="4" Margin="0,10,0,0">
-          <ToggleButton x:Name="SettingsRail" Style="{StaticResource RailItem}" Click="OpenSettings_Click" AutomationProperties.Name="Settings">
-            <StackPanel Orientation="Horizontal" Spacing="12">
-              <p:LineIcon Kind="settings" Size="17" Width="24" Opacity="0.85"/>
-              <TextBlock Text="Settings" FontSize="13.5" VerticalAlignment="Center"/>
-            </StackPanel>
-          </ToggleButton>
-        </Grid>
       </Grid>
 
       <!-- The page sits on one calm panel; a soft glow in the accent colour gives it depth. -->

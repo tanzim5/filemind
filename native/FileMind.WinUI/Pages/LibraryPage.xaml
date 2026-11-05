@@ -151,7 +151,7 @@
 
       <Border x:Name="FilterPanel" Grid.Column="0" Background="Transparent" BorderThickness="0" Padding="0" Visibility="Visible">
         <ScrollViewer VerticalScrollBarVisibility="Hidden">
-          <StackPanel x:Name="SectionStack" Spacing="24" Padding="16,6,16,20">
+          <StackPanel x:Name="SectionStack" Spacing="22" Padding="6,6,6,20">
 
             <StackPanel x:Name="SecTypes" Spacing="8">
               <local:WrapPanel x:Name="TypeChips" Columns="3" Spacing="6"/>

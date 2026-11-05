@@ -26,6 +26,7 @@ public sealed partial class SettingsPage : Page
         InitializeComponent();
         Loaded += async (_, _) => await FillAsync();
         GlassSlider.Value = St.Transparency * 100;
+        ShowHotkey(); KeepSwitch.IsOn = St.KeepRunning;
         SizeSlider.Value = St.TileSize;
         GapSlider.Value = St.TileGap;
         NamesSwitch.IsOn = St.ShowNames;
@@ -35,7 +36,40 @@ public sealed partial class SettingsPage : Page
         Labels();
     }
 
-    private void BuildAll() { BuildThemes(); BuildAccents(); BuildLayouts(); BuildList(MenuList, Menus, St.MenuOrder, St.MenuHidden, RailChanged); BuildList(SectionList, Sections, St.SectionOrder, St.SectionHidden, SectionsChanged); }
+    private void BuildAll() { BuildThemes(); BuildAccents(); BuildLayouts(); }
+
+    // ---- Quick search shortcut: click, then press the new combination ----
+    private bool _recording;
+    private void ShowHotkey() => HotkeyBtn.Content = (App.ActiveHotkey ?? St.QuickSearchHotkey).Replace("+", "  +  ");
+    private void Hotkey_Click(object sender, RoutedEventArgs e)
+    {
+        _recording = true; HotkeyBtn.Content = "Press the new shortcut..."; HotkeyNote.Visibility = Visibility.Collapsed;
+    }
+    private void Hotkey_Lost(object sender, RoutedEventArgs e) { _recording = false; ShowHotkey(); }
+    private void Hotkey_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (!_recording) return;
+        var key = e.Key;
+        if (key is Windows.System.VirtualKey.Control or Windows.System.VirtualKey.Shift or Windows.System.VirtualKey.Menu or Windows.System.VirtualKey.LeftWindows or Windows.System.VirtualKey.RightWindows) { e.Handled = true; return; }
+        e.Handled = true;
+        if (key == Windows.System.VirtualKey.Escape) { _recording = false; ShowHotkey(); return; }
+        bool Down(Windows.System.VirtualKey k) => Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(k).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+        var parts = new List<string>();
+        if (Down(Windows.System.VirtualKey.Control)) parts.Add("Ctrl");
+        if (Down(Windows.System.VirtualKey.Menu)) parts.Add("Alt");
+        if (Down(Windows.System.VirtualKey.Shift)) parts.Add("Shift");
+        var name = key == Windows.System.VirtualKey.Space ? "Space"
+                 : key is >= Windows.System.VirtualKey.F1 and <= Windows.System.VirtualKey.F24 ? "F" + (key - Windows.System.VirtualKey.F1 + 1)
+                 : key is >= Windows.System.VirtualKey.A and <= Windows.System.VirtualKey.Z or >= Windows.System.VirtualKey.Number0 and <= Windows.System.VirtualKey.Number9 ? ((char)(int)key).ToString() : null;
+        if (name is null || parts.Count == 0) { HotkeyNote.Text = "Use a modifier (Ctrl, Alt or Shift) plus a letter, number, F-key or Space."; HotkeyNote.Visibility = Visibility.Visible; return; }
+        parts.Add(name);
+        var combo = string.Join("+", parts);
+        _recording = false;
+        if (App.SetHotkey(combo)) { St.QuickSearchHotkey = combo; Save(); HotkeyNote.Visibility = Visibility.Collapsed; }
+        else { HotkeyNote.Text = $"{combo.Replace("+", " + ")} is already used by another app. Pick a different one."; HotkeyNote.Visibility = Visibility.Visible; }
+        ShowHotkey();
+    }
+    private void Keep_Toggled(object sender, RoutedEventArgs e) { if (!_ready) return; St.KeepRunning = KeepSwitch.IsOn; Save(); }
 
     private void Save() { try { St.Save(AppRuntime.Current.Paths); } catch (Exception) { } }
 
@@ -104,13 +138,17 @@ public sealed partial class SettingsPage : Page
         }
     }
 
+    private Microsoft.UI.Xaml.DispatcherTimer? _glassSave;
+    private void GlassSaveTick(object? s, object e) { _glassSave?.Stop(); Save(); }
+
     private void Glass_Changed(object sender, RangeBaseValueChangedEventArgs e)
     {
         if (!_ready) return;
         St.Transparency = GlassSlider.Value / 100;
         GlassValue.Text = $"{GlassSlider.Value:0} %";
-        Save();
-        App.Window?.ApplyGlass();
+        App.Window?.ApplyGlassLight();
+        _glassSave ??= new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+        _glassSave.Tick -= GlassSaveTick; _glassSave.Tick += GlassSaveTick; _glassSave.Stop(); _glassSave.Start();
     }
 
     // ---- Library look ----
@@ -193,7 +231,7 @@ public sealed partial class SettingsPage : Page
         var d = new AppSettings();
         St.Theme = d.Theme; St.Accent = d.Accent; St.Transparency = d.Transparency;
         St.Layout = d.Layout; St.TileSize = d.TileSize; St.TileGap = d.TileGap; St.ShowNames = d.ShowNames; St.Volume = d.Volume;
-        St.MenuOrder = d.MenuOrder; St.MenuHidden = d.MenuHidden; St.SectionOrder = d.SectionOrder; St.SectionHidden = d.SectionHidden;
+        
         Save();
         _ready = false;
         GlassSlider.Value = St.Transparency * 100;

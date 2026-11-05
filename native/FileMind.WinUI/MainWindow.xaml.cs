@@ -58,6 +58,23 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>Applies the user's glass opacity choices to the rail and page panel.</summary>
+    /// <summary>Cheap update for the transparency slider: only colours change, so dragging is smooth (no backdrop swap,
+    /// no rail rebuild).</summary>
+    public void ApplyGlassLight()
+    {
+        try
+        {
+            var st = AppRuntime.Current.Settings;
+            var p = ThemeEngine.Find(st.Theme);
+            if (p.Key == "amoled") return;
+            byte a(double v) => (byte)(Math.Clamp(v, 0.05, 1) * 255);
+            ThemeEngine.Apply(st, Root);
+            RailCard.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(a(ThemeEngine.RailOpacity(st)), p.Rail.R, p.Rail.G, p.Rail.B));
+            PanelCard.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(a(ThemeEngine.PanelOpacity(st)), p.Panel.R, p.Panel.G, p.Panel.B));
+        }
+        catch (Exception ex) { App.Log("glass", ex, ""); }
+    }
+
     public void ApplyGlass()
     {
         try
@@ -316,7 +333,10 @@ public sealed partial class MainWindow : Window
                          && ContentFrame.BackStack.Any(e => e.SourcePageType == typeof(Pages.LibraryPage)); i++)
             ContentFrame.GoBack();
         if (ContentFrame.Content is Pages.LibraryPage lp) _ = lp.ShowAgainAsync();
-        else ContentFrame.Navigate(typeof(Pages.LibraryPage));
+        else ContentFrame.Navigate(Environment.GetEnvironmentVariable("FILEMIND_DEV_PAGE") switch
+        {
+            "discover" => typeof(Pages.DiscoverPage), "spaces" => typeof(Pages.SpacesPage), "duplicates" => typeof(Pages.DuplicatesPage), _ => typeof(Pages.LibraryPage),
+        });
     }
 
     private void OpenSettings_Click(object sender, RoutedEventArgs e) => OpenSettings();

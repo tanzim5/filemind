@@ -40,11 +40,15 @@
 
       <Border Style="{StaticResource GlassCard}">
         <StackPanel Spacing="14">
-          <TextBlock Text="Sidebar" FontSize="18" FontWeight="SemiBold"/>
-          <TextBlock Text="Menu" Style="{StaticResource SecondaryText}"/>
-          <StackPanel x:Name="MenuList" Spacing="4"/>
-          <TextBlock Text="Library filter sections" Style="{StaticResource SecondaryText}" Margin="0,8,0,0"/>
-          <StackPanel x:Name="SectionList" Spacing="4"/>
+          <TextBlock Text="Quick search" FontSize="18" FontWeight="SemiBold"/>
+          <TextBlock Text="Opens over any app, anywhere in Windows. Type or press Alt+V to talk." Style="{StaticResource SecondaryText}" TextWrapping="Wrap"/>
+          <Grid ColumnSpacing="12">
+            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock Text="Shortcut" VerticalAlignment="Center"/>
+            <Button x:Name="HotkeyBtn" Grid.Column="1" Style="{StaticResource GlassButton}" MinWidth="190" Click="Hotkey_Click" PreviewKeyDown="Hotkey_KeyDown" LostFocus="Hotkey_Lost" Padding="12,8"/>
+          </Grid>
+          <TextBlock x:Name="HotkeyNote" Style="{StaticResource SecondaryText}" TextWrapping="Wrap" Visibility="Collapsed" FontSize="12"/>
+          <ToggleSwitch x:Name="KeepSwitch" Header="Keep running in the tray when the window is closed" Toggled="Keep_Toggled"/>
         </StackPanel>
       </Border>
 

@@ -47,12 +47,12 @@ public sealed class QuickSearchWindow : Window
         Child = new TextBlock { Text = text, FontSize = 11.5, HorizontalAlignment = HorizontalAlignment.Center, Foreground = Res("GlassTextSecondaryBrush") },
     };
 
-    private static TextBlock Label(string text, bool strong = false) => new()
+    private static TextBlock Label(string text, bool strong = false)
     {
-        Text = text, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center,
-        FontWeight = strong ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
-        Foreground = strong ? null : Res("GlassTextSecondaryBrush"),
-    };
+        var t = new TextBlock { Text = text, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center };
+        if (strong) t.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold; else t.Foreground = Res("GlassTextSecondaryBrush");
+        return t;
+    }
 
     private static Border Bar() => new() { Width = 1, Height = 14, Background = Res("DividerBrush"), Margin = new Thickness(6, 0, 6, 0) };
 
@@ -169,6 +169,8 @@ public sealed class QuickSearchWindow : Window
         Activated += (_, e) => { if (e.WindowActivationState == WindowActivationState.Deactivated && _shown && !_listening) HideLauncher(); };
         AppWindow.Closing += (_, e) => { e.Cancel = true; HideLauncher(); };
     }
+
+    public void DevQuery(string text) { _box.Text = text; }
 
     private string KindFilter => (_kind.SelectedItem as ComboBoxItem)?.Tag as string ?? "all";
 

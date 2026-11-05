@@ -94,7 +94,7 @@ public sealed class WrapPanel : Panel
             var row = rows[r];
             var natural = row.Sum(c => c.DesiredSize.Width) + Spacing * (row.Count - 1);
             var last = r == rows.Count - 1;
-            var extra = Justify && (!last || (row.Count > 1 && natural > final.Width * 0.7)) ? Math.Max(0, final.Width - natural) / row.Count : 0;
+            var extra = Justify && !last ? Math.Max(0, final.Width - natural) / row.Count : 0;
             double x = 0, h = row.Max(c => c.DesiredSize.Height);
             foreach (var c in row)
             {

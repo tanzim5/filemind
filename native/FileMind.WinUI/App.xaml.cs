@@ -57,6 +57,13 @@ public partial class App : Application
             ActiveHotkey = new[] { wanted, "Ctrl+Shift+Space", "Ctrl+Alt+Shift+Space", "Alt+Shift+F" }.Distinct()
                 .FirstOrDefault(c => _native.RegisterHotkey(c));
             if (ActiveHotkey != wanted) Log("hotkey", null, $"{wanted} is used by another app; using {ActiveHotkey ?? "none"}");
+            // Development aid: FILEMIND_DEV_LAUNCHER=<text> opens the launcher with that query once the engine is up.
+            if (Environment.GetEnvironmentVariable("FILEMIND_DEV_LAUNCHER") is { Length: > 0 } dev)
+            {
+                var t = new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+                t.Tick += (_, _) => { t.Stop(); Launcher.Toggle(); Launcher.DevQuery(dev); };
+                t.Start();
+            }
             _native.ShowTrayIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "filemind.ico"),
                 ActiveHotkey is null ? "File Mind" : $"File Mind — {ActiveHotkey} to search");
         }

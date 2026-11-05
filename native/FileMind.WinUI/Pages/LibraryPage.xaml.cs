@@ -83,6 +83,7 @@ public sealed partial class LibraryPage : Page
     {
         InitializeComponent();
         Current = this;
+        KeyboardAcceleratorPlacementMode = Microsoft.UI.Xaml.Input.KeyboardAcceleratorPlacementMode.Hidden;
         ApplySections();
         TileRepeater.ItemsSource = _tiles;
         Layout.Target = Settings.TileSize; Layout.Gap = Settings.TileGap;
@@ -151,6 +152,7 @@ public sealed partial class LibraryPage : Page
             e.Handled = true;
             await action();
         };
+        a.ScopeOwner = null;
         KeyboardAccelerators.Add(a);
     }
 
@@ -602,15 +604,15 @@ public sealed partial class LibraryPage : Page
     // ------------------------------------------------------------------ filter panel
     private FrameworkElement Chip(string text, bool on, Func<Task> click, string? dot = null, int? count = null, string? tooltip = null, bool compact = false)
     {
-        var row = new Grid { ColumnSpacing = 6, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var row = new Grid { ColumnSpacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         if (dot is not null) row.Children.Add(new Border { Width = 9, Height = 9, CornerRadius = new CornerRadius(4), Background = Brush(dot), VerticalAlignment = VerticalAlignment.Center });
         var label = new TextBlock { Text = text, FontSize = 12.5, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         Grid.SetColumn(label, 1); row.Children.Add(label);
         if (count is { } n) { var ct = new TextBlock { Text = n.ToString("N0"), FontSize = 11.5, Foreground = Ui.Brush("GlassTextTertiaryBrush"), VerticalAlignment = VerticalAlignment.Center }; Grid.SetColumn(ct, 2); row.Children.Add(ct); }
-        var b = new ToggleButton { Content = row, IsChecked = on, Style = Ui.Style("GlassChip"), HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(10, 6, 10, 6), MinHeight = 30, CornerRadius = new CornerRadius(6) };
+        var b = new ToggleButton { Content = row, IsChecked = on, Style = Ui.Style("GlassChip"), HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(10, 6, 10, 6), MinHeight = 30, CornerRadius = new CornerRadius(6) };
         b.Click += async (_, _) => await click();
         if (tooltip is not null) ToolTipService.SetToolTip(b, tooltip);
         return b;
@@ -925,13 +927,17 @@ public sealed partial class LibraryPage : Page
             var shown = group.Where(f => FacetOn(f.Key) || (f.Count > 0 && f.Count < r.Total)).ToList();
             if (shown.Count == 0) continue;
             var box = new StackPanel { Spacing = 5 };
-            box.Children.Add(new TextBlock { Text = group.Key, FontSize = 11.5, Foreground = Ui.Brush("GlassTextTertiaryBrush") });
+            var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            head.Children.Add(new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = Brush(group.Key switch { "Quality" => "#3B82F6", "Shape" => "#8B5CF6", "Length" => "#22A559", "Motion" => "#EC4899", "File size" => "#F59E0B", _ => "#14B8A6" }), VerticalAlignment = VerticalAlignment.Center });
+            head.Children.Add(new TextBlock { Text = group.Key, FontSize = 12, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
+            box.Children.Add(head);
             var wrap = new WrapPanel { Spacing = 5, Justify = true };
+            var hint = group.Key switch { "Quality" => "#3B82F6", "Shape" => "#8B5CF6", "Length" => "#22A559", "Motion" => "#EC4899", "File size" => "#F59E0B", _ => "#14B8A6" };
             foreach (var f in shown)
             {
                 var key = f.Key;
                 wrap.Children.Add(Chip(f.Label, FacetOn(key), () => GoAsync(() => { ToggleFacet(key); _title = ""; SyncDetailFields(); }),
-                    null, f.Count, $"{f.Hint} · {f.Count:N0} of {r.Total:N0}"));
+                    hint, f.Count, $"{f.Hint} · {f.Count:N0} of {r.Total:N0}"));
             }
             box.Children.Add(wrap);
             RefineGroups.Children.Add(box);
