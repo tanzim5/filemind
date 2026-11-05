@@ -2,11 +2,11 @@ name: Release builds
 
 on:
   push:
-    tags: ["v*"]          # git tag v0.4.3 && git push --tags  -> builds everything and publishes a release
+    tags: ["v*"]          # git tag v0.6.0 && git push --tags  -> builds and publishes a release
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Optional existing v* tag to publish the three builds as a GitHub Release"
+        description: "Optional existing v* tag to publish the build as a GitHub Release"
         required: false
         type: string
 
@@ -23,7 +23,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install (CPU PyTorch keeps the download small and works on every PC)
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Install (CPU PyTorch: PyInstaller needs to see it, but it is left out of the build)
         run: |
           python -m pip install --upgrade pip
           pip install torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cpu
@@ -42,83 +46,30 @@ jobs:
           python -m unittest discover -s tests -q
           node --test tests/*.cjs
 
-      - name: Build (CPU, works on every PC)
-        run: python packaging/build_windows.py --ffmpeg ffbin --variant cpu
+      - name: Build the engine (one for every PC; picks CPU or NVIDIA PyTorch on first run)
+        run: python packaging/build_windows.py --ffmpeg ffbin --no-zip
 
-      - name: Build (NVIDIA, downloads PyTorch with CUDA on first run)
-        run: python packaging/build_windows.py --ffmpeg ffbin --variant nvidia
-
-      - name: Validate both Windows downloads
+      - name: Build the native app and put the engine inside it
+        shell: pwsh
         run: |
-          python packaging/validate_build.py windows
-          python packaging/validate_build.py nvidia
+          dotnet publish native/FileMind.WinUI -c Release -r win-x64 -p:Platform=x64 -o dist/app/FileMind
+          Copy-Item -Recurse dist/engine/FileMind dist/app/FileMind/engine
+          Compress-Archive -Path dist/app/FileMind -DestinationPath dist/FileMind-Windows.zip
 
-      - name: Smoke test (CPU build; downloads the model, indexes a photo, a video and a sound)
-        run: python packaging/smoke_test.py dist/cpu/FileMind/FileMind.exe --ffmpeg ffbin
+      - name: Validate the download
+        run: python packaging/validate_build.py windows
+
+      - name: Smoke test (engine on CPU; downloads PyTorch and the model, indexes a photo, a video and a sound)
+        run: python packaging/smoke_test.py dist/engine/FileMind/FileMind.exe --ffmpeg ffbin
 
       - uses: actions/upload-artifact@v4
         with:
-          name: FileMind-Windows-portable
-          path: dist/FileMind-Windows-portable.zip
-          compression-level: 0
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: FileMind-Windows-NVIDIA
-          path: dist/FileMind-Windows-NVIDIA.zip
-          compression-level: 0
-
-  macos:
-    runs-on: macos-14          # Apple Silicon
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install
-        run: |
-          python -m pip install --upgrade pip
-          pip install torch==2.11.0 torchvision==0.26.0 transformers==5.19.0 sentence-transformers==6.1.0
-          pip install -r requirements.txt pyinstaller
-
-      - name: Get ffmpeg
-        run: |
-          mkdir ffbin
-          for t in ffmpeg ffprobe; do
-            curl -fsSL -o $t.zip "https://ffmpeg.martin-riedl.de/redirect/latest/macos/arm64/release/$t.zip"
-            unzip -o -q $t.zip -d ffbin
-          done
-          chmod +x ffbin/ffmpeg ffbin/ffprobe
-          ffbin/ffmpeg -version | head -1
-
-      - name: Check app behavior
-        run: |
-          python -m unittest discover -s tests -q
-          node --test tests/*.cjs
-
-      - name: Build
-        run: python packaging/build_macos.py --ffmpeg ffbin
-
-      - name: Validate Mac download
-        run: python packaging/validate_build.py macos
-
-      - name: Smoke test (the runner has no GPU, so MLX runs on its CPU here)
-        env:
-          FILEMIND_MLX_DEVICE: cpu
-        run: |
-          mkdir smoke && ditto -x -k dist/FileMind-macOS-arm64.zip smoke
-          python packaging/smoke_test.py smoke/FileMind.app/Contents/MacOS/FileMind --ffmpeg ffbin --video-frames 2
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: FileMind-macOS
-          path: dist/FileMind-macOS-arm64.zip
+          name: FileMind-Windows
+          path: dist/FileMind-Windows.zip
           compression-level: 0
 
   release:
-    needs: [windows, macos]
+    needs: [windows]
     if: startsWith(github.ref, 'refs/tags/') || startsWith(inputs.release_tag, 'v')
     runs-on: ubuntu-latest
     steps:
@@ -131,24 +82,19 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.release_tag || github.ref_name }}
-          files: |
-            dist/FileMind-Windows-portable.zip
-            dist/FileMind-Windows-NVIDIA.zip
-            dist/FileMind-macOS-arm64.zip
+          files: dist/FileMind-Windows.zip
           body: |
-            ## Which one?
+            ## One download for every Windows 10/11 PC: `FileMind-Windows.zip`
 
-            | Download | For | First launch downloads |
+            Unzip anywhere and double-click `FileMind.exe`. Windows may say "Windows protected your PC" because the app isn't code-signed: click **More info → Run anyway**.
+
+            On first launch File Mind checks your graphics card and downloads what it needs once:
+
+            | Your PC | Runs on | First launch downloads |
             |---|---|---|
-            | **`FileMind-Windows-portable.zip`** | Any Windows 10/11 PC. Pick this if unsure. | The AI model, ~1.5 GB |
-            | **`FileMind-Windows-NVIDIA.zip`** | PCs with an NVIDIA graphics card (GTX 16-series, RTX 20-series or newer). Indexing is many times faster. | GPU support (PyTorch with CUDA, ~2.8 GB) + the AI model, ~1.5 GB |
-            | **`FileMind-macOS-arm64.zip`** | Macs with Apple Silicon (M1 or newer), macOS 14 or newer. Runs the model on the Mac's GPU. | The AI model, ~1.1 GB |
+            | NVIDIA card (GTX 16 / RTX 20 series or newer, current driver) | The GPU, many times faster | PyTorch with CUDA (~2.8 GB) + the AI model (~1.5 GB) |
+            | AMD, Intel or no dedicated graphics | The CPU | PyTorch for CPU (~0.12 GB) + the AI model (~1.5 GB) |
 
-            **Windows:** unzip anywhere and double-click `FileMind.exe`. Nothing to install. Windows may say "Windows protected your PC" because the app isn't code-signed: click **More info → Run anyway**.
-            The NVIDIA version needs an up-to-date NVIDIA driver; without one it still works, just at CPU speed.
+            You can force CPU or NVIDIA in Settings. After that File Mind works fully offline. Older releases (macOS, separate NVIDIA build) remain available on the Releases page.
 
-            **Mac:** unzip, drag `FileMind.app` to Applications, and open it. The app isn't notarized by Apple, so the first time macOS will say it can't verify it: open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. (Or run `xattr -dr com.apple.quarantine /Applications/FileMind.app` once.) Your library index and the model live in `~/Library/Application Support/File Mind`.
-
-            After the first launch File Mind works fully offline. Made by [Tanzim](https://x.com/tanzim31). Intel Macs and Linux: [run from source](https://github.com/tanzim5/filemind#run-from-source-macos-linux-windows).
-
-            This version adds plain-language media filters, file-specific duplicate review, improved voice recording, and opt-in background and start-at-login controls in the desktop app. Both startup controls are off by default. For real file drops into Photoshop or After Effects, use the Windows desktop app; browser tabs cannot provide the native Windows file-drop format.
+            Made by [Tanzim](https://x.com/tanzim31).
