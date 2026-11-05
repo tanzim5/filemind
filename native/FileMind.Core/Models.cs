@@ -25,6 +25,8 @@ public sealed class FileItem
     [JsonPropertyName("codec")] public string? Codec { get; set; }
     [JsonPropertyName("proposed")] public string? Proposed { get; set; }
     [JsonPropertyName("snippet")] public string? Snippet { get; set; }
+    [JsonPropertyName("tags")] public List<string> Tags { get; set; } = [];
+    public bool IsFavourite => Tags.Contains(TagInfo.Favourite, StringComparer.OrdinalIgnoreCase);
 
     public string SizeText => Size switch
     {
@@ -62,6 +64,46 @@ public sealed class RootFolder
     [JsonPropertyName("errors")] public int Errors { get; set; }
 }
 
+/// <summary>A tag (Finder-style, with a colour) and how many files carry it. "Favourites" is the built-in one.</summary>
+public sealed class TagInfo
+{
+    public const string Favourite = "Favourites";
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+    [JsonPropertyName("color")] public string Color { get; set; } = "#8B5CF6";
+    [JsonPropertyName("count")] public int Count { get; set; }
+}
+
+public sealed class TagList
+{
+    [JsonPropertyName("tags")] public List<TagInfo> Tags { get; set; } = [];
+}
+
+/// <summary>One Refine option and how many files on screen it keeps.</summary>
+public sealed class Facet
+{
+    [JsonPropertyName("group")] public string Group { get; set; } = "";
+    [JsonPropertyName("key")] public string Key { get; set; } = "";
+    [JsonPropertyName("label")] public string Label { get; set; } = "";
+    [JsonPropertyName("hint")] public string Hint { get; set; } = "";
+    [JsonPropertyName("count")] public int Count { get; set; }
+}
+
+public sealed class FacetResult
+{
+    [JsonPropertyName("total")] public int Total { get; set; }
+    [JsonPropertyName("facets")] public List<Facet> Facets { get; set; } = [];
+}
+
+/// <summary>The on-device voice model (Whisper): whether it is downloaded, and download progress.</summary>
+public sealed class VoiceModelState
+{
+    [JsonPropertyName("ready")] public bool Ready { get; set; }
+    [JsonPropertyName("running")] public bool Running { get; set; }
+    [JsonPropertyName("done")] public long Done { get; set; }
+    [JsonPropertyName("total")] public long Total { get; set; }
+    [JsonPropertyName("error")] public string Error { get; set; } = "";
+}
+
 public sealed class IndexState
 {
     [JsonPropertyName("running")] public bool Running { get; set; }
@@ -72,6 +114,9 @@ public sealed class IndexState
     [JsonPropertyName("current")] public string Current { get; set; } = "";
     [JsonPropertyName("message")] public string Message { get; set; } = "";
     [JsonPropertyName("device")] public string Device { get; set; } = "";
+    /// <summary>Seconds per file and seconds left, estimated by the engine while it reads files.</summary>
+    [JsonPropertyName("rate")] public double Rate { get; set; }
+    [JsonPropertyName("eta")] public int Eta { get; set; }
 }
 
 public sealed class ModelStatus
@@ -79,6 +124,10 @@ public sealed class ModelStatus
     [JsonPropertyName("ready")] public bool Ready { get; set; }
     [JsonPropertyName("gpu")] public bool Gpu { get; set; }
     [JsonPropertyName("device")] public string? Device { get; set; }
+    /// <summary>"cuda" or "cpu": which PyTorch this engine downloads/uses, and why it chose it.</summary>
+    [JsonPropertyName("accel")] public string? Accel { get; set; }
+    [JsonPropertyName("accel_reason")] public string? AccelReason { get; set; }
+    [JsonPropertyName("runtime_bytes")] public long RuntimeBytes { get; set; }
     [JsonPropertyName("running")] public bool Running { get; set; }
     [JsonPropertyName("done")] public long Done { get; set; }
     [JsonPropertyName("total")] public long Total { get; set; }

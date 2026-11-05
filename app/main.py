@@ -1,3 +1,4 @@
+import asyncio
 import os
 import json
 import re
@@ -77,6 +78,7 @@ def _file_dict(r, score=None):
          "status": r["status"], "mode": r["embed_mode"], "snippet": r["snippet"],
          "dom": r["dom"] or None, "src": names_mod.source_of(r["name"])}
     d.update({key: r[key] for key in ("width", "height", "duration", "fps", "codec") if key in r.keys()})
+    d["tags"] = _file_tags().get(r["id"], [])
     if score is not None:
         d["score"] = round(float(score), 4)
     return d
@@ -207,7 +209,7 @@ def files(root: int | None = None, kind: str | None = None, project: int | None 
           min_width: int | None = None, min_height: int | None = None, min_pixels: int | None = None,
           min_duration: float | None = None, max_duration: float | None = None,
           min_fps: float | None = None, aspect: str | None = None,
-          codec: str | None = None, ids_only: bool = False):
+          codec: str | None = None, ids_only: bool = False, tag: str | None = None):
     where, args = ["f.status='done'"], []      # only fully read files; never half-processed cards
     if root:
         where.append("f.root_id=?"); args.append(root)
@@ -220,6 +222,8 @@ def files(root: int | None = None, kind: str | None = None, project: int | None 
             where.append("f.id IN (SELECT file_id FROM project_files WHERE project_id=?)"); args.append(project)
     if unassigned:
         where.append("f.id NOT IN (SELECT file_id FROM project_files)")
+    if tag:
+        where.append("f.id IN (SELECT file_id FROM file_tags WHERE tag=?)"); args.append(tag)
     if after is not None:
         where.append("f.mtime>=?"); args.append(after)
     if before is not None:
@@ -282,6 +286,131 @@ def files(root: int | None = None, kind: str | None = None, project: int | None 
         d["proposed"] = pn.get(i)
         out.append(d)
     return {"total": total, "files": out}
+
+
+# ---------------------------------------------------------------- tags and favourites
+# A favourite is the built-in "Favourites" tag, so both share one store, one filter and one search path.
+FAVOURITE = "Favourites"
+_tag_cache: dict | None = None
+
+
+def _file_tags() -> dict:
+    global _tag_cache
+    if _tag_cache is None:
+        out: dict = {}
+        for r in db.conn().execute("SELECT file_id, tag FROM file_tags ORDER BY tag"):
+            out.setdefault(r[0], []).append(r[1])
+        _tag_cache = out
+    return _tag_cache
+
+
+def _ensure_tag(name: str, color: str | None = None):
+    db.conn().execute("INSERT OR IGNORE INTO tags(name, color) VALUES(?, ?)",
+                      (name, color or ("#F59E0B" if name == FAVOURITE else "#8B5CF6")))
+
+
+@app.get("/api/tags")
+def tags_list():
+    c = db.conn()
+    _ensure_tag(FAVOURITE); c.commit()
+    counts = {r[0].lower(): r[1] for r in c.execute("SELECT tag, COUNT(*) FROM file_tags GROUP BY tag COLLATE NOCASE")}
+    rows = [{"name": r["name"], "color": r["color"], "count": counts.get(r["name"].lower(), 0)}
+            for r in c.execute("SELECT name, color FROM tags ORDER BY created, name")]
+    rows.sort(key=lambda t: (t["name"] != FAVOURITE,))
+    return {"tags": rows}
+
+
+@app.post("/api/tags")
+def tags_apply(body: dict = Body(...)):
+    """{ids, add: [names], remove: [names]}: tag or untag files; new tag names are created as they are used."""
+    global _tag_cache
+    ids = [int(i) for i in body.get("ids") or []]
+    add = [str(t).strip()[:40] for t in body.get("add") or [] if str(t).strip()]
+    remove = [str(t).strip() for t in body.get("remove") or [] if str(t).strip()]
+    c = db.conn()
+    for t in add:
+        _ensure_tag(t)
+        c.executemany("INSERT OR IGNORE INTO file_tags(file_id, tag) VALUES(?, ?)", [(i, t) for i in ids])
+    for t in remove:
+        c.executemany("DELETE FROM file_tags WHERE file_id=? AND tag=?", [(i, t) for i in ids])
+    c.commit(); _tag_cache = None
+    return tags_list()
+
+
+@app.post("/api/tags/define")
+def tags_define(body: dict = Body(...)):
+    """{name, color, rename?}: create a tag, recolour it, or rename it everywhere."""
+    global _tag_cache
+    name = str(body.get("name") or "").strip()[:40]
+    if not name:
+        raise HTTPException(400, "A tag needs a name")
+    c = db.conn()
+    _ensure_tag(name, body.get("color"))
+    if body.get("color"):
+        c.execute("UPDATE tags SET color=? WHERE name=?", (body["color"], name))
+    new = str(body.get("rename") or "").strip()[:40]
+    if new and new != name and name != FAVOURITE:
+        c.execute("UPDATE tags SET name=? WHERE name=?", (new, name))
+        c.execute("UPDATE OR IGNORE file_tags SET tag=? WHERE tag=?", (new, name))
+        c.execute("DELETE FROM file_tags WHERE tag=?", (name,))
+    c.commit(); _tag_cache = None
+    return tags_list()
+
+
+@app.delete("/api/tags/{name}")
+def tags_delete(name: str):
+    global _tag_cache
+    if name == FAVOURITE:
+        raise HTTPException(400, "Favourites can't be deleted")
+    c = db.conn()
+    c.execute("DELETE FROM file_tags WHERE tag=?", (name,)); c.execute("DELETE FROM tags WHERE name=?", (name,))
+    c.commit(); _tag_cache = None
+    return tags_list()
+
+
+_DETAIL_KEYS = ("after", "before", "min_size", "max_size", "min_width", "min_height", "min_pixels",
+                "min_duration", "max_duration", "min_fps", "aspect", "codec")
+_SCOPE_KEYS = ("root", "kind", "project", "unassigned", "color", "near", "source", "pattern", "discover", "tag")
+
+
+@app.post("/api/facets")
+def facets(body: dict = Body(...)):
+    """Counts for every Refine option over what is on screen: the browsed scope (without the detail filters, so the
+    other choices in a group stay visible) or, when searching, the ids of the current results. Options that match
+    nothing or everything are left out by the client, so every chip that shows actually narrows the view."""
+    ids = body.get("ids")
+    if ids is None:
+        ids = files(**{k: body[k] for k in _SCOPE_KEYS if body.get(k) is not None}, ids_only=True)["ids"]
+    ids = [int(i) for i in ids][:200_000]
+    total = len(ids)
+    if not total:
+        return {"total": 0, "facets": []}
+    c = db.conn()
+    rows = []
+    for start in range(0, total, 900):
+        chunk = ids[start:start + 900]
+        rows += c.execute(f"SELECT kind,width,height,duration,fps,size,mtime FROM files WHERE id IN ({','.join('?' * len(chunk))})", chunk).fetchall()
+    now = time.time()
+    day = 86400
+    tests = [
+        ("Quality", "4k", "4K", "At least 3840 × 2160", lambda r: (r["width"] or 0) * (r["height"] or 0) >= 3840 * 2160),
+        ("Quality", "hd", "HD or better", "At least 1920 × 1080", lambda r: (r["width"] or 0) * (r["height"] or 0) >= 1920 * 1080),
+        ("Shape", "portrait", "Vertical", "Taller than wide", lambda r: r["width"] and r["height"] and r["width"] < r["height"]),
+        ("Shape", "square", "Square", "About as wide as tall", lambda r: r["width"] and r["height"] and r["width"] * 1.1 >= r["height"] and r["height"] * 1.1 >= r["width"]),
+        ("Shape", "wide", "Widescreen", "16:9 or wider", lambda r: r["width"] and r["height"] and r["width"] >= r["height"] * 1.7),
+        ("Length", "short", "Under 30 s", "Clips and short sounds", lambda r: r["duration"] and r["duration"] <= 30),
+        ("Length", "long", "Over 1 min", "Longer videos and audio", lambda r: r["duration"] and r["duration"] >= 60),
+        ("Motion", "60fps", "60 fps", "Smooth, high frame rate", lambda r: (r["fps"] or 0) >= 50),
+        ("File size", "big", "Over 20 MB", "Large files", lambda r: (r["size"] or 0) >= 20_000_000),
+        ("File size", "huge", "Over 500 MB", "Very large files", lambda r: (r["size"] or 0) >= 500_000_000),
+        ("Date", "today", "Today", "Changed in the last day", lambda r: (r["mtime"] or 0) >= now - day),
+        ("Date", "week", "This week", "Last 7 days", lambda r: (r["mtime"] or 0) >= now - 7 * day),
+        ("Date", "month", "This month", "Last 30 days", lambda r: (r["mtime"] or 0) >= now - 30 * day),
+        ("Date", "year", "This year", "Last 365 days", lambda r: (r["mtime"] or 0) >= now - 365 * day),
+    ]
+    out = [{"group": g, "key": k, "label": lab, "hint": hint, "count": sum(1 for r in rows if t(r))}
+           for g, k, lab, hint, t in tests]
+    return {"total": total, "facets": out}
 
 
 def _smart_space_ids(pid: int) -> set[int] | None:
@@ -466,7 +595,10 @@ def _search_filter(body):
     """Keep semantic results inside the same exact filters used by the library view."""
     color, source, project = body.get("color"), body.get("source"), body.get("project")
     filters = body.get("filters") or {}
-    if not (color or source or project or any(value is not None for value in filters.values())):
+    tagged = None
+    if body.get("tag"):
+        tagged = {r[0] for r in db.conn().execute("SELECT file_id FROM file_tags WHERE tag=?", (body["tag"],))}
+    if not (color or source or project or tagged is not None or any(value is not None for value in filters.values())):
         return None
     members = None
     if project:
@@ -475,6 +607,8 @@ def _search_filter(body):
             members = {r[0] for r in db.conn().execute("SELECT file_id FROM project_files WHERE project_id=?", (project,))}
 
     def keep(r):
+        if tagged is not None and r["id"] not in tagged:
+            return False
         for key, column, comparison in (("min_size", "size", lambda a, b: a >= b),
                                         ("max_size", "size", lambda a, b: a <= b),
                                         ("min_width", "width", lambda a, b: a >= b),
@@ -629,6 +763,35 @@ async def voice(file: UploadFile = File(...)):
     sims = tags_mod._vecs() @ v
     hint = [tags_mod.TAGS[i] for i in np.argsort(-sims)[:3]]
     return {"id": vid, "secs": secs, "hint": hint}
+
+
+@app.get("/api/voice/model")
+def voice_model():
+    return transcribe.dictation_status()
+
+
+@app.post("/api/voice/model")
+def voice_model_prepare():
+    return transcribe.prepare_dictation()
+
+
+@app.post("/api/voice/text")
+async def voice_text(file: UploadFile = File(...)):
+    """Speech to text for the quick-search launcher: the words become an ordinary typed search, so phrases like
+    "videos of the beach without people" are understood the same way as typing them."""
+    import subprocess
+    from . import transcribe
+    stamp = int(time.time() * 1000)
+    raw, wav = extract.TMP_DIR / f"dict_{stamp}.bin", extract.TMP_DIR / f"dict_{stamp}.wav"
+    raw.write_bytes(await file.read())
+    try:
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(raw), "-t", "30", "-ac", "1", "-ar", "16000",
+                        str(wav)], capture_output=True, timeout=60)
+        if not wav.exists() or wav.stat().st_size < 4000:
+            raise HTTPException(400, "Didn't catch that. Speak a little longer.")
+        return await asyncio.to_thread(transcribe.dictate, str(wav))
+    finally:
+        raw.unlink(missing_ok=True); wav.unlink(missing_ok=True)
 
 
 @app.post("/api/search/image")

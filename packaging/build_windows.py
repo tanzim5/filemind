@@ -1,17 +1,17 @@
-"""Build the portable Windows app.
+"""Build the File Mind engine for Windows: dist/engine/FileMind/FileMind.exe (+ dist/FileMind-Engine.zip).
 
-    --variant cpu     dist/cpu/FileMind/FileMind.exe  ->  dist/FileMind-Windows-portable.zip
-                      Bundles the CPU build of PyTorch; works on every PC.
-    --variant nvidia  dist/nvidia/FileMind-NVIDIA/FileMind.exe  ->  dist/FileMind-Windows-NVIDIA.zip
-                      Ships without PyTorch. On first run it downloads PyTorch with CUDA (~2.8 GB, too big for a
-                      GitHub release file) from pytorch.org, as listed in packaging/runtime-nvidia.json.
+One engine for every PC. It ships without PyTorch; on first run it checks the graphics card and downloads the
+right PyTorch from pytorch.org, as listed in packaging/runtime-windows.json (see app/runtime.py):
+    usable NVIDIA GPU  ->  PyTorch with CUDA (~2.8 GB, too big for a GitHub release file anyway)
+    anything else      ->  the CPU build (~120 MB); AMD and Intel graphics run on the CPU too
+The release workflow puts this folder inside the native app as engine/, so the release is a single zip.
 
-Run inside a venv with the CPU build of PyTorch (the nvidia variant leaves it out but builds in the same venv):
+Run inside a venv with the CPU build of PyTorch (it is left out of the build, but PyInstaller needs to see it):
     pip install torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cpu
     pip install -r packaging/requirements-windows.txt
-    python packaging/build_windows.py --ffmpeg C:/path/to/folder/with/ffmpeg.exe+ffprobe.exe [--variant nvidia]
+    python packaging/build_windows.py --ffmpeg C:/path/to/folder/with/ffmpeg.exe+ffprobe.exe
 
-The model is not bundled either; FileMind.exe downloads it on first launch into a models/ folder beside itself."""
+The model is not bundled either; it is downloaded on first launch into a models/ folder."""
 import argparse
 import shutil
 import subprocess
@@ -20,20 +20,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
+OUT = DIST / "engine"
 
 COLLECT_ALL = ["transformers", "sentence_transformers", "tokenizers", "safetensors", "huggingface_hub",
                "accelerate", "librosa", "soundfile", "uvicorn", "webview", "faster_whisper", "ctranslate2", "av", "onnxruntime"]
 METADATA = ["numpy", "tqdm", "regex", "requests", "packaging", "filelock", "pyyaml", "pillow", "scipy",
             "scikit-learn"]
 EXCLUDE = ["tkinter", "matplotlib", "IPython", "jupyter", "notebook", "pytest",
-           "tensorboard", "triton"]
-# The downloaded PyTorch imports these pure-Python packages from the app, so the NVIDIA build must carry them.
+           "tensorboard", "triton", "torch", "torchvision", "torchaudio"]
+# The downloaded PyTorch imports these pure-Python packages from the app, so the build must carry them.
 TORCH_DEPS = ["sympy", "mpmath", "networkx", "jinja2", "markupsafe", "fsspec", "filelock", "setuptools"]
-
-VARIANTS = {
-    "cpu": {"folder": "FileMind", "zip": "FileMind-Windows-portable"},
-    "nvidia": {"folder": "FileMind-NVIDIA", "zip": "FileMind-Windows-NVIDIA"},
-}
 
 
 def _stdlib_stub(folder: Path) -> Path:
@@ -68,53 +64,43 @@ def _stdlib_stub(folder: Path) -> Path:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ffmpeg", required=True, help="folder containing ffmpeg.exe and ffprobe.exe")
-    ap.add_argument("--variant", choices=VARIANTS, default="cpu")
+    ap.add_argument("--no-zip", action="store_true", help="skip dist/FileMind-Engine.zip")
     a = ap.parse_args()
-    v = VARIANTS[a.variant]
     ff = Path(a.ffmpeg).resolve()
     for exe in ("ffmpeg.exe", "ffprobe.exe"):
         if not (ff / exe).exists():
             sys.exit(f"missing {ff / exe}")
 
-    out = DIST / a.variant
+    work = ROOT / "build" / "engine"
     cmd = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--onedir", "--windowed",
-           "--name", "FileMind", "--distpath", str(out), "--workpath", str(ROOT / "build" / a.variant),
-           "--specpath", str(ROOT / "build" / a.variant), "--icon", str(ROOT / "packaging" / "filemind.ico"),
+           "--name", "FileMind", "--distpath", str(OUT), "--workpath", str(work),
+           "--specpath", str(work), "--icon", str(ROOT / "packaging" / "filemind.ico"),
            "--add-data", f"{ROOT / 'app' / 'static'};app/static",
            "--add-binary", f"{ff / 'ffmpeg.exe'};ffmpeg", "--add-binary", f"{ff / 'ffprobe.exe'};ffmpeg",
-           "--hidden-import", "app.main", "--collect-submodules", "app"]
-    cmd += [x for m in COLLECT_ALL for x in ("--collect-all", m)]
+           "--add-data", f"{ROOT / 'packaging' / 'runtime-windows.json'};.",
+           "--hidden-import", "app.main", "--collect-submodules", "app",
+           "--hidden-import", "typing_extensions", "--hidden-import", "_stdlib_all",
+           "--paths", str(_stdlib_stub(work))]
+    cmd += [x for m in COLLECT_ALL + TORCH_DEPS for x in ("--collect-all", m)]
     cmd += [x for m in METADATA for x in ("--copy-metadata", m)]
     cmd += [x for m in EXCLUDE for x in ("--exclude-module", m)]
-    if a.variant == "cpu":
-        cmd += ["--copy-metadata", "torch"]
-    else:
-        cmd += [x for m in ("torch", "torchvision", "torchaudio") for x in ("--exclude-module", m)]
-        cmd += [x for m in TORCH_DEPS for x in ("--collect-all", m)]
-        cmd += ["--hidden-import", "typing_extensions", "--hidden-import", "_stdlib_all",
-                "--paths", str(_stdlib_stub(ROOT / "build" / a.variant)),
-                "--add-data", f"{ROOT / 'packaging' / 'runtime-nvidia.json'};.", ]
     cmd.append(str(ROOT / "filemind.py"))
-    shutil.rmtree(out, ignore_errors=True)
+    shutil.rmtree(OUT, ignore_errors=True)
     subprocess.run(cmd, check=True, cwd=ROOT)
 
-    app = out / v["folder"]
-    (out / "FileMind").rename(app) if v["folder"] != "FileMind" else None
-    if a.variant == "nvidia":
-        (app / "_internal" / "runtime-nvidia.json").rename(app / "_internal" / "runtime.json")
+    app = OUT / "FileMind"
+    (app / "_internal" / "runtime-windows.json").rename(app / "_internal" / "runtime.json")
     shutil.copy(ROOT / "README.md", app / "README.md")
     (app / "LICENSES.txt").write_text(
         "File Mind bundles:\n"
         "- FFmpeg (ffmpeg.exe, ffprobe.exe), https://ffmpeg.org — licensed under the GNU LGPL/GPL (run `ffmpeg -L` for this build); source at https://ffmpeg.org/download.html\n"
-        "- Python and the open-source packages listed in the File Mind repository (PyTorch BSD, Transformers Apache-2.0, ...)\n"
+        "- Python and the open-source packages listed in the File Mind repository (Transformers Apache-2.0, ...)\n"
         "The EmbeddingGemma 2 model, downloaded on first run, is Apache-2.0.\n"
-        + ("PyTorch with CUDA, downloaded on first run from pytorch.org, is BSD-licensed and includes NVIDIA CUDA "
-           "libraries under the NVIDIA CUDA EULA.\n" if a.variant == "nvidia" else ""), encoding="utf-8")
-    zipped = shutil.make_archive(str(DIST / v["zip"]), "zip", out, v["folder"])
-    size = Path(zipped).stat().st_size
-    print(f"\n{zipped}  {size / 2**20:.0f} MB")
-    if size >= 2 * 2**30:
-        sys.exit("zip is over GitHub's 2 GB per-file limit")
+        "PyTorch, downloaded on first run from pytorch.org, is BSD-licensed; its CUDA build includes NVIDIA CUDA "
+        "libraries under the NVIDIA CUDA EULA.\n", encoding="utf-8")
+    if not a.no_zip:
+        zipped = shutil.make_archive(str(DIST / "FileMind-Engine"), "zip", OUT, "FileMind")
+        print(f"\n{zipped}  {Path(zipped).stat().st_size / 2**20:.0f} MB")
 
 
 if __name__ == "__main__":

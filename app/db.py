@@ -114,6 +114,17 @@ def init():
             PRIMARY KEY(file_id, start)
         );
         CREATE INDEX IF NOT EXISTS idx_moments_file ON moments(file_id);
+        CREATE TABLE IF NOT EXISTS tags (
+            name TEXT PRIMARY KEY COLLATE NOCASE,
+            color TEXT NOT NULL DEFAULT '#8B5CF6',
+            created REAL NOT NULL DEFAULT (strftime('%s','now'))
+        );
+        CREATE TABLE IF NOT EXISTS file_tags (
+            file_id INTEGER NOT NULL,
+            tag TEXT NOT NULL COLLATE NOCASE,
+            PRIMARY KEY(file_id, tag)
+        );
+        CREATE INDEX IF NOT EXISTS idx_file_tags_tag ON file_tags(tag);
         CREATE TABLE IF NOT EXISTS moment_runs (
             file_id INTEGER PRIMARY KEY,
             size INTEGER NOT NULL,

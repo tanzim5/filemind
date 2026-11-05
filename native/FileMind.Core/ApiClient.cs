@@ -58,6 +58,37 @@ public sealed class ApiClient(Uri baseUri) : IDisposable
     public Task<TranscriptState> GetTranscriptAsync(int id, CancellationToken ct = default) => GetAsync<TranscriptState>($"/api/transcript/{id}", ct);
     public Task<TranscriptState> StartTranscriptAsync(int id, CancellationToken ct = default) => PostAsync<TranscriptState>($"/api/transcript/{id}", null, ct);
 
+    public async Task DeleteTagAsync(string name, CancellationToken ct = default)
+    {
+        using var response = await _http.DeleteAsync($"/api/tags/{Uri.EscapeDataString(name)}", ct);
+        response.EnsureSuccessStatusCode();
+    }
+    public Task<TagList> GetTagsAsync(CancellationToken ct = default) => GetAsync<TagList>("/api/tags", ct);
+    public Task<TagList> TagFilesAsync(IEnumerable<int> ids, IEnumerable<string>? add, IEnumerable<string>? remove, CancellationToken ct = default) =>
+        PostAsync<TagList>("/api/tags", new { ids = ids.ToList(), add = add?.ToList() ?? [], remove = remove?.ToList() ?? [] }, ct);
+    public Task<TagList> DefineTagAsync(string name, string? color, string? rename = null, CancellationToken ct = default) =>
+        PostAsync<TagList>("/api/tags/define", new { name, color, rename }, ct);
+
+    /// <summary>Counts for the Refine options: over a browsed scope (kind, root, source, ...) or the given result ids.</summary>
+    public Task<FacetResult> GetFacetsAsync(Dictionary<string, object?> scope, IEnumerable<int>? ids, CancellationToken ct = default)
+    {
+        var body = new Dictionary<string, object?>(scope);
+        if (ids is not null) body["ids"] = ids.ToList();
+        return PostAsync<FacetResult>("/api/facets", body, ct);
+    }
+
+    public Task<VoiceModelState> GetVoiceModelAsync(CancellationToken ct = default) => GetAsync<VoiceModelState>("/api/voice/model", ct);
+    public Task<VoiceModelState> PrepareVoiceModelAsync(CancellationToken ct = default) => PostAsync<VoiceModelState>("/api/voice/model", null, ct);
+
+    /// <summary>Speech to text on the engine (local Whisper): used when Windows speech recognition is unavailable.</summary>
+    public async Task<string> VoiceToTextAsync(string audioPath, CancellationToken ct = default)
+    {
+        using var form = new MultipartFormDataContent();
+        form.Add(new ByteArrayContent(await File.ReadAllBytesAsync(audioPath, ct)), "file", Path.GetFileName(audioPath));
+        using var response = await _http.PostAsync("/api/voice/text", form, ct);
+        return (await ReadAsync<JsonElement>(response, ct)).GetProperty("text").GetString() ?? "";
+    }
+
     /// <summary>Find files that look or sound like a picture on disk.</summary>
     public async Task<List<FileItem>> SearchByImageAsync(string path, FileQuery query, CancellationToken ct = default)
     {

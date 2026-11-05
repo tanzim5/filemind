@@ -6,7 +6,7 @@
     <ScrollViewer VerticalScrollBarVisibility="Hidden">
       <StackPanel Padding="44,40,44,90" Spacing="40">
         <StackPanel Spacing="12">
-          <TextBlock Text="SEE YOUR LIBRARY DIFFERENTLY" Style="{StaticResource SectionLabel}" Foreground="#FFFF7A45"/>
+          <TextBlock Text="See your library differently" Style="{StaticResource SectionLabel}" Foreground="#FFFF7A45"/>
           <TextBlock Text="Discover what’s already here." Style="{StaticResource TitleText}" FontSize="64"/>
           <TextBlock Text="Fresh paths through the files File Mind has read, shaped by visual similarity and file metadata."
                      Style="{StaticResource SecondaryText}" FontSize="15" TextWrapping="Wrap"/>
