@@ -113,7 +113,7 @@
   <Style x:Key="GlassChip" TargetType="ToggleButton">
     <Setter Property="Background" Value="{StaticResource GlassFillBrush}"/>
     <Setter Property="BorderBrush" Value="{StaticResource GlassStrokeBrush}"/>
-    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="BorderThickness" Value="0"/>
     <Setter Property="CornerRadius" Value="5"/>
     <Setter Property="Padding" Value="11,5"/>
     <Setter Property="FontSize" Value="12"/>

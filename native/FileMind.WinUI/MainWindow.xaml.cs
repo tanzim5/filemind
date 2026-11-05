@@ -165,6 +165,15 @@ public sealed partial class MainWindow : Window
         if (tag is null || tag == _current) return;
         _current = tag;
         foreach (var b in RailButtons) b.IsChecked = (string)b.Tag == tag;
+        TintGlyphs();
+    }
+
+    private readonly Dictionary<string, Pages.LineIcon> _glyphs = [];
+    private void TintGlyphs()
+    {
+        foreach (var (k, g) in _glyphs)
+            if (k == _current) g.Foreground = (Brush)Application.Current.Resources["AccentBrush"];
+            else g.ResetColor();
     }
 
     private static Windows.UI.Color Color(byte a, byte r, byte g, byte b) => Windows.UI.Color.FromArgb(a, r, g, b);
@@ -253,16 +262,19 @@ public sealed partial class MainWindow : Window
     /// <summary>Builds the four destinations: a colour icon, the name, and a quiet count on the right.</summary>
     public void BuildRail()
     {
-        NavStack.Children.Clear(); _rail.Clear(); _counts.Clear();
-        QuickKeys.Text = (App.ActiveHotkey ?? AppRuntime.Current.Settings.QuickSearchHotkey).Replace("+", " + ");
+        NavStack.Children.Clear(); _rail.Clear(); _counts.Clear(); _glyphs.Clear();
         foreach (var (key, label) in Destinations)
         {
-            var row = new Grid { ColumnSpacing = 11 };
+            // Finder/Raycast-style rows: a quiet monochrome glyph, the name, a dim count. The selected row gets a soft
+            // fill and an accent-coloured glyph; nothing else competes for attention.
+            var row = new Grid { ColumnSpacing = 10 };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.Children.Add(new Pages.AppIcon { Glyph = key == "library" ? "photo" : key, Tone = key, Size = 24, VerticalAlignment = VerticalAlignment.Center });
-            var name = new TextBlock { Text = label, FontSize = 13.5, VerticalAlignment = VerticalAlignment.Center };
+            var glyph = new Pages.LineIcon { Kind = key switch { "library" => "photo", "discover" => "sparkle", "spaces" => "folder", _ => "duplicates" }, Size = 16, VerticalAlignment = VerticalAlignment.Center };
+            _glyphs[key] = glyph;
+            row.Children.Add(glyph);
+            var name = new TextBlock { Text = label, FontSize = 13, VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(name, 1); row.Children.Add(name);
             var count = new TextBlock { FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center, Foreground = (Brush)Application.Current.Resources["GlassTextTertiaryBrush"] };
             Grid.SetColumn(count, 2); row.Children.Add(count);
@@ -271,6 +283,7 @@ public sealed partial class MainWindow : Window
             b.Click += Rail_Click;
             _rail.Add(b); NavStack.Children.Add(b);
         }
+        TintGlyphs();
         _ = FillCountsAsync();
     }
 

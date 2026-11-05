@@ -157,9 +157,18 @@
               <local:WrapPanel x:Name="TypeChips" Columns="3" Spacing="6"/>
             </StackPanel>
 
+            <StackPanel x:Name="SecTags" Spacing="10">
+              <Grid>
+                <TextBlock Text="Tags" Style="{StaticResource SectionLabel}" VerticalAlignment="Center"/>
+                <Button Style="{StaticResource GlassButton}" HorizontalAlignment="Right" Padding="7,2" CornerRadius="4" Click="NewTag_Click" ToolTipService.ToolTip="New tag">
+                  <local:LineIcon Kind="plus" Size="11"/></Button>
+              </Grid>
+              <local:WrapPanel x:Name="TagChips" Spacing="6" Justify="True"/>
+            </StackPanel>
+
             <StackPanel x:Name="SecSources" Spacing="10">
               <TextBlock Text="Sources" Style="{StaticResource SectionLabel}"/>
-              <local:WrapPanel x:Name="SourceChips" Columns="1" Spacing="4"/>
+              <local:WrapPanel x:Name="SourceChips" Spacing="6" Justify="True"/>
             </StackPanel>
 
             <StackPanel x:Name="SecColours" Spacing="10">
@@ -180,7 +189,7 @@
 
             <StackPanel x:Name="SecMoods" Spacing="10">
               <TextBlock Text="Looks &amp; moods" Style="{StaticResource SectionLabel}"/>
-              <local:WrapPanel x:Name="MoodChips" Columns="2" Spacing="6"/>
+              <local:WrapPanel x:Name="MoodChips" Spacing="6" Justify="True"/>
             </StackPanel>
 
             <StackPanel x:Name="SecSpaces" Spacing="10">
@@ -189,12 +198,12 @@
                 <Button Style="{StaticResource GlassButton}" HorizontalAlignment="Right" Padding="7,2" CornerRadius="4" Click="NewSpace_Click" ToolTipService.ToolTip="New space">
                   <local:LineIcon Kind="plus" Size="11"/></Button>
               </Grid>
-              <local:WrapPanel x:Name="SpaceChips" Columns="2" Spacing="6"/>
+              <local:WrapPanel x:Name="SpaceChips" Spacing="6" Justify="True"/>
             </StackPanel>
 
             <StackPanel x:Name="SecDetails" Spacing="10">
               <TextBlock Text="Refine" Style="{StaticResource SectionLabel}"/>
-              <StackPanel x:Name="RefineGroups" Spacing="14"/>
+              <StackPanel x:Name="RefineGroups" Spacing="10"/>
               <TextBlock x:Name="RefineEmpty" Visibility="Collapsed" Style="{StaticResource SecondaryText}" FontSize="12" TextWrapping="Wrap"
                          Text="Everything here is alike in size, shape and date. Nothing to narrow."/>
               <Expander Header="Exact values" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Background="Transparent" Padding="8">
@@ -254,6 +263,11 @@
                 Background="{StaticResource OverlayBrush}" BorderBrush="{StaticResource GlassStrokeBrush}">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <TextBlock x:Name="SelCount" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <Button x:Name="FavBtn" Style="{StaticResource GlassButton}" Click="Favourite_Click" Padding="10,7" ToolTipService.ToolTip="Favourite (F)">
+              <StackPanel Orientation="Horizontal" Spacing="6"><local:LineIcon x:Name="FavIcon" Kind="star" Size="13"/><TextBlock x:Name="FavText" Text="Favourite"/></StackPanel></Button>
+            <Button Style="{StaticResource GlassButton}" Click="TagSel_Click" Padding="10,7" ToolTipService.ToolTip="Tag">
+              <StackPanel Orientation="Horizontal" Spacing="6"><local:LineIcon Kind="tag" Size="13"/><TextBlock Text="Tag"/></StackPanel></Button>
+            <Border Width="1" Height="18" Background="{StaticResource DividerBrush}" Margin="4,0"/>
             <ComboBox x:Name="SpacePick" MinWidth="150" PlaceholderText="Choose a space" VerticalAlignment="Center"/>
             <Button Style="{StaticResource GlassAccentButton}" Click="AddToSpace_Click" Padding="12,7">
               <StackPanel Orientation="Horizontal" Spacing="6"><local:LineIcon Kind="plus" Size="12"/><TextBlock Text="Add to space"/></StackPanel></Button>

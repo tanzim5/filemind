@@ -32,19 +32,7 @@
           <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <Button x:Name="QuickBtn" Grid.Row="1" Style="{StaticResource GlassButton}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-                Padding="10,8" Margin="0,0,0,14" Click="Quick_Click" AutomationProperties.Name="Quick search">
-          <Grid ColumnSpacing="8">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <p:LineIcon Kind="search" Size="14" Opacity="0.75" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="1" Text="Quick search" FontSize="13" Foreground="{StaticResource GlassTextSecondaryBrush}" VerticalAlignment="Center"/>
-            <Border Grid.Column="2" Background="{StaticResource GlassFillBrush}" CornerRadius="4" Padding="6,1">
-              <TextBlock x:Name="QuickKeys" FontSize="11" Foreground="{StaticResource GlassTextTertiaryBrush}"/>
-            </Border>
-          </Grid>
-        </Button>
-
-        <StackPanel x:Name="NavStack" Grid.Row="2" Spacing="2" Margin="0,0,0,10"/>
+        <StackPanel x:Name="NavStack" Grid.Row="2" Spacing="1" Margin="0,4,0,18"/>
         <ContentControl x:Name="SidebarHost" Grid.Row="3" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
 
         <Grid Grid.Row="4" Margin="0,10,0,0">

@@ -14,6 +14,10 @@ public sealed class WrapPanel : Panel
     /// <summary>When above zero, chips sit in equal columns that fill the width, so rows line up with no gaps.</summary>
     public int Columns { get; set; }
 
+    /// <summary>Flowing chips keep their natural widths but each full row is stretched to the edge, so the block reads
+    /// as a tidy rectangle instead of a ragged column (a short last row keeps natural widths).</summary>
+    public bool Justify { get; set; }
+
     private IEnumerable? _items;
 
     /// <summary>Replaces the chips with these elements.</summary>
@@ -49,7 +53,9 @@ public sealed class WrapPanel : Panel
         var width = double.IsInfinity(available.Width) ? 300 : available.Width;
         foreach (var child in Children)
         {
-            child.Measure(new Size(width, double.PositiveInfinity));
+            // Natural width: a chip that stretches would otherwise claim the whole line.
+            child.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            if (child.DesiredSize.Width > width) child.Measure(new Size(width, double.PositiveInfinity));
             var s = child.DesiredSize;
             if (x > 0 && x + s.Width > width) { y += rowH + Spacing; x = 0; rowH = 0; }
             x += s.Width + Spacing;
@@ -73,14 +79,30 @@ public sealed class WrapPanel : Panel
             }
             return final;
         }
-        double x = 0, y = 0, rowH = 0;
+        // Lay the chips out into rows first, then place each row (stretched when justified).
+        var rows = new List<List<UIElement>>(); var cur = new List<UIElement>(); double rx = 0;
         foreach (var child in Children)
         {
-            var s = child.DesiredSize;
-            if (x > 0 && x + s.Width > final.Width) { y += rowH + Spacing; x = 0; rowH = 0; }
-            child.Arrange(new Rect(x, y, s.Width, s.Height));
-            x += s.Width + Spacing;
-            rowH = Math.Max(rowH, s.Height);
+            var w = child.DesiredSize.Width;
+            if (cur.Count > 0 && rx + w > final.Width) { rows.Add(cur); cur = []; rx = 0; }
+            cur.Add(child); rx += w + Spacing;
+        }
+        if (cur.Count > 0) rows.Add(cur);
+        double y = 0;
+        for (var r = 0; r < rows.Count; r++)
+        {
+            var row = rows[r];
+            var natural = row.Sum(c => c.DesiredSize.Width) + Spacing * (row.Count - 1);
+            var last = r == rows.Count - 1;
+            var extra = Justify && (!last || (row.Count > 1 && natural > final.Width * 0.7)) ? Math.Max(0, final.Width - natural) / row.Count : 0;
+            double x = 0, h = row.Max(c => c.DesiredSize.Height);
+            foreach (var c in row)
+            {
+                var w = c.DesiredSize.Width + extra;
+                c.Arrange(new Rect(x, y, w, c.DesiredSize.Height));
+                x += w + Spacing;
+            }
+            y += h + Spacing;
         }
         return final;
     }

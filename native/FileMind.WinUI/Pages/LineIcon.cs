@@ -51,6 +51,8 @@ public sealed class LineIcon : UserControl
         ["scan"] = "M3,7 V5 A2,2 0 0 1 5,3 H7 M17,3 H19 A2,2 0 0 1 21,5 V7 M21,17 V19 A2,2 0 0 1 19,21 H17 M7,21 H5 A2,2 0 0 1 3,19 V17 M7,12 H17",
         ["sparkle"] = "M12,3 C12.8,9 15,11.2 21,12 C15,12.8 12.8,15 12,21 C11.2,15 9,12.8 3,12 C9,11.2 11.2,9 12,3 Z",
         ["command"] = "M15,6 V18 A3,3 0 1 0 18,15 H6 A3,3 0 1 0 9,18 V6 A3,3 0 1 0 6,9 H18 A3,3 0 1 0 15,6 Z",
+        ["star"] = "M12,3.6 L14.6,8.9 L20.4,9.7 L16.2,13.8 L17.2,19.6 L12,16.9 L6.8,19.6 L7.8,13.8 L3.6,9.7 L9.4,8.9 Z",
+        ["tag"] = "M3.5,12 L3.5,4.8 A1.3,1.3 0 0 1 4.8,3.5 L12,3.5 L20.2,11.7 A1.5,1.5 0 0 1 20.2,13.8 L13.8,20.2 A1.5,1.5 0 0 1 11.7,20.2 Z M8,8 L8.01,8",
         ["close"] = "M18,6 L6,18 M6,6 L18,18",
         ["check"] = "M20,6 L9,17 L4,12",
         ["play"] = "M7,4.5 L19,12 L7,19.5 Z",
@@ -88,6 +90,8 @@ public sealed class LineIcon : UserControl
         Foreground = new SolidColorBrush(ActualTheme == ElementTheme.Light ? Windows.UI.Color.FromArgb(0xE6, 24, 24, 28) : Windows.UI.Color.FromArgb(0xE6, 255, 255, 255));
     }
     private bool _auto;
+    /// <summary>Back to the automatic ink/white colour after a temporary tint.</summary>
+    public void ResetColor() { _auto = true; FollowTheme(); }
 
     public string Kind
     {

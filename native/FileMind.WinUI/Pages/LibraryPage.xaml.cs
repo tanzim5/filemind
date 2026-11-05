@@ -66,17 +66,17 @@ public sealed partial class LibraryPage : Page
     public static LibraryPage? Current { get; private set; }
 
     /// <summary>Puts the sidebar sections in the order chosen in Settings and hides those switched off.</summary>
+    // One deliberate order, most useful first: what kind of file, your own tags, the hard facts (Refine), where it came
+    // from, how it looks, and finally the folders. Spaces have their own page, so they are not repeated here.
     public void ApplySections()
     {
-        var all = new Dictionary<string, UIElement> { ["types"] = SecTypes, ["sources"] = SecSources, ["colours"] = SecColours, ["folders"] = SecFolders, ["moods"] = SecMoods, ["spaces"] = SecSpaces, ["details"] = SecDetails };
-        if (!Settings.SectionOrder.Contains("moods")) { Settings.SectionOrder = ["types", "sources", "colours", "folders", "moods", "spaces", "details"]; Settings.SectionHidden.Remove("colours"); try { Settings.Save(AppRuntime.Current.Paths); } catch { } }
-        var order = Settings.SectionOrder.Where(all.ContainsKey).Distinct().Concat(all.Keys.Except(Settings.SectionOrder)).ToList();
         SectionStack.Children.Clear();
-        foreach (var key in order)
+        foreach (var sec in new UIElement[] { SecTypes, SecTags, SecDetails, SecSources, SecColours, SecMoods, SecFolders })
         {
-            all[key].Visibility = Settings.SectionHidden.Contains(key) ? Visibility.Collapsed : Visibility.Visible;
-            SectionStack.Children.Add(all[key]);
+            sec.Visibility = Visibility.Visible;
+            SectionStack.Children.Add(sec);
         }
+        SecSpaces.Visibility = Visibility.Collapsed;
     }
 
     public LibraryPage()
@@ -178,6 +178,7 @@ public sealed partial class LibraryPage : Page
             _sources = await Api.GetSourcesAsync();
             _moods = await Api.GetMoodsAsync();
             _projects = await Api.GetProjectsAsync();
+            _tagList = (await Api.GetTagsAsync()).Tags;
         }
         catch (Exception) { }
         RebuildPanels();
@@ -728,6 +729,7 @@ public sealed partial class LibraryPage : Page
                 FolderList.Children.Add(line);
             }
 
+            BuildTagChips();
             _ = FillRefineAsync();
 
             RebuildActiveChips();
@@ -922,9 +924,9 @@ public sealed partial class LibraryPage : Page
         {
             var shown = group.Where(f => FacetOn(f.Key) || (f.Count > 0 && f.Count < r.Total)).ToList();
             if (shown.Count == 0) continue;
-            var box = new StackPanel { Spacing = 6 };
-            box.Children.Add(new TextBlock { Text = group.Key, FontSize = 11.5, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
-            var wrap = new WrapPanel { Spacing = 6 };
+            var box = new StackPanel { Spacing = 5 };
+            box.Children.Add(new TextBlock { Text = group.Key, FontSize = 11.5, Foreground = Ui.Brush("GlassTextTertiaryBrush") });
+            var wrap = new WrapPanel { Spacing = 5, Justify = true };
             foreach (var f in shown)
             {
                 var key = f.Key;
@@ -935,6 +937,106 @@ public sealed partial class LibraryPage : Page
             RefineGroups.Children.Add(box);
         }
         RefineEmpty.Visibility = RefineGroups.Children.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // ------------------------------------------------------------------ tags and favourites
+    private List<TagInfo> _tagList = [];
+
+    private void BuildTagChips()
+    {
+        TagChips.Children.Clear();
+        foreach (var t in _tagList)
+        {
+            if (t.Name != TagInfo.Favourite && t.Count == 0 && _q.Tag != t.Name) continue;
+            var name = t.Name;
+            var fav = name == TagInfo.Favourite;
+            var chip = Chip(fav ? "\u2605  Favourites" : t.Name, string.Equals(_q.Tag, name, StringComparison.OrdinalIgnoreCase),
+                () => GoAsync(() => { _q.Tag = string.Equals(_q.Tag, name, StringComparison.OrdinalIgnoreCase) ? null : name; _title = ""; }),
+                fav ? null : t.Color, t.Count);
+            if (!fav)
+            {
+                var menu = new MenuFlyout();
+                var rename = new MenuFlyoutItem { Text = "Rename..." };
+                rename.Click += async (_, _) => { var n = await PromptAsync("Rename tag", name); if (n is null) return; _tagList = (await Api.DefineTagAsync(name, null, n)).Tags; BuildTagChips(); };
+                var colour = new MenuFlyoutSubItem { Text = "Colour" };
+                foreach (var (hex, label) in new[] { ("#EF4444", "Red"), ("#F59E0B", "Orange"), ("#22A559", "Green"), ("#3B82F6", "Blue"), ("#8B5CF6", "Purple"), ("#EC4899", "Pink"), ("#64748B", "Grey") })
+                {
+                    var item = new MenuFlyoutItem { Text = label, Icon = new FontIcon { Glyph = "\u25CF", Foreground = Brush(hex) } };
+                    item.Click += async (_, _) => { _tagList = (await Api.DefineTagAsync(name, hex)).Tags; BuildTagChips(); };
+                    colour.Items.Add(item);
+                }
+                var delete = new MenuFlyoutItem { Text = "Delete tag" };
+                delete.Click += async (_, _) => { await Api.DeleteTagAsync(name); _tagList = (await Api.GetTagsAsync()).Tags; if (_q.Tag == name) await GoAsync(() => _q.Tag = null); BuildTagChips(); };
+                menu.Items.Add(rename); menu.Items.Add(colour); menu.Items.Add(new MenuFlyoutSeparator()); menu.Items.Add(delete);
+                chip.ContextFlyout = menu;
+            }
+            TagChips.Children.Add(chip);
+        }
+    }
+
+    private List<FileItem> SelectedItems() => _tiles.Where(t => _sel.Contains(t.Item.Id)).Select(t => t.Item).ToList();
+
+    private async Task ApplyTagsAsync(IReadOnlyCollection<int> ids, string? add, string? remove)
+    {
+        try
+        {
+            _tagList = (await Api.TagFilesAsync(ids, add is null ? null : [add], remove is null ? null : [remove])).Tags;
+            foreach (var t in _tiles.Where(t => ids.Contains(t.Item.Id)))
+            {
+                if (add is not null && !t.Item.Tags.Contains(add, StringComparer.OrdinalIgnoreCase)) t.Item.Tags.Add(add);
+                if (remove is not null) t.Item.Tags.RemoveAll(x => string.Equals(x, remove, StringComparison.OrdinalIgnoreCase));
+            }
+            BuildTagChips();
+            SyncFavButton();
+        }
+        catch (Exception ex) { ShowToast(ex.Message); }
+    }
+
+    private void SyncFavButton()
+    {
+        var items = SelectedItems();
+        var all = items.Count > 0 && items.All(i => i.IsFavourite);
+        FavText.Text = all ? "Unfavourite" : "Favourite";
+        if (all) FavIcon.Foreground = Ui.Brush("AccentBrush"); else FavIcon.ResetColor();
+    }
+
+    private async void Favourite_Click(object sender, RoutedEventArgs e)
+    {
+        var items = SelectedItems();
+        if (items.Count == 0) return;
+        var ids = items.Select(i => i.Id).ToList();
+        if (items.All(i => i.IsFavourite)) { await ApplyTagsAsync(ids, null, TagInfo.Favourite); ShowToast($"Removed {ids.Count:N0} from Favourites."); }
+        else { await ApplyTagsAsync(ids, TagInfo.Favourite, null); ShowToast($"Added {ids.Count:N0} to Favourites."); }
+    }
+
+    // Every tag, ticked when all selected files carry it, plus "New tag...".
+    private void TagSel_Click(object sender, RoutedEventArgs e)
+    {
+        var items = SelectedItems();
+        if (items.Count == 0) return;
+        var ids = items.Select(i => i.Id).ToList();
+        var menu = new MenuFlyout();
+        foreach (var t in _tagList.Where(t => t.Name != TagInfo.Favourite))
+        {
+            var name = t.Name;
+            var on = items.All(i => i.Tags.Contains(name, StringComparer.OrdinalIgnoreCase));
+            var item = new ToggleMenuFlyoutItem { Text = name, IsChecked = on, Icon = new FontIcon { Glyph = "\u25CF", Foreground = Brush(t.Color) } };
+            item.Click += async (_, _) => await ApplyTagsAsync(ids, on ? null : name, on ? name : null);
+            menu.Items.Add(item);
+        }
+        if (menu.Items.Count > 0) menu.Items.Add(new MenuFlyoutSeparator());
+        var add = new MenuFlyoutItem { Text = "New tag..." };
+        add.Click += async (_, _) => { var n = await PromptAsync("New tag", "Name the tag"); if (n is not null && n.Trim().Length > 0) await ApplyTagsAsync(ids, n.Trim(), null); };
+        menu.Items.Add(add);
+        menu.ShowAt((FrameworkElement)sender);
+    }
+
+    private async void NewTag_Click(object sender, RoutedEventArgs e)
+    {
+        var n = await PromptAsync("New tag", "Name the tag");
+        if (n is null || n.Trim().Length == 0) return;
+        try { _tagList = (await Api.DefineTagAsync(n.Trim(), null)).Tags; BuildTagChips(); ShowToast($"Made the tag {n.Trim()}. Select files and choose Tag to add it."); }
+        catch (Exception ex) { ShowToast(ex.Message); }
     }
 
     private async Task ApplySmartAsync(string input)
@@ -1071,6 +1173,7 @@ public sealed partial class LibraryPage : Page
         var any = _sel.Count > 0;
         foreach (var t in _tiles) t.AnyChecked = any;
         ActionBar.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+        if (any) SyncFavButton();
         SelCount.Text = $"{_sel.Count:N0} selected";
         RemoveFromSpaceBtn.Visibility = _q.Project is not null ? Visibility.Visible : Visibility.Collapsed;
     }

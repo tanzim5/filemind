@@ -25,6 +25,8 @@ public sealed class FileItem
     [JsonPropertyName("codec")] public string? Codec { get; set; }
     [JsonPropertyName("proposed")] public string? Proposed { get; set; }
     [JsonPropertyName("snippet")] public string? Snippet { get; set; }
+    [JsonPropertyName("tags")] public List<string> Tags { get; set; } = [];
+    public bool IsFavourite => Tags.Contains(TagInfo.Favourite, StringComparer.OrdinalIgnoreCase);
 
     public string SizeText => Size switch
     {
@@ -60,6 +62,20 @@ public sealed class RootFolder
     [JsonPropertyName("files")] public int Files { get; set; }
     [JsonPropertyName("indexed")] public int Indexed { get; set; }
     [JsonPropertyName("errors")] public int Errors { get; set; }
+}
+
+/// <summary>A tag (Finder-style, with a colour) and how many files carry it. "Favourites" is the built-in one.</summary>
+public sealed class TagInfo
+{
+    public const string Favourite = "Favourites";
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+    [JsonPropertyName("color")] public string Color { get; set; } = "#8B5CF6";
+    [JsonPropertyName("count")] public int Count { get; set; }
+}
+
+public sealed class TagList
+{
+    [JsonPropertyName("tags")] public List<TagInfo> Tags { get; set; } = [];
 }
 
 /// <summary>One Refine option and how many files on screen it keeps.</summary>
