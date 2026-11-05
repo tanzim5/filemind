@@ -5,57 +5,76 @@
         Title="File Mind">
   <Grid x:Name="Root" RequestedTheme="Dark">
     <Grid.RowDefinitions>
-      <RowDefinition Height="32"/>
+      <RowDefinition Height="38"/>
       <RowDefinition Height="*"/>
     </Grid.RowDefinitions>
 
-    <Grid x:Name="TitleBar" Padding="16,0,0,0">
+    <Grid x:Name="TitleBar" Padding="20,0,0,0">
       <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-        <Image Source="ms-appx:///Assets/icon.png" Width="18" Height="18"/>
-        <TextBlock Text="File Mind" FontSize="12" Foreground="{StaticResource GlassTextSecondaryBrush}"/>
+        <Image Source="ms-appx:///Assets/icon.png" Width="20" Height="20"/>
+        <TextBlock Text="File Mind" FontFamily="Segoe UI Variable Display" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center"/>
       </StackPanel>
     </Grid>
 
-    <Grid x:Name="Shell" Grid.Row="1">
+    <Grid x:Name="Shell" Grid.Row="1" Visibility="Collapsed">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="288"/>
+        <ColumnDefinition Width="256"/>
         <ColumnDefinition Width="*"/>
       </Grid.ColumnDefinitions>
 
-      <!-- The left rail: destinations on top, the page's filters below (fixed). Settings lives in the panel on the right. -->
-      <Border x:Name="RailCard" Style="{StaticResource GlassCard}" Margin="8,0,0,8" Padding="8,6,8,6" CornerRadius="8" BorderThickness="1">
-        <Grid RowSpacing="8">
-          <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-          </Grid.RowDefinitions>
-          <Grid Margin="10,2,2,4">
-            <TextBlock Text="File Mind" Style="{StaticResource TitleText}" FontSize="24" VerticalAlignment="Center"/>
-            <Button Style="{StaticResource GlassButton}" HorizontalAlignment="Right" Padding="9,7" CornerRadius="6" Click="OpenSettings_Click"
-                    ToolTipService.ToolTip="Settings (Ctrl+,)" AutomationProperties.Name="Settings">
-              <p:LineIcon Kind="settings" Size="15"/></Button>
+      <!-- The sidebar sits on the window itself: brand, quick search, destinations, the page's filters, settings. -->
+      <Grid x:Name="RailCard" Padding="12,6,10,10">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="0"/>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*"/>
+          <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Button x:Name="QuickBtn" Grid.Row="1" Style="{StaticResource GlassButton}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                Padding="10,8" Margin="0,0,0,14" Click="Quick_Click" AutomationProperties.Name="Quick search">
+          <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <p:LineIcon Kind="search" Size="14" Opacity="0.75" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="1" Text="Quick search" FontSize="13" Foreground="{StaticResource GlassTextSecondaryBrush}" VerticalAlignment="Center"/>
+            <Border Grid.Column="2" Background="{StaticResource GlassFillBrush}" CornerRadius="4" Padding="6,1">
+              <TextBlock x:Name="QuickKeys" FontSize="11" Foreground="{StaticResource GlassTextTertiaryBrush}"/>
+            </Border>
           </Grid>
-          <StackPanel x:Name="NavStack" Grid.Row="1" Spacing="2"/>
-          <ContentControl x:Name="SidebarHost" Grid.Row="2" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
+        </Button>
+
+        <StackPanel x:Name="NavStack" Grid.Row="2" Spacing="2" Margin="0,0,0,10"/>
+        <ContentControl x:Name="SidebarHost" Grid.Row="3" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
+
+        <Grid Grid.Row="4" Margin="0,10,0,0">
+          <ToggleButton x:Name="SettingsRail" Style="{StaticResource RailItem}" Click="OpenSettings_Click" AutomationProperties.Name="Settings">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <p:LineIcon Kind="settings" Size="17" Width="24" Opacity="0.85"/>
+              <TextBlock Text="Settings" FontSize="13.5" VerticalAlignment="Center"/>
+            </StackPanel>
+          </ToggleButton>
+        </Grid>
+      </Grid>
+
+      <!-- The page sits on one calm panel; a soft glow in the accent colour gives it depth. -->
+      <Border x:Name="PanelCard" Grid.Column="1" Margin="0,0,8,8" CornerRadius="8" Background="#E617171B" BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1">
+        <Grid>
+          <Rectangle IsHitTestVisible="False" Fill="{StaticResource AuraBrush}"/>
+          <Frame x:Name="ContentFrame"/>
         </Grid>
       </Border>
 
-      <!-- The page itself sits on a calm solid panel that runs to the bottom of the window; its edges are faded, never cut. -->
-      <Border x:Name="PanelCard" Grid.Column="1" Margin="8,0,8,8" CornerRadius="8" Background="#E617171B" BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1">
-        <Frame x:Name="ContentFrame"/>
-      </Border>
-
-      <!-- Settings, tucked away on the right -->
+      <!-- Settings slide in from the right -->
       <Grid x:Name="SettingsScrim" Grid.ColumnSpan="2" Visibility="Collapsed" Background="{StaticResource ScrimBrush}" Tapped="SettingsScrim_Tapped">
-        <Border x:Name="SettingsPanel" HorizontalAlignment="Right" Width="440" Margin="0" CornerRadius="8,0,0,0" Background="{StaticResource OverlayBrush}"
+        <Border x:Name="SettingsPanel" HorizontalAlignment="Right" Width="520" Margin="0,0,8,8" CornerRadius="8" Background="{StaticResource OverlayBrush}"
                 BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1" Tapped="SettingsPanel_Tapped">
           <Grid>
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-            <Grid Margin="24,18,14,0">
-              <TextBlock Text="Settings" Style="{StaticResource TitleText}" FontSize="30"/>
-              <Button Style="{StaticResource GlassButton}" HorizontalAlignment="Right" Padding="9,8" CornerRadius="6" Click="CloseSettings_Click" AutomationProperties.Name="Close settings">
-                <p:LineIcon Kind="close" Size="14"/></Button>
+            <Grid Margin="24,18,14,6">
+              <TextBlock Text="Settings" Style="{StaticResource TitleText}" FontSize="24"/>
+              <Button Style="{StaticResource GlassButton}" HorizontalAlignment="Right" Padding="9,8" Click="CloseSettings_Click" AutomationProperties.Name="Close settings">
+                <p:LineIcon Kind="close" Size="13"/></Button>
             </Grid>
             <Frame x:Name="SettingsFrame" Grid.Row="1"/>
           </Grid>
@@ -67,4 +86,3 @@
     <Frame x:Name="SetupFrame" Grid.Row="1" Visibility="Collapsed" Background="{StaticResource SurfaceBrush}"/>
   </Grid>
 </Window>
-

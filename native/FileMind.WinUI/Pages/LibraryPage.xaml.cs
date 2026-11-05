@@ -393,7 +393,7 @@ public sealed partial class LibraryPage : Page
         {
             e.Handled = true;
             SearchBox.Text = "";
-            await GoAsync(() => { _tags.Add((text, text)); _similarTo = 0; _imagePath = null; _title = ""; });
+            await ApplySmartAsync(text);   // "4K vertical clips of a car": the details become Refine filters, "car" a search tag
         }
         else if (e.Key == VirtualKey.Back && SearchBox.Text.Length == 0 && _tags.Count > 0)
         {
@@ -606,10 +606,10 @@ public sealed partial class LibraryPage : Page
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         if (dot is not null) row.Children.Add(new Border { Width = 9, Height = 9, CornerRadius = new CornerRadius(4), Background = Brush(dot), VerticalAlignment = VerticalAlignment.Center });
-        var label = new TextBlock { Text = text, FontSize = compact ? 11.5 : 12, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        var label = new TextBlock { Text = text, FontSize = 12.5, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         Grid.SetColumn(label, 1); row.Children.Add(label);
-        if (count is { } n) { var ct = new TextBlock { Text = n.ToString("N0"), FontSize = 11, Opacity = 0.55, VerticalAlignment = VerticalAlignment.Center }; Grid.SetColumn(ct, 2); row.Children.Add(ct); }
-        var b = new ToggleButton { Content = row, IsChecked = on, Style = Ui.Style("GlassChip"), HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = compact ? new Thickness(9, 3, 9, 3) : new Thickness(9, 5, 9, 5), MinHeight = 0, CornerRadius = new CornerRadius(compact ? 12 : 14) };
+        if (count is { } n) { var ct = new TextBlock { Text = n.ToString("N0"), FontSize = 11.5, Foreground = Ui.Brush("GlassTextTertiaryBrush"), VerticalAlignment = VerticalAlignment.Center }; Grid.SetColumn(ct, 2); row.Children.Add(ct); }
+        var b = new ToggleButton { Content = row, IsChecked = on, Style = Ui.Style("GlassChip"), HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(10, 6, 10, 6), MinHeight = 30, CornerRadius = new CornerRadius(6) };
         b.Click += async (_, _) => await click();
         if (tooltip is not null) ToolTipService.SetToolTip(b, tooltip);
         return b;
@@ -728,7 +728,7 @@ public sealed partial class LibraryPage : Page
                 FolderList.Children.Add(line);
             }
 
-            QuickChips.ItemsSource = BuildQuickChips();
+            _ = FillRefineAsync();
 
             RebuildActiveChips();
         }
@@ -813,8 +813,6 @@ public sealed partial class LibraryPage : Page
     {
         _q = new FileQuery { Sort = _q.Sort };
         _tags.Clear(); _similarTo = 0; _imagePath = null; _title = "";
-        SmartStatus.Visibility = Visibility.Collapsed;
-        SmartBox.Text = "";
         SyncDetailFields();
     });
 
@@ -865,49 +863,83 @@ public sealed partial class LibraryPage : Page
     }
 
     // ------------------------------------------------------------------ refine
-    // The meaning of a file is searched with the search bar. These are the hard facts about it, one tap each.
-    // Only what makes sense for the chosen type is shown, and every chip reflects the live query.
-    private List<FrameworkElement> BuildQuickChips()
+    // The hard facts about files (quality, shape, length, size, date), grouped and counted over what is on screen.
+    // An option that would show nothing, or would not narrow anything, is not offered; a chosen one always stays.
+    private int _refineGen;
+
+    private bool FacetOn(string key)
     {
-        var list = new List<FrameworkElement>();
-        var video = _q.Kind is "all" or "video";
-        var visual = _q.Kind is "all" or "video" or "image";
-        var timed = _q.Kind is "all" or "video" or "audio";
-        void Q(string label, Func<bool> on, Action toggle) =>
-            list.Add(Chip(label, on(), () => GoAsync(() => { toggle(); _title = ""; SyncDetailFields(); }), null, null, null, true));
-        long Px4K = 3840L * 2160, PxHd = 1920L * 1080;
         var now = DateTimeOffset.UtcNow;
-        double Since(int days) => now.AddDays(-days).ToUnixTimeSeconds();
-        if (visual)
+        bool Ago(int d) => _q.After is { } a && Math.Abs(a - now.AddDays(-d).ToUnixTimeSeconds()) < 86400;
+        return key switch
         {
-            Q("4K+", () => _q.MinPixels == Px4K, () => _q.MinPixels = _q.MinPixels == Px4K ? null : Px4K);
-            Q("HD+", () => _q.MinPixels == PxHd, () => _q.MinPixels = _q.MinPixels == PxHd ? null : PxHd);
-            Q("Vertical", () => _q.Aspect == "portrait", () => _q.Aspect = _q.Aspect == "portrait" ? null : "portrait");
-            Q("Wide", () => _q.Aspect == "wide", () => _q.Aspect = _q.Aspect == "wide" ? null : "wide");
-            Q("Square", () => _q.Aspect == "square", () => _q.Aspect = _q.Aspect == "square" ? null : "square");
-        }
-        if (timed)
-        {
-            Q("Under 30 s", () => _q.MaxDuration == 30, () => _q.MaxDuration = _q.MaxDuration == 30 ? null : 30);
-            Q("Over 1 min", () => _q.MinDuration == 60, () => _q.MinDuration = _q.MinDuration == 60 ? null : 60);
-        }
-        if (video) Q("60 fps", () => _q.MinFps == 60, () => _q.MinFps = _q.MinFps == 60 ? null : 60);
-        Q("Over 20 MB", () => _q.MinSize == 20_000_000, () => _q.MinSize = _q.MinSize == 20_000_000 ? null : 20_000_000);
-        Q("This week", () => _q.After is { } a && Math.Abs(a - Since(7)) < 86400, () => _q.After = _q.After is { } a && Math.Abs(a - Since(7)) < 86400 ? null : Since(7));
-        Q("This month", () => _q.After is { } a && Math.Abs(a - Since(30)) < 86400, () => _q.After = _q.After is { } a && Math.Abs(a - Since(30)) < 86400 ? null : Since(30));
-        return list;
+            "4k" => _q.MinPixels == 3840L * 2160, "hd" => _q.MinPixels == 1920L * 1080,
+            "portrait" or "square" or "wide" => _q.Aspect == key,
+            "short" => _q.MaxDuration == 30, "long" => _q.MinDuration == 60, "60fps" => _q.MinFps == 50,
+            "big" => _q.MinSize == 20_000_000, "huge" => _q.MinSize == 500_000_000,
+            "today" => Ago(1), "week" => Ago(7), "month" => Ago(30), "year" => Ago(365), _ => false,
+        };
     }
 
-    // ------------------------------------------------------------------ find by details
-    private async void SmartBox_KeyDown(object sender, KeyRoutedEventArgs e)
+    private void ToggleFacet(string key)
     {
-        if (e.Key == VirtualKey.Enter && SmartBox.Text.Trim().Length > 0) { e.Handled = true; await ApplySmartAsync(SmartBox.Text); }
+        var on = FacetOn(key);
+        double Since(int d) => DateTimeOffset.UtcNow.AddDays(-d).ToUnixTimeSeconds();
+        switch (key)
+        {
+            case "4k": _q.MinPixels = on ? null : 3840L * 2160; break;
+            case "hd": _q.MinPixels = on ? null : 1920L * 1080; break;
+            case "portrait" or "square" or "wide": _q.Aspect = on ? null : key; break;
+            case "short": _q.MaxDuration = on ? null : 30; break;
+            case "long": _q.MinDuration = on ? null : 60; break;
+            case "60fps": _q.MinFps = on ? null : 50; break;
+            case "big": _q.MinSize = on ? null : 20_000_000; break;
+            case "huge": _q.MinSize = on ? null : 500_000_000; break;
+            case "today": _q.After = on ? null : Since(1); break;
+            case "week": _q.After = on ? null : Since(7); break;
+            case "month": _q.After = on ? null : Since(30); break;
+            case "year": _q.After = on ? null : Since(365); break;
+        }
+    }
+
+    private async Task FillRefineAsync()
+    {
+        var gen = ++_refineGen;
+        var scope = new Dictionary<string, object?>
+        {
+            ["kind"] = _q.Kind == "all" ? null : _q.Kind, ["root"] = _q.Root, ["project"] = _q.Project,
+            ["unassigned"] = _q.Unassigned ? true : null, ["color"] = _q.Color, ["near"] = _q.Near,
+            ["source"] = _q.Source, ["pattern"] = _q.Pattern, ["discover"] = _q.Discover,
+        };
+        IEnumerable<int>? ids = IsPlainBrowse ? null : _tiles.Select(t => t.Item.Id).ToList();
+        FacetResult r;
+        try { r = await Api.GetFacetsAsync(scope.Where(kv => kv.Value is not null).ToDictionary(kv => kv.Key, kv => kv.Value), ids); }
+        catch (Exception ex) { App.Log("facets", ex, null); return; }
+        if (gen != _refineGen) return;
+
+        RefineGroups.Children.Clear();
+        foreach (var group in r.Facets.GroupBy(f => f.Group))
+        {
+            var shown = group.Where(f => FacetOn(f.Key) || (f.Count > 0 && f.Count < r.Total)).ToList();
+            if (shown.Count == 0) continue;
+            var box = new StackPanel { Spacing = 6 };
+            box.Children.Add(new TextBlock { Text = group.Key, FontSize = 11.5, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
+            var wrap = new WrapPanel { Spacing = 6 };
+            foreach (var f in shown)
+            {
+                var key = f.Key;
+                wrap.Children.Add(Chip(f.Label, FacetOn(key), () => GoAsync(() => { ToggleFacet(key); _title = ""; SyncDetailFields(); }),
+                    null, f.Count, $"{f.Hint} · {f.Count:N0} of {r.Total:N0}"));
+            }
+            box.Children.Add(wrap);
+            RefineGroups.Children.Add(box);
+        }
+        RefineEmpty.Visibility = RefineGroups.Children.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async Task ApplySmartAsync(string input)
     {
         var r = SmartFilter.Parse(input);
-        SmartBox.Text = input;
         await GoAsync(() =>
         {
             var s = r.Query;
@@ -923,8 +955,6 @@ public sealed partial class LibraryPage : Page
             _title = "";
             SyncDetailFields();
         });
-        SmartStatus.Text = r.Understood.Count > 0 ? "Understood: " + string.Join(", ", r.Understood) + (r.Text.Length > 0 ? $" · searching “{r.Text}”" : "") : "No exact details found; searching by meaning.";
-        SmartStatus.Visibility = Visibility.Visible;
     }
 
     private void SyncDetailFields()

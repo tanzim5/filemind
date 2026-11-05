@@ -62,6 +62,32 @@ public sealed class RootFolder
     [JsonPropertyName("errors")] public int Errors { get; set; }
 }
 
+/// <summary>One Refine option and how many files on screen it keeps.</summary>
+public sealed class Facet
+{
+    [JsonPropertyName("group")] public string Group { get; set; } = "";
+    [JsonPropertyName("key")] public string Key { get; set; } = "";
+    [JsonPropertyName("label")] public string Label { get; set; } = "";
+    [JsonPropertyName("hint")] public string Hint { get; set; } = "";
+    [JsonPropertyName("count")] public int Count { get; set; }
+}
+
+public sealed class FacetResult
+{
+    [JsonPropertyName("total")] public int Total { get; set; }
+    [JsonPropertyName("facets")] public List<Facet> Facets { get; set; } = [];
+}
+
+/// <summary>The on-device voice model (Whisper): whether it is downloaded, and download progress.</summary>
+public sealed class VoiceModelState
+{
+    [JsonPropertyName("ready")] public bool Ready { get; set; }
+    [JsonPropertyName("running")] public bool Running { get; set; }
+    [JsonPropertyName("done")] public long Done { get; set; }
+    [JsonPropertyName("total")] public long Total { get; set; }
+    [JsonPropertyName("error")] public string Error { get; set; } = "";
+}
+
 public sealed class IndexState
 {
     [JsonPropertyName("running")] public bool Running { get; set; }
@@ -72,6 +98,9 @@ public sealed class IndexState
     [JsonPropertyName("current")] public string Current { get; set; } = "";
     [JsonPropertyName("message")] public string Message { get; set; } = "";
     [JsonPropertyName("device")] public string Device { get; set; } = "";
+    /// <summary>Seconds per file and seconds left, estimated by the engine while it reads files.</summary>
+    [JsonPropertyName("rate")] public double Rate { get; set; }
+    [JsonPropertyName("eta")] public int Eta { get; set; }
 }
 
 public sealed class ModelStatus

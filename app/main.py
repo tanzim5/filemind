@@ -285,6 +285,51 @@ def files(root: int | None = None, kind: str | None = None, project: int | None 
     return {"total": total, "files": out}
 
 
+_DETAIL_KEYS = ("after", "before", "min_size", "max_size", "min_width", "min_height", "min_pixels",
+                "min_duration", "max_duration", "min_fps", "aspect", "codec")
+_SCOPE_KEYS = ("root", "kind", "project", "unassigned", "color", "near", "source", "pattern", "discover")
+
+
+@app.post("/api/facets")
+def facets(body: dict = Body(...)):
+    """Counts for every Refine option over what is on screen: the browsed scope (without the detail filters, so the
+    other choices in a group stay visible) or, when searching, the ids of the current results. Options that match
+    nothing or everything are left out by the client, so every chip that shows actually narrows the view."""
+    ids = body.get("ids")
+    if ids is None:
+        ids = files(**{k: body[k] for k in _SCOPE_KEYS if body.get(k) is not None}, ids_only=True)["ids"]
+    ids = [int(i) for i in ids][:200_000]
+    total = len(ids)
+    if not total:
+        return {"total": 0, "facets": []}
+    c = db.conn()
+    rows = []
+    for start in range(0, total, 900):
+        chunk = ids[start:start + 900]
+        rows += c.execute(f"SELECT kind,width,height,duration,fps,size,mtime FROM files WHERE id IN ({','.join('?' * len(chunk))})", chunk).fetchall()
+    now = time.time()
+    day = 86400
+    tests = [
+        ("Quality", "4k", "4K", "At least 3840 × 2160", lambda r: (r["width"] or 0) * (r["height"] or 0) >= 3840 * 2160),
+        ("Quality", "hd", "HD or better", "At least 1920 × 1080", lambda r: (r["width"] or 0) * (r["height"] or 0) >= 1920 * 1080),
+        ("Shape", "portrait", "Vertical", "Taller than wide", lambda r: r["width"] and r["height"] and r["width"] < r["height"]),
+        ("Shape", "square", "Square", "About as wide as tall", lambda r: r["width"] and r["height"] and r["width"] * 1.1 >= r["height"] and r["height"] * 1.1 >= r["width"]),
+        ("Shape", "wide", "Widescreen", "16:9 or wider", lambda r: r["width"] and r["height"] and r["width"] >= r["height"] * 1.7),
+        ("Length", "short", "Under 30 s", "Clips and short sounds", lambda r: r["duration"] and r["duration"] <= 30),
+        ("Length", "long", "Over 1 min", "Longer videos and audio", lambda r: r["duration"] and r["duration"] >= 60),
+        ("Motion", "60fps", "60 fps", "Smooth, high frame rate", lambda r: (r["fps"] or 0) >= 50),
+        ("File size", "big", "Over 20 MB", "Large files", lambda r: (r["size"] or 0) >= 20_000_000),
+        ("File size", "huge", "Over 500 MB", "Very large files", lambda r: (r["size"] or 0) >= 500_000_000),
+        ("Date", "today", "Today", "Changed in the last day", lambda r: (r["mtime"] or 0) >= now - day),
+        ("Date", "week", "This week", "Last 7 days", lambda r: (r["mtime"] or 0) >= now - 7 * day),
+        ("Date", "month", "This month", "Last 30 days", lambda r: (r["mtime"] or 0) >= now - 30 * day),
+        ("Date", "year", "This year", "Last 365 days", lambda r: (r["mtime"] or 0) >= now - 365 * day),
+    ]
+    out = [{"group": g, "key": k, "label": lab, "hint": hint, "count": sum(1 for r in rows if t(r))}
+           for g, k, lab, hint, t in tests]
+    return {"total": total, "facets": out}
+
+
 def _smart_space_ids(pid: int) -> set[int] | None:
     row = db.conn().execute("SELECT spec,query_vec FROM smart_spaces WHERE project_id=?", (pid,)).fetchone()
     if row is None:
@@ -630,6 +675,16 @@ async def voice(file: UploadFile = File(...)):
     sims = tags_mod._vecs() @ v
     hint = [tags_mod.TAGS[i] for i in np.argsort(-sims)[:3]]
     return {"id": vid, "secs": secs, "hint": hint}
+
+
+@app.get("/api/voice/model")
+def voice_model():
+    return transcribe.dictation_status()
+
+
+@app.post("/api/voice/model")
+def voice_model_prepare():
+    return transcribe.prepare_dictation()
 
 
 @app.post("/api/voice/text")

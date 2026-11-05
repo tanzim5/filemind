@@ -13,20 +13,17 @@ public static class ThemeEngine
 {
     private static Color C(string hex) => Windows.UI.Color.FromArgb(255, Convert.ToByte(hex[1..3], 16), Convert.ToByte(hex[3..5], 16), Convert.ToByte(hex[5..7], 16));
 
+    // Four looks, each tuned rather than many variations: a deep blue-black, a neutral graphite, true black for OLED
+    // screens, and a warm light theme. Older theme keys fall back to the first one.
     public static readonly Palette[] All =
     [
-        new("ink", "Ink", true, C("#141418"), C("#0E0E11")),
-        new("night", "Night", true, C("#14182A"), C("#0F1220")),
-        new("graphite", "Graphite", true, C("#24262B"), C("#1A1C20")),
-        new("forest", "Forest", true, C("#13211B"), C("#0E1814")),
-        new("amoled", "AMOLED black", true, C("#000000"), C("#000000")),
-        new("slate", "Slate", true, C("#1B222B"), C("#12171E")),
-        new("paper", "Paper", false, C("#ECE8E0"), C("#F8F6F1")),
-        new("mist", "Mist", false, C("#E4E9F2"), C("#F4F6FB")),
-        new("sage", "Sage", false, C("#E3EBE0"), C("#F3F7F1")),
+        new("ink", "Midnight", true, C("#10111A"), C("#0C0D14")),
+        new("graphite", "Graphite", true, C("#1E2024"), C("#17181B")),
+        new("amoled", "Black", true, C("#000000"), C("#000000")),
+        new("paper", "Light", false, C("#ECEAE6"), C("#F7F6F3")),
     ];
 
-    public static readonly string[] Accents = ["#FF5A1F", "#EF4444", "#F59E0B", "#22A559", "#14B8A6", "#3B82F6", "#8B5CF6", "#EC4899"];
+    public static readonly string[] Accents = ["#FF5A1F", "#F43F5E", "#F59E0B", "#22A559", "#3B82F6", "#8B5CF6"];
 
     public static ElementTheme Element() => Find(AppRuntime.Current.Settings.Theme).Dark ? ElementTheme.Dark : ElementTheme.Light;
 
@@ -48,16 +45,21 @@ public static class ThemeEngine
 
     private static Color Lift(Color c, int d) => Windows.UI.Color.FromArgb(255, (byte)Math.Clamp(c.R + d, 0, 255), (byte)Math.Clamp(c.G + d, 0, 255), (byte)Math.Clamp(c.B + d, 0, 255));
 
+    // One transparency setting (0 = solid, 1 = most glass). The floors keep text readable over any wallpaper:
+    // the page never drops below 78 % opacity, the sidebar below 40 %.
+    public static double RailOpacity(AppSettings st) => 1 - 0.60 * Math.Clamp(st.Transparency, 0, 1);
+    public static double PanelOpacity(AppSettings st) => 1 - 0.22 * Math.Clamp(st.Transparency, 0, 1);
+
     public static void Apply(AppSettings st, FrameworkElement root)
     {
         var p = Find(st.Theme);
         root.RequestedTheme = p.Dark ? ElementTheme.Dark : ElementTheme.Light;
         byte W = p.Dark ? (byte)255 : (byte)0;           // glass veils are white on dark, black on light
         Color A(byte a) => Windows.UI.Color.FromArgb(a, W, W, W);
-        Set("GlassFillBrush", A(0x14)); Set("GlassFillStrongBrush", A(0x24)); Set("GlassFillHoverBrush", A(0x1F));
+        Set("GlassFillBrush", A(0x1A)); Set("GlassFillStrongBrush", A(0x2A)); Set("GlassFillHoverBrush", A(0x24));
         Set("GlassHighlightBrush", A(0x26)); Set("GlassHoverSoftBrush", A(0x14));
-        Set("GlassTextSecondaryBrush", p.Dark ? Windows.UI.Color.FromArgb(0xB3, 255, 255, 255) : Windows.UI.Color.FromArgb(0xB8, 20, 20, 24));
-        Set("GlassTextTertiaryBrush", p.Dark ? Windows.UI.Color.FromArgb(0x80, 255, 255, 255) : Windows.UI.Color.FromArgb(0x8C, 20, 20, 24));
+        Set("GlassTextSecondaryBrush", p.Dark ? Windows.UI.Color.FromArgb(0xD1, 255, 255, 255) : Windows.UI.Color.FromArgb(0xD6, 20, 20, 24));
+        Set("GlassTextTertiaryBrush", p.Dark ? Windows.UI.Color.FromArgb(0xA3, 255, 255, 255) : Windows.UI.Color.FromArgb(0xA8, 20, 20, 24));
 
         if (Application.Current.Resources.TryGetValue("GlassStrokeBrush", out var sv) && sv is LinearGradientBrush sg && sg.GradientStops.Count == 3)
         {
@@ -76,8 +78,14 @@ public static class ThemeEngine
         Set("AccentTintBrush", Windows.UI.Color.FromArgb(0x4D, ac.R, ac.G, ac.B));
         Set("AccentOnFillBrush", Windows.UI.Color.FromArgb(0x66, ac.R, ac.G, ac.B));
         Set("AccentOnStrokeBrush", Windows.UI.Color.FromArgb(0x99, ac.R, ac.G, ac.B));
+        Set("AccentBrush", ac);
+        if (Application.Current.Resources.TryGetValue("AuraBrush", out var av) && av is RadialGradientBrush aura && aura.GradientStops.Count == 2)
+        {
+            aura.GradientStops[0].Color = Windows.UI.Color.FromArgb(p.Key == "amoled" ? (byte)0x14 : p.Dark ? (byte)0x26 : (byte)0x1C, ac.R, ac.G, ac.B);
+            aura.GradientStops[1].Color = Windows.UI.Color.FromArgb(0, ac.R, ac.G, ac.B);
+        }
 
-        var fade = Windows.UI.Color.FromArgb((byte)(Math.Clamp(st.PanelGlass, 0.05, 1) * 255), p.Panel.R, p.Panel.G, p.Panel.B);
+        var fade = Windows.UI.Color.FromArgb((byte)(PanelOpacity(st) * 255), p.Panel.R, p.Panel.G, p.Panel.B);
         Fade("FadeTopBrush", fade); Fade("FadeBottomBrush", fade);
     }
 }

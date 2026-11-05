@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml.Automation;
 using System.Diagnostics;
 using FileMind.Core;
 using Microsoft.UI;
@@ -24,8 +25,7 @@ public sealed partial class SettingsPage : Page
     {
         InitializeComponent();
         Loaded += async (_, _) => await FillAsync();
-        RailSlider.Value = St.RailGlass * 100;
-        PanelSlider.Value = St.PanelGlass * 100;
+        GlassSlider.Value = St.Transparency * 100;
         SizeSlider.Value = St.TileSize;
         GapSlider.Value = St.TileGap;
         NamesSwitch.IsOn = St.ShowNames;
@@ -47,25 +47,47 @@ public sealed partial class SettingsPage : Page
     }
 
     // ---- Appearance ----
+    // Each theme is a small picture of the window (sidebar, page, accent line), so you choose by look, not by name.
     private void BuildThemes()
     {
         ThemeChips.Children.Clear();
+        var accent = (SolidColorBrush)Ui.Brush("AccentBrush");
         foreach (var p in ThemeEngine.All)
         {
-            var dot = Ellipse2(p);
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            row.Children.Add(dot);
-            row.Children.Add(new TextBlock { Text = p.Name, FontSize = 12.5 });
-            var chip = new ToggleButton { Style = Ui.Style("GlassChip"), Content = row, IsChecked = p.Key == St.Theme, Padding = new Thickness(11, 6, 12, 6), CornerRadius = new CornerRadius(6) };
-            chip.Click += (_, _) => { St.Theme = p.Key; Save(); App.Window?.ApplyGlass(); BuildThemes(); };
-            ThemeChips.Children.Add(chip);
+            var selected = p.Key == St.Theme;
+            var ink = p.Dark ? Windows.UI.Color.FromArgb(0x55, 255, 255, 255) : Windows.UI.Color.FromArgb(0x40, 0, 0, 0);
+            var pic = new Grid { Width = 104, Height = 64, ColumnSpacing = 0 };
+            pic.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
+            pic.ColumnDefinitions.Add(new ColumnDefinition());
+            var rail = new StackPanel { Background = new SolidColorBrush(p.Rail), Padding = new Thickness(6, 8, 6, 0), Spacing = 5 };
+            rail.Children.Add(new Border { Height = 4, CornerRadius = new CornerRadius(2), Background = accent });
+            for (var i = 0; i < 3; i++) rail.Children.Add(new Border { Height = 4, CornerRadius = new CornerRadius(2), Background = new SolidColorBrush(ink) });
+            var page = new Grid { Background = new SolidColorBrush(p.Panel), Padding = new Thickness(7) };
+            var tiles = new Grid { ColumnSpacing = 4, RowSpacing = 4 };
+            tiles.ColumnDefinitions.Add(new ColumnDefinition()); tiles.ColumnDefinitions.Add(new ColumnDefinition());
+            tiles.RowDefinitions.Add(new RowDefinition()); tiles.RowDefinitions.Add(new RowDefinition());
+            for (var i = 0; i < 4; i++)
+            {
+                var t = new Border { CornerRadius = new CornerRadius(2), Background = new SolidColorBrush(ink) };
+                Grid.SetColumn(t, i % 2); Grid.SetRow(t, i / 2); tiles.Children.Add(t);
+            }
+            page.Children.Add(tiles);
+            Grid.SetColumn(page, 1);
+            pic.Children.Add(rail); pic.Children.Add(page);
+            var frame = new Border { CornerRadius = new CornerRadius(6), Child = pic,
+                BorderThickness = new Thickness(selected ? 2 : 1),
+                BorderBrush = selected ? accent : Ui.Brush("GlassStrokeBrush") };
+            var col = new StackPanel { Spacing = 6 };
+            col.Children.Add(frame);
+            col.Children.Add(new TextBlock { Text = p.Name, FontSize = 12.5, HorizontalAlignment = HorizontalAlignment.Center,
+                FontWeight = selected ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
+                Foreground = selected ? null : Ui.Brush("GlassTextSecondaryBrush") });
+            var btn = new Button { Content = col, Padding = new Thickness(0), Background = new SolidColorBrush(Colors.Transparent), BorderThickness = new Thickness(0) };
+            AutomationProperties.SetName(btn, p.Name + " theme");
+            btn.Click += (_, _) => { St.Theme = p.Key; Save(); App.Window?.ApplyGlass(); BuildThemes(); BuildAccents(); };
+            ThemeChips.Children.Add(btn);
         }
     }
-
-    private static Microsoft.UI.Xaml.Shapes.Ellipse Ellipse2(Palette p) => new()
-    {
-        Width = 16, Height = 16, Fill = new SolidColorBrush(p.Panel), Stroke = new SolidColorBrush(p.Dark ? Windows.UI.Color.FromArgb(0x66, 255, 255, 255) : Windows.UI.Color.FromArgb(0x66, 0, 0, 0)), StrokeThickness = 1,
-    };
 
     private void BuildAccents()
     {
@@ -74,7 +96,7 @@ public sealed partial class SettingsPage : Page
         {
             var c = Windows.UI.Color.FromArgb(255, Convert.ToByte(hex[1..3], 16), Convert.ToByte(hex[3..5], 16), Convert.ToByte(hex[5..7], 16));
             var selected = string.Equals(hex, St.Accent, StringComparison.OrdinalIgnoreCase);
-            var b = new Button { Width = 30, Height = 30, Padding = new Thickness(0), CornerRadius = new CornerRadius(5), Background = new SolidColorBrush(c),
+            var b = new Button { Width = 28, Height = 28, Padding = new Thickness(0), CornerRadius = new CornerRadius(14), Background = new SolidColorBrush(c),
                 BorderBrush = new SolidColorBrush(selected ? (ThemeEngine.Find(St.Theme).Dark ? Colors.White : Windows.UI.Color.FromArgb(255, 24, 24, 28)) : Colors.Transparent), BorderThickness = new Thickness(2.5) };
             ToolTipService.SetToolTip(b, hex);
             b.Click += (_, _) => { St.Accent = hex; Save(); App.Window?.ApplyGlass(); BuildAccents(); };
@@ -85,8 +107,8 @@ public sealed partial class SettingsPage : Page
     private void Glass_Changed(object sender, RangeBaseValueChangedEventArgs e)
     {
         if (!_ready) return;
-        St.RailGlass = RailSlider.Value / 100;
-        St.PanelGlass = PanelSlider.Value / 100;
+        St.Transparency = GlassSlider.Value / 100;
+        GlassValue.Text = $"{GlassSlider.Value:0} %";
         Save();
         App.Window?.ApplyGlass();
     }
@@ -169,12 +191,12 @@ public sealed partial class SettingsPage : Page
     private void Reset_Click(object sender, RoutedEventArgs e)
     {
         var d = new AppSettings();
-        St.Theme = d.Theme; St.Accent = d.Accent; St.RailGlass = d.RailGlass; St.PanelGlass = d.PanelGlass;
+        St.Theme = d.Theme; St.Accent = d.Accent; St.Transparency = d.Transparency;
         St.Layout = d.Layout; St.TileSize = d.TileSize; St.TileGap = d.TileGap; St.ShowNames = d.ShowNames; St.Volume = d.Volume;
         St.MenuOrder = d.MenuOrder; St.MenuHidden = d.MenuHidden; St.SectionOrder = d.SectionOrder; St.SectionHidden = d.SectionHidden;
         Save();
         _ready = false;
-        RailSlider.Value = St.RailGlass * 100; PanelSlider.Value = St.PanelGlass * 100;
+        GlassSlider.Value = St.Transparency * 100;
         SizeSlider.Value = St.TileSize; GapSlider.Value = St.TileGap; NamesSwitch.IsOn = St.ShowNames; VolumeSlider.Value = St.Volume * 100;
         BuildAll(); _ready = true; Labels();
         App.Window?.ApplyGlass(); LibraryPage.Current?.ApplyLook(); LibraryPage.Current?.ApplySections(); ViewerPage.SetDefaultVolume(St.Volume);

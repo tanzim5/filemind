@@ -104,6 +104,31 @@ def dictation_ready():
     return all((DICTATION_DIR / name).exists() for name in FILES)
 
 
+# Download progress for the voice model, so Settings can fetch it ahead of the first voice search.
+dictation_state = {"running": False, "done": 0, "total": 487_000_000, "error": ""}
+
+
+def dictation_status():
+    return {**dictation_state, "ready": dictation_ready()}
+
+
+def prepare_dictation():
+    """Downloads the voice model in the background; safe to call repeatedly."""
+    if dictation_ready() or dictation_state["running"]:
+        return dictation_status()
+    dictation_state.update(running=True, done=0, error="")
+
+    def run():
+        try:
+            _ensure_dictation()
+        except Exception as exc:  # network trouble is reported, never raised into the server
+            dictation_state["error"] = str(exc)
+        finally:
+            dictation_state["running"] = False
+    threading.Thread(target=run, daemon=True).start()
+    return dictation_status()
+
+
 def _ensure_dictation():
     DICTATION_DIR.mkdir(parents=True, exist_ok=True)
     with requests.Session() as session:
@@ -117,6 +142,7 @@ def _ensure_dictation():
                 r.raise_for_status()
                 with part.open("wb") as dest:
                     for chunk in r.iter_content(1 << 20):
+                        dictation_state["done"] += len(chunk)
                         dest.write(chunk)
             part.replace(out)
 

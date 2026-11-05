@@ -58,6 +58,17 @@ public sealed class ApiClient(Uri baseUri) : IDisposable
     public Task<TranscriptState> GetTranscriptAsync(int id, CancellationToken ct = default) => GetAsync<TranscriptState>($"/api/transcript/{id}", ct);
     public Task<TranscriptState> StartTranscriptAsync(int id, CancellationToken ct = default) => PostAsync<TranscriptState>($"/api/transcript/{id}", null, ct);
 
+    /// <summary>Counts for the Refine options: over a browsed scope (kind, root, source, ...) or the given result ids.</summary>
+    public Task<FacetResult> GetFacetsAsync(Dictionary<string, object?> scope, IEnumerable<int>? ids, CancellationToken ct = default)
+    {
+        var body = new Dictionary<string, object?>(scope);
+        if (ids is not null) body["ids"] = ids.ToList();
+        return PostAsync<FacetResult>("/api/facets", body, ct);
+    }
+
+    public Task<VoiceModelState> GetVoiceModelAsync(CancellationToken ct = default) => GetAsync<VoiceModelState>("/api/voice/model", ct);
+    public Task<VoiceModelState> PrepareVoiceModelAsync(CancellationToken ct = default) => PostAsync<VoiceModelState>("/api/voice/model", null, ct);
+
     /// <summary>Speech to text on the engine (local Whisper): used when Windows speech recognition is unavailable.</summary>
     public async Task<string> VoiceToTextAsync(string audioPath, CancellationToken ct = default)
     {

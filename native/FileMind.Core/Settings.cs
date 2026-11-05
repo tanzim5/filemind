@@ -19,6 +19,7 @@ public sealed class AppSettings
     /// <summary>How see-through the sidebar glass is (0 clear, 1 solid) and how solid the page panel is.</summary>
     public double RailGlass { get; set; } = 0.35;
     public double PanelGlass { get; set; } = 0.9;
+    public double Transparency { get; set; } = 0.6;   // 0 solid … 1 most glass; replaces RailGlass/PanelGlass
     /// <summary>Colour theme key (see ThemeEngine) and the accent colour as #RRGGBB.</summary>
     public string Theme { get; set; } = "ink";
     public string Accent { get; set; } = "#FF5A1F";

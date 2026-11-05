@@ -68,6 +68,12 @@
   <SolidColorBrush x:Key="OverlayBrush" Color="#F01D1D22"/>
   <SolidColorBrush x:Key="DividerBrush" Color="#1FFFFFFF"/>
   <SolidColorBrush x:Key="ScrimBrush" Color="#66000000"/>
+  <!-- A soft glow of the accent colour in the top corner of the page panel (recoloured by ThemeEngine). -->
+  <RadialGradientBrush x:Key="AuraBrush" Center="0.92,-0.05" GradientOrigin="0.92,-0.05" RadiusX="0.75" RadiusY="0.7">
+    <GradientStop Color="#24FF5A1F" Offset="0"/>
+    <GradientStop Color="#00FF5A1F" Offset="1"/>
+  </RadialGradientBrush>
+  <SolidColorBrush x:Key="AccentBrush" Color="#FFFF5A1F"/>
 
   <!-- Glass button: a frosted capsule that brightens under the pointer. -->
   <Style x:Key="GlassButton" TargetType="Button">
@@ -138,10 +144,9 @@
   </Style>
 
   <Style x:Key="SectionLabel" TargetType="TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource GlassTextTertiaryBrush}"/>
-    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="Foreground" Value="{StaticResource GlassTextSecondaryBrush}"/>
+    <Setter Property="FontSize" Value="12.5"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
-    <Setter Property="CharacterSpacing" Value="80"/>
   </Style>
 
   <!-- Sidebar and page chrome become transparent so the acrylic window shows through. -->
@@ -154,29 +159,36 @@
   <!-- Left-rail destination: a quiet row that lights up when selected. -->
   <Style x:Key="RailItem" TargetType="ToggleButton">
     <Setter Property="HorizontalAlignment" Value="Stretch"/>
-    <Setter Property="HorizontalContentAlignment" Value="Left"/>
-    <Setter Property="Padding" Value="12,9"/>
-    <Setter Property="CornerRadius" Value="4"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="Padding" Value="8,6"/>
+    <Setter Property="CornerRadius" Value="6"/>
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ToggleButton">
           <Grid>
             <Border x:Name="On" Background="{StaticResource GlassHighlightBrush}" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
             <Border x:Name="Hl" Background="{StaticResource GlassHoverSoftBrush}" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
-            <ContentPresenter Padding="{TemplateBinding Padding}" HorizontalContentAlignment="Left" Foreground="{TemplateBinding Foreground}"/>
+            <Border x:Name="Bar" Width="3" Height="16" CornerRadius="1.5" HorizontalAlignment="Left" Margin="-1,0,0,0" Background="{StaticResource AccentBrush}" Opacity="0"/>
+            <ContentPresenter Padding="{TemplateBinding Padding}" HorizontalContentAlignment="Stretch" Foreground="{TemplateBinding Foreground}"/>
             <VisualStateManager.VisualStateGroups>
               <VisualStateGroup x:Name="CommonStates">
                 <VisualState x:Name="Normal"/>
                 <VisualState x:Name="PointerOver"><VisualState.Setters><Setter Target="Hl.Opacity" Value="1"/></VisualState.Setters></VisualState>
                 <VisualState x:Name="Pressed"><VisualState.Setters><Setter Target="Hl.Opacity" Value="1"/></VisualState.Setters></VisualState>
-                <VisualState x:Name="Checked"><VisualState.Setters><Setter Target="On.Opacity" Value="1"/></VisualState.Setters></VisualState>
-                <VisualState x:Name="CheckedPointerOver"><VisualState.Setters><Setter Target="On.Opacity" Value="1"/></VisualState.Setters></VisualState>
-                <VisualState x:Name="CheckedPressed"><VisualState.Setters><Setter Target="On.Opacity" Value="1"/></VisualState.Setters></VisualState>
+                <VisualState x:Name="Checked"><VisualState.Setters><Setter Target="On.Opacity" Value="1"/><Setter Target="Bar.Opacity" Value="1"/></VisualState.Setters></VisualState>
+                <VisualState x:Name="CheckedPointerOver"><VisualState.Setters><Setter Target="On.Opacity" Value="1"/><Setter Target="Bar.Opacity" Value="1"/></VisualState.Setters></VisualState>
+                <VisualState x:Name="CheckedPressed"><VisualState.Setters><Setter Target="On.Opacity" Value="1"/><Setter Target="Bar.Opacity" Value="1"/></VisualState.Setters></VisualState>
               </VisualStateGroup>
             </VisualStateManager.VisualStateGroups>
           </Grid>
         </ControlTemplate>
       </Setter.Value>
     </Setter>
+  </Style>
+
+  <!-- A settings row: icon, title and hint on the left, the control on the right. -->
+  <Style x:Key="SettingRow" TargetType="Grid">
+    <Setter Property="Padding" Value="14,11"/>
+    <Setter Property="ColumnSpacing" Value="14"/>
   </Style>
 </ResourceDictionary>
