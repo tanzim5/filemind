@@ -79,6 +79,10 @@ public sealed class ModelStatus
     [JsonPropertyName("ready")] public bool Ready { get; set; }
     [JsonPropertyName("gpu")] public bool Gpu { get; set; }
     [JsonPropertyName("device")] public string? Device { get; set; }
+    /// <summary>"cuda" or "cpu": which PyTorch this engine downloads/uses, and why it chose it.</summary>
+    [JsonPropertyName("accel")] public string? Accel { get; set; }
+    [JsonPropertyName("accel_reason")] public string? AccelReason { get; set; }
+    [JsonPropertyName("runtime_bytes")] public long RuntimeBytes { get; set; }
     [JsonPropertyName("running")] public bool Running { get; set; }
     [JsonPropertyName("done")] public long Done { get; set; }
     [JsonPropertyName("total")] public long Total { get; set; }

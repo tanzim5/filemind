@@ -20,7 +20,7 @@ dotnet build native/FileMind.WinUI -c Debug -p:Platform=x64
 - CPU indexing stall fix (140 image tokens, 4 video frames, batch 1, rate/ETA, query LRU cache) — needs a
   real CPU-only run to confirm it no longer stalls.
 
-## Task 1 — native app uses the bundled engine
+## Task 1 — native app uses the bundled engine  ✅ DONE (EngineLocator.FindBundled, FILEMIND_ACCEL from Settings)
 Files: `native/FileMind.Core/EngineHost.cs` (EngineLocator), `native/FileMind.WinUI/Services/AppRuntime.cs`.
 - Add `EngineLocator.FindBundled(string appDir)`: returns a launch for `Path.Combine(appDir, "engine", "FileMind.exe")`
   if it exists, with env `FILEMIND_DATA`, `FILEMIND_MODELS`, `FILEMIND_RUNTIME` from `AppPaths` (same as
@@ -39,7 +39,18 @@ Files: `native/FileMind.WinUI/Pages/SetupPage.xaml(.cs)` (edition UI ~lines 51�
 - Point `engine-manifest.json` at v0.6.0 or remove the editions if nothing uses them anymore.
 - Bump `<Version>` in `FileMind.WinUI.csproj` to 0.6.0.
 
-## Task 3 — Spotlight quick search window
+## Task 3 — Spotlight quick search window  ✅ DONE, tested (QuickSearch/QuickSearchWindow.cs, Services/NativeHost.cs, Services/SpeechInput.cs)
+Shipped: Ctrl+Shift+Space (Ctrl+Alt+Space is taken by the Claude desktop app; falls back automatically), tray icon with
+Open/Quick search/Quit, closing the main window keeps it in the tray, Alt+V talk, Windows live speech recognition with
+local Whisper-small fallback via POST /api/voice/text. Search ~400 ms on CPU.
+Follow-ups:
+- 3a. Settings UI to change the shortcut (App.SetHotkey) and toggle KeepRunning.
+- 3b. Voice fallback stops after 8 s or a second Alt+V; add silence detection (AudioGraph levels) and pre-download
+  Whisper during setup so the first voice search isn't a 460 MB wait.
+- 3c. In-process streaming Whisper (Whisper.net / whisper.cpp, GPU via Vulkan/CUDA) for live words with no privacy toggle.
+- 3d. Space = preview, drag a result out, recent searches when the box is empty.
+
+## (original spec)
 New files: `native/FileMind.WinUI/QuickSearch/QuickSearchWindow.xaml(.cs)`, `Services/GlobalHotkey.cs`.
 - `GlobalHotkey`: Win32 `RegisterHotKey` on a message-only HWND (subclass via `SetWindowSubclass` or a hidden
   window); default **Ctrl+Alt+Space**, configurable in Settings; show a clear error if the combo is taken.

@@ -37,7 +37,18 @@ public sealed partial class MainWindow : Window
             else if (pp.IsXButton2Pressed) { e.Handled = true; _ = GoForwardAnyAsync(); }
         }), true);
         ContentFrame.Navigated += (_, e) => SyncRail(e.SourcePageType);
-        Closed += (_, _) => { SavePlacement(); AppRuntime.Current.Shutdown(); };
+        Closed += (_, e) =>
+        {
+            SavePlacement();
+            // Keep running in the notification area so Ctrl+Alt+Space still works; the tray menu quits for real.
+            if (!App.Quitting && AppRuntime.Current.Settings.KeepRunning && App.Launcher is not null)
+            {
+                e.Handled = true;
+                AppWindow.Hide();
+                return;
+            }
+            App.Quit();
+        };
         Root.Loaded += async (_, _) => await BootAsync();
     }
 

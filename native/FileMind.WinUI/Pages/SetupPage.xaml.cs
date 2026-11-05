@@ -11,6 +11,7 @@ public sealed partial class SetupPage : Page
     private TaskCompletionSource<string>? _choice;
     private TaskCompletionSource<bool>? _retry;
     private bool _forceCpu;
+    private string? _lastAccel;
 
     public SetupPage() => InitializeComponent();
 
@@ -113,12 +114,15 @@ public sealed partial class SetupPage : Page
 
             var what = m.Stage switch
             {
-                "verify" => "Checking the GPU libraries…",
-                "unpack" => "Unpacking the GPU libraries…",
+                "verify" => "Checking the AI engine…",
+                "unpack" => "Unpacking the AI engine…",
                 _ => m.File is { Length: > 0 } ? $"Downloading {m.File}" : "Downloading the AI model…",
             };
-            Headline.Text = "Downloading the AI model";
-            Detail.Text = "This happens once. After it, File Mind works fully offline.";
+            _lastAccel = m.Accel;
+            Headline.Text = "Getting File Mind ready";
+            var runsOn = m.Accel == "cuda" ? "Runs on your NVIDIA graphics card." :
+                         m.Accel == "cpu" ? $"Runs on the processor ({m.AccelReason})." : "";
+            Detail.Text = $"{runsOn} This download happens once; after it, File Mind works fully offline.".Trim();
             ShowBusy(Headline.Text, what);
             SetBar(m.Done, m.Total);
             if (m.Total > 0) BusyText.Text = $"{what}\n{Mb(m.Done)} of {Mb(m.Total)}";
@@ -132,8 +136,9 @@ public sealed partial class SetupPage : Page
         Detail.Text = "";
         ChoicePanel.Visibility = BusyPanel.Visibility = Visibility.Collapsed;
         ErrorText.Text = message;
-        UseCpuButton.Visibility = AppRuntime.Current.Edition == EngineManifest.Nvidia && AppRuntime.Current.SourceLabel is null
-            ? Visibility.Visible : Visibility.Collapsed;
+        var rt = AppRuntime.Current;
+        UseCpuButton.Visibility = rt.SourceLabel is null && rt.Settings.Engine != "cpu"
+            && (rt.Edition == EngineManifest.Nvidia || _lastAccel == "cuda") ? Visibility.Visible : Visibility.Collapsed;
         ErrorPanel.Visibility = Visibility.Visible;
         _retry = new TaskCompletionSource<bool>();
         await _retry.Task;

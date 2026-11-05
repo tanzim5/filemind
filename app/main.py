@@ -1,3 +1,4 @@
+import asyncio
 import os
 import json
 import re
@@ -629,6 +630,25 @@ async def voice(file: UploadFile = File(...)):
     sims = tags_mod._vecs() @ v
     hint = [tags_mod.TAGS[i] for i in np.argsort(-sims)[:3]]
     return {"id": vid, "secs": secs, "hint": hint}
+
+
+@app.post("/api/voice/text")
+async def voice_text(file: UploadFile = File(...)):
+    """Speech to text for the quick-search launcher: the words become an ordinary typed search, so phrases like
+    "videos of the beach without people" are understood the same way as typing them."""
+    import subprocess
+    from . import transcribe
+    stamp = int(time.time() * 1000)
+    raw, wav = extract.TMP_DIR / f"dict_{stamp}.bin", extract.TMP_DIR / f"dict_{stamp}.wav"
+    raw.write_bytes(await file.read())
+    try:
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(raw), "-t", "30", "-ac", "1", "-ar", "16000",
+                        str(wav)], capture_output=True, timeout=60)
+        if not wav.exists() or wav.stat().st_size < 4000:
+            raise HTTPException(400, "Didn't catch that. Speak a little longer.")
+        return await asyncio.to_thread(transcribe.dictate, str(wav))
+    finally:
+        raw.unlink(missing_ok=True); wav.unlink(missing_ok=True)
 
 
 @app.post("/api/search/image")

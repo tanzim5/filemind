@@ -20,9 +20,71 @@ public partial class App : Application
     {
         // One window per user: a second launch just brings the first one forward.
         _single = new Mutex(true, @"Local\FileMind.Native.Main", out var first);
-        if (!first) { FocusRunningInstance(); Environment.Exit(0); return; }
-        try { Window = new MainWindow(); Window.Activate(); }
+        _showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\FileMind.Native.Show");
+        if (!first) { _showSignal.Set(); FocusRunningInstance(); Environment.Exit(0); return; }
+        try
+        {
+            Window = new MainWindow();
+            if (!Environment.GetCommandLineArgs().Contains("--hidden")) Window.Activate();
+            StartLauncher();
+            // A second launch (double-clicking FileMind.exe while it sits in the tray) brings the main window back.
+            ThreadPool.RegisterWaitForSingleObject(_showSignal, (_, _) => Window.DispatcherQueue.TryEnqueue(ShowMain), null, -1, false);
+        }
         catch (Exception ex) { Log("launch", ex, ex.Message); throw; }
+    }
+
+    public static QuickSearch.QuickSearchWindow? Launcher { get; private set; }
+    private static NativeHost? _native;
+    private static EventWaitHandle? _showSignal;
+    public static bool Quitting { get; private set; }
+    /// <summary>The shortcut actually registered (null when every candidate was taken).</summary>
+    public static string? ActiveHotkey { get; private set; }
+
+    /// <summary>The quick-search launcher, its global shortcut and the tray icon. The launcher window is created now and
+    /// only shown/hidden afterwards, so the shortcut opens it instantly.</summary>
+    private static void StartLauncher()
+    {
+        try
+        {
+            Launcher = new QuickSearch.QuickSearchWindow();
+            Launcher.AppWindow.Hide();
+            _native = new NativeHost(Launcher.Hwnd);
+            _native.HotkeyPressed += () => Launcher.DispatcherQueue.TryEnqueue(Launcher.Toggle);
+            _native.OpenRequested += () => Window?.DispatcherQueue.TryEnqueue(ShowMain);
+            _native.QuitRequested += () => Window?.DispatcherQueue.TryEnqueue(Quit);
+            // The chosen shortcut first; if another app owns it, the first free fallback (not saved, so it is retried next time).
+            var wanted = AppRuntime.Current.Settings.QuickSearchHotkey;
+            ActiveHotkey = new[] { wanted, "Ctrl+Shift+Space", "Ctrl+Alt+Shift+Space", "Alt+Shift+F" }.Distinct()
+                .FirstOrDefault(c => _native.RegisterHotkey(c));
+            if (ActiveHotkey != wanted) Log("hotkey", null, $"{wanted} is used by another app; using {ActiveHotkey ?? "none"}");
+            _native.ShowTrayIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "filemind.ico"),
+                ActiveHotkey is null ? "File Mind" : $"File Mind — {ActiveHotkey} to search");
+        }
+        catch (Exception ex) { Log("launcher", ex, ex.Message); }
+    }
+
+    /// <summary>Re-registers the shortcut after it was changed in Settings. False when another app owns it.</summary>
+    public static bool SetHotkey(string combo)
+    {
+        var ok = _native?.RegisterHotkey(combo) ?? false;
+        if (ok) ActiveHotkey = combo;
+        return ok;
+    }
+
+    public static void ShowMain()
+    {
+        if (Window is null) return;
+        Window.AppWindow.Show();
+        Window.Activate();
+    }
+
+    /// <summary>Really exit: tray menu "Quit", or closing the window when "keep running" is off.</summary>
+    public static void Quit()
+    {
+        Quitting = true;
+        try { _native?.Dispose(); } catch (Exception) { }
+        AppRuntime.Current.Shutdown();
+        Environment.Exit(0);
     }
 
     private static Mutex? _single;

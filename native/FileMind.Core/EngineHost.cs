@@ -25,6 +25,22 @@ public static class EngineLocator
         return null;
     }
 
+    /// <summary>The engine shipped inside the release zip, in engine\ beside the app. It downloads the right PyTorch
+    /// (CUDA for a usable NVIDIA card, otherwise CPU) on first run; <paramref name="accel"/> forces "cpu" or "cuda".</summary>
+    public static EngineLaunch? FindBundled(string appDir, AppPaths paths, string? accel)
+    {
+        var exe = Path.Combine(appDir, "engine", "FileMind.exe");
+        if (!File.Exists(exe)) return null;
+        var env = new Dictionary<string, string>
+        {
+            ["FILEMIND_DATA"] = paths.Data,
+            ["FILEMIND_MODELS"] = paths.Models,
+            ["FILEMIND_RUNTIME"] = paths.Runtime,
+        };
+        if (accel is "cpu" or "cuda") env["FILEMIND_ACCEL"] = accel;
+        return new EngineLaunch(exe, [], Path.GetDirectoryName(exe)!, env, "bundled engine");
+    }
+
     /// <summary>An installed edition. Data, models and the CUDA runtime go to the user's folder, not beside the
     /// exe, so updating or reinstalling the engine never touches the library.</summary>
     public static EngineLaunch ForInstalled(string exe, AppPaths paths, string editionTitle) =>

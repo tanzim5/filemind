@@ -58,6 +58,15 @@ public sealed class ApiClient(Uri baseUri) : IDisposable
     public Task<TranscriptState> GetTranscriptAsync(int id, CancellationToken ct = default) => GetAsync<TranscriptState>($"/api/transcript/{id}", ct);
     public Task<TranscriptState> StartTranscriptAsync(int id, CancellationToken ct = default) => PostAsync<TranscriptState>($"/api/transcript/{id}", null, ct);
 
+    /// <summary>Speech to text on the engine (local Whisper): used when Windows speech recognition is unavailable.</summary>
+    public async Task<string> VoiceToTextAsync(string audioPath, CancellationToken ct = default)
+    {
+        using var form = new MultipartFormDataContent();
+        form.Add(new ByteArrayContent(await File.ReadAllBytesAsync(audioPath, ct)), "file", Path.GetFileName(audioPath));
+        using var response = await _http.PostAsync("/api/voice/text", form, ct);
+        return (await ReadAsync<JsonElement>(response, ct)).GetProperty("text").GetString() ?? "";
+    }
+
     /// <summary>Find files that look or sound like a picture on disk.</summary>
     public async Task<List<FileItem>> SearchByImageAsync(string path, FileQuery query, CancellationToken ct = default)
     {

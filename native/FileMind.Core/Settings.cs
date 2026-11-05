@@ -30,6 +30,10 @@ public sealed class AppSettings
     /// <summary>Volume the viewer starts at (0 to 1).</summary>
     public double Volume { get; set; } = 0.8;
     public List<string> SectionHidden { get; set; } = [];
+    /// <summary>System-wide shortcut that opens the quick-search launcher.</summary>
+    public string QuickSearchHotkey { get; set; } = "Ctrl+Shift+Space";
+    /// <summary>Closing the window keeps File Mind in the notification area so the shortcut keeps working.</summary>
+    public bool KeepRunning { get; set; } = true;
 
     public static AppSettings Load(AppPaths paths)
     {
