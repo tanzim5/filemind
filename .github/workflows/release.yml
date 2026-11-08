@@ -27,7 +27,7 @@ jobs:
         with:
           dotnet-version: "9.0.x"
 
-      - name: Install (CPU PyTorch: PyInstaller needs to see it, but it is left out of the build)
+      - name: "Install (CPU PyTorch is only here so PyInstaller can see it; it is left out of the build)"
         run: |
           python -m pip install --upgrade pip
           pip install torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cpu
