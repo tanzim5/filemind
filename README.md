@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/tanzim5/filemind/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/tanzim5/filemind?style=for-the-badge&color=ff5a1f&labelColor=111114"></a>
-  <img alt="Platforms" src="https://img.shields.io/badge/Windows%20·%20macOS-111114?style=for-the-badge">
+  <img alt="Platforms" src="https://img.shields.io/badge/Windows-111114?style=for-the-badge">
   <img alt="Offline" src="https://img.shields.io/badge/100%25-offline-111114?style=for-the-badge">
   <a href="https://github.com/tanzim5/filemind/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/tanzim5/filemind?style=for-the-badge&color=ff5a1f&labelColor=111114"></a>
 </p>
@@ -18,8 +18,9 @@
   <a href="https://x.com/tanzim31">@tanzim31</a>
 </p>
 
-<p align="center"><img src="docs/library-2026.jpg" alt="The File Mind Windows app: the library with type, source, colour and look filters" width="100%"></p>
+<p align="center"><img src="docs/library-0.6.png" alt="The File Mind Windows app: library with tags, favourites and counted Refine filters" width="100%"></p>
 <p align="center"><img src="docs/sounds-2026.jpg" alt="Sounds in the library: every file is a waveform you can play and scrub right on its tile" width="100%"></p>
+<p align="center"><img src="docs/duplicates-0.6.png" alt="Duplicates: find exact copies and look-alikes, remove to the Recycle Bin" width="100%"></p>
 
 File Mind reads a folder — Downloads, Pictures, a project drive — and understands **what is in** your photos, videos
 and sounds using Google's [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2), a multimodal AI model
@@ -62,10 +63,9 @@ Nothing to install: Python, ffmpeg and everything else are inside the download. 
 
 | Your computer | Download | First launch also downloads |
 |---|---|---|
-| **Windows 11**, native app (recommended) | `FileMind-Windows-App.zip`: the new native WinUI app; it picks and downloads the right engine for your PC on first launch | Engine (~0.4 GB, or ~0.3 GB for NVIDIA) + AI model (~1.5 GB) |
-| **Windows**, any PC (classic all-in-one) | `FileMind-Windows-portable.zip` | AI model (~1.5 GB) |
-| **Windows** with an NVIDIA card (GTX 16 / RTX 20 series or newer) | `FileMind-Windows-NVIDIA.zip`: several times faster indexing | AI model (~1.5 GB) + GPU support (~2.8 GB) |
-| **Mac**, Apple Silicon (M1+, macOS 14+) | `FileMind-macOS-arm64.zip`: runs on the GPU through [MLX](https://github.com/ml-explore/mlx) | AI model (~1.1 GB) |
+| **Windows 10/11** (64-bit) | `FileMind-Windows.zip`: one app for every PC; on first run it picks CPU or NVIDIA PyTorch automatically | AI model (~1.5 GB), plus GPU support (~2.8 GB) on NVIDIA cards |
+
+**Quick search anywhere:** press **Ctrl+Shift+Space** for the Raycast-style launcher. Change the shortcut in Settings.
 
 ➡ Get them from the **[latest release](https://github.com/tanzim5/filemind/releases/latest)**.
 
@@ -81,15 +81,6 @@ Nothing to install: Python, ffmpeg and everything else are inside the download. 
 **Uninstall:** turn off *Start at login* in Customize, close the app, delete the folder. If the NVIDIA version can't use your card, it quietly runs on the CPU.
 
 <p align="center"><img src="docs/setup.png" alt="First launch: the model downloads once" width="70%"></p>
-</details>
-
-<details>
-<summary><b>Mac steps</b></summary>
-
-1. Unzip, drag **`FileMind.app`** into Applications and open it.
-2. The app isn't notarized by Apple, so macOS first says it can't verify it. Open **System Settings → Privacy & Security** and click **Open Anyway** (or run once: `xattr -dr com.apple.quarantine /Applications/FileMind.app`).
-
-The index and model live in `~/Library/Application Support/File Mind`; delete that folder to forget everything. *Start at login* adds a per-user LaunchAgent: turn it off before moving or deleting the app. Intel Macs aren't supported; on Linux, [run from source](#run-from-source).
 </details>
 
 ## Privacy
@@ -145,7 +136,7 @@ Set `FILEMIND_MODELS` to put the model elsewhere and `FILEMIND_DATA` for the ind
 
 **Linux.** "Browse…" uses `zenity` or `kdialog` if installed; otherwise paste the folder path. "Show in folder" opens your file manager.
 
-**Building the apps.** See `packaging/build_windows.py` and `packaging/build_macos.py`. GitHub Actions builds three downloads (standard Windows, NVIDIA Windows, Apple Silicon Mac) for every `v*` tag, checks each archive's contents and smoke-tests the standard Windows and Mac apps. You can also run the **Release builds** workflow manually; to publish from a manual run, give it an existing `v*` tag in `release_tag`. NVIDIA first-run CUDA download and GPU use need testing on an NVIDIA PC.
+**Building the apps.** See `packaging/build_windows.py`. GitHub Actions builds the single Windows download for every `v*` tag, checks each archive's contents and smoke-tests the standard Windows and Mac apps. You can also run the **Release builds** workflow manually; to publish from a manual run, give it an existing `v*` tag in `release_tag`. NVIDIA first-run CUDA download and GPU use need testing on an NVIDIA PC.
 </details>
 
 ## Licence
