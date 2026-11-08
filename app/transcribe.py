@@ -91,3 +91,73 @@ def _run(fid, path, cache):
     except Exception as exc:
         with _lock:
             _jobs[fid] = {"status": "error", "error": f"{type(exc).__name__}: {exc}"}
+
+
+# --------------------------------------------------------------- dictation: speech -> a typed search
+DICTATION_REPO = "Systran/faster-whisper-small"          # clearly better than base for short spoken queries
+DICTATION_DIR = embedder._MODELS / "faster-whisper-small"
+_dictation = None
+_dictation_lock = threading.Lock()
+
+
+def dictation_ready():
+    return all((DICTATION_DIR / name).exists() for name in FILES)
+
+
+# Download progress for the voice model, so Settings can fetch it ahead of the first voice search.
+dictation_state = {"running": False, "done": 0, "total": 487_000_000, "error": ""}
+
+
+def dictation_status():
+    return {**dictation_state, "ready": dictation_ready()}
+
+
+def prepare_dictation():
+    """Downloads the voice model in the background; safe to call repeatedly."""
+    if dictation_ready() or dictation_state["running"]:
+        return dictation_status()
+    dictation_state.update(running=True, done=0, error="")
+
+    def run():
+        try:
+            _ensure_dictation()
+        except Exception as exc:  # network trouble is reported, never raised into the server
+            dictation_state["error"] = str(exc)
+        finally:
+            dictation_state["running"] = False
+    threading.Thread(target=run, daemon=True).start()
+    return dictation_status()
+
+
+def _ensure_dictation():
+    DICTATION_DIR.mkdir(parents=True, exist_ok=True)
+    with requests.Session() as session:
+        session.headers["User-Agent"] = "FileMind"
+        for name in FILES:
+            out = DICTATION_DIR / name
+            if out.exists():
+                continue
+            part = out.with_name(name + ".part")
+            with session.get(f"https://huggingface.co/{DICTATION_REPO}/resolve/main/{name}", stream=True, timeout=90) as r:
+                r.raise_for_status()
+                with part.open("wb") as dest:
+                    for chunk in r.iter_content(1 << 20):
+                        dictation_state["done"] += len(chunk)
+                        dest.write(chunk)
+            part.replace(out)
+
+
+def dictate(wav_path: str) -> dict:
+    """Short spoken query -> text. Greedy decoding with voice-activity trimming keeps it near real time."""
+    global _dictation
+    with _dictation_lock:
+        if _dictation is None:
+            _ensure_dictation()
+            from faster_whisper import WhisperModel
+            cuda = embedder.DEVICE != "CPU"
+            _dictation = WhisperModel(str(DICTATION_DIR), device="cuda" if cuda else "cpu",
+                                      compute_type="float16" if cuda else "int8", local_files_only=True)
+        segments, info = _dictation.transcribe(wav_path, beam_size=1, vad_filter=True, without_timestamps=True,
+                                               condition_on_previous_text=False)
+        text = " ".join(s.text.strip() for s in segments).strip()
+    return {"text": text, "language": info.language}

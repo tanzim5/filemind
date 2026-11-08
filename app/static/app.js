@@ -1223,8 +1223,8 @@ async function firstRun() {
   const gb = n => (n / 1e9).toFixed(2) + ' GB';
   const el = document.body.appendChild(Object.assign(document.createElement('div'), { id: 'setup' }));
   el.innerHTML = `<div class="card"><span class="mark"></span><h1 class="d-head">Getting File Mind ready</h1>
-    <p>${m.gpu ? `File Mind downloads two things once: GPU support for your NVIDIA graphics card (PyTorch with CUDA, about 2.8 GB)
-    and Google's EmbeddingGemma model, which understands your photos, videos and sounds (about 1.5 GB).`
+    <p>${m.runtime_bytes ? `File Mind downloads two things once: ${m.gpu ? 'GPU support for your NVIDIA graphics card' : 'the AI engine for your processor'}
+    (PyTorch, about ${gb(m.runtime_bytes)}) and Google's EmbeddingGemma model, which understands your photos, videos and sounds (about 1.5 GB).`
     : `File Mind uses Google's EmbeddingGemma model to understand your photos, videos and sounds. It downloads once — about 1.5 GB.`}
     From then on everything runs on this computer, offline. Your files are never uploaded.</p>
     <div class="bar"><i></i></div><div class="surow"><span id="suLeft">Starting…</span><span id="suRight"></span></div>

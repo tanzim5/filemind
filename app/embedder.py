@@ -1,8 +1,5 @@
 """Wrapper around google/embeddinggemma-2 (text, image, video, audio -> one 768d space)."""
-import importlib.util
 import os
-import platform
-import sys
 import threading
 import time
 from pathlib import Path
@@ -11,22 +8,23 @@ import numpy as np
 
 from . import extract, runtime
 
-# Which engine runs the model: "mlx" on Apple Silicon (GPU, 5-bit weights), otherwise "torch" (CUDA if present, else
-# CPU). FILEMIND_BACKEND=torch forces PyTorch on a Mac.
-BACKEND = (os.environ.get("FILEMIND_BACKEND") or
-           ("mlx" if sys.platform == "darwin" and platform.machine() == "arm64"
-            and (getattr(sys, "frozen", False) or importlib.util.find_spec("mlx_vlm") is not None) else "torch"))
-
 # Weights live in ./models (or FILEMIND_MODELS, set by the portable app) so File Mind is fully
 # self-contained. They are fetched once by fetch.py; after that nothing touches the network.
 _MODELS = Path(os.environ.get("FILEMIND_MODELS") or Path(__file__).resolve().parent.parent / "models")
-_LOCAL = _MODELS / ("embeddinggemma-2-mlx" if BACKEND == "mlx" else "embeddinggemma-2")
+_LOCAL = _MODELS / "embeddinggemma-2"
 MODEL_ID = str(_LOCAL)
-REPO = "mlx-community/embeddinggemma-2-5bit" if BACKEND == "mlx" else "google/embeddinggemma-2"
+REPO = "google/embeddinggemma-2"
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 _model = None
 DEVICE = ""            # what the model runs on, once loaded: shown in the app
+ON_CPU = False         # True once loaded without a usable GPU: lighter settings keep indexing practical
+
+# On a CPU the vision encoder dominates the cost of every image and video frame. The model card's default budget is
+# 280 image tokens; 140 measured 2.3x faster on a 14-thread CPU with vectors 0.95-0.98 similar and identical top
+# results, so a CPU-only PC reads a photo library in hours instead of days. Videos also sample fewer frames.
+CPU_IMAGE_TOKENS = int(os.environ.get("FILEMIND_CPU_IMAGE_TOKENS") or 140)
+CPU_VIDEO_FRAMES = int(os.environ.get("FILEMIND_CPU_VIDEO_FRAMES") or 4)
 _lock = threading.Lock()
 
 
@@ -39,20 +37,11 @@ def model_ready() -> bool:
 
 
 def get_model():
-    global _model, DEVICE
+    global _model, DEVICE, ON_CPU
     with _lock:
         if _model is None:
             if not ready():
                 raise RuntimeError("The AI model isn't downloaded yet")
-            if BACKEND == "mlx":
-                from .mlx_backend import MLXEmbedder
-                try:
-                    _model = MLXEmbedder(MODEL_ID)
-                    DEVICE = "Apple GPU (MLX)"
-                except Exception as e:
-                    raise RuntimeError(f"Could not start the Apple GPU (MLX) engine: {e}. "
-                                       "Set FILEMIND_BACKEND=torch to use PyTorch instead.") from e
-                return _model
             import torch
             from sentence_transformers import SentenceTransformer
             cuda = _cuda_works(torch)
@@ -61,9 +50,30 @@ def get_model():
             device = "cuda" if cuda else "cpu"
             DEVICE = f"{torch.cuda.get_device_name(0)} (CUDA)" if cuda else "CPU"
             print(f"File Mind: the model runs on {DEVICE}", flush=True)
-            _model = SentenceTransformer(MODEL_ID, device=device,
-                                         model_kwargs={"torch_dtype": dtype})
+            m = SentenceTransformer(MODEL_ID, device=device, model_kwargs={"torch_dtype": dtype})
+            ON_CPU = not cuda
+            if ON_CPU:
+                _set_image_tokens(m, CPU_IMAGE_TOKENS)
+            _model = m
         return _model
+
+
+def _set_image_tokens(m, tokens: int):
+    """How many soft tokens the vision encoder spends on each image (and each video frame)."""
+    proc = getattr(m[0], "processor", None)
+    ip = getattr(proc, "image_processor", None)
+    if ip is None or not hasattr(ip, "max_soft_tokens"):
+        print("File Mind: this model has no image token setting; using its defaults", flush=True)
+        return
+    ip.max_soft_tokens = tokens
+    for o in (ip, proc):
+        if hasattr(o, "image_seq_length"):
+            o.image_seq_length = tokens
+    print(f"File Mind: CPU mode, {tokens} tokens per image", flush=True)
+
+
+def video_frame_count() -> int:
+    return CPU_VIDEO_FRAMES if ON_CPU and not os.environ.get("FILEMIND_VIDEO_FRAMES") else extract.VIDEO_FRAMES
 
 
 def _cuda_works(torch) -> bool:
@@ -80,9 +90,17 @@ def _norm(v) -> np.ndarray:
     return v / n if n > 0 else v
 
 
+_queries: dict[str, np.ndarray] = {}         # recent query vectors: retyping or re-running a search costs nothing
+
+
 def embed_query(text: str) -> np.ndarray:
-    m = get_model()
-    return _norm(m.encode(text, prompt_name="SearchQuery", normalize_embeddings=True))
+    hit = _queries.pop(text, None)
+    if hit is None:
+        hit = _norm(get_model().encode(text, prompt_name="SearchQuery", normalize_embeddings=True))
+        if len(_queries) >= 512:
+            _queries.pop(next(iter(_queries)))
+    _queries[text] = hit                        # most recent last
+    return hit.copy()
 
 
 def _prep_image(path: str) -> Path:
@@ -160,7 +178,7 @@ def prepare(path: Path, kind: str, name: str) -> dict:
     if kind == "image":
         p["image"] = str(_prep_image(str(path)))
     elif kind == "video":
-        p["frames"] = extract.video_frames(path)
+        p["frames"] = extract.video_frames(path, video_frame_count())
     elif kind == "audio":
         p["clip"] = extract.audio_clip(path)
     elif kind in ("text", "code", "doc"):
@@ -202,8 +220,6 @@ def embed_images(preps: list[dict]) -> list[tuple[np.ndarray, str]]:
     m = get_model()
     try:
         items = [{"text": "<|image|>", "image": [p["image"]]} for p in preps]
-        if BACKEND == "mlx":                                       # the MLX engine takes one multimodal input at a time
-            return [(_norm(_encode(m, i, normalize_embeddings=True)), "content") for i in items]
         v = np.asarray(_encode(m, items, batch_size=len(items), normalize_embeddings=True))
         return [(_norm(x), "content") for x in v]
     finally:

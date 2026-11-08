@@ -26,7 +26,10 @@ class LibraryToolTests(unittest.TestCase):
             CREATE TABLE smart_spaces(project_id INTEGER PRIMARY KEY, spec TEXT, query_vec BLOB);
             CREATE TABLE moments(file_id INTEGER, start REAL, end REAL, vec BLOB, size INTEGER, mtime REAL);
             CREATE TABLE moment_runs(file_id INTEGER PRIMARY KEY, size INTEGER, mtime REAL, status TEXT, error TEXT);
+            CREATE TABLE tags(name TEXT PRIMARY KEY COLLATE NOCASE, color TEXT NOT NULL DEFAULT '#8B5CF6', created REAL NOT NULL DEFAULT 0);
+            CREATE TABLE file_tags(file_id INTEGER NOT NULL, tag TEXT NOT NULL COLLATE NOCASE, PRIMARY KEY(file_id, tag));
         """)
+        main._tag_cache = None
         for fid, color, width, height in ((1, "red", 100, 50), (2, "red", 100, 50), (3, "blue", 40, 80)):
             path = self.root / f"{fid}.png"
             Image.new("RGB", (width, height), color).save(path)
@@ -51,6 +54,25 @@ class LibraryToolTests(unittest.TestCase):
                           (str(path), path.name, path.stat().st_size))
         self.conn.commit()
         self.assertEqual(main.files(project=1, ids_only=True)["ids"], [4, 2, 1])
+
+    def test_tags_and_favourites_filter_browse_search_and_facets(self):
+        main.tags_apply({"ids": [1, 3], "add": [main.FAVOURITE, "Client work"]})
+        main.tags_apply({"ids": [3], "remove": ["Client work"]})
+        tags = {t["name"]: t["count"] for t in main.tags_list()["tags"]}
+        self.assertEqual(tags, {main.FAVOURITE: 2, "Client work": 1})
+        self.assertEqual(main.tags_list()["tags"][0]["name"], main.FAVOURITE)
+        self.assertEqual(sorted(main.files(tag=main.FAVOURITE, ids_only=True)["ids"]), [1, 3])
+        self.assertEqual(main.files(tag="client work", ids_only=True)["ids"], [1])
+        keep = main._search_filter({"tag": "Client work"})
+        rows = self.conn.execute("SELECT * FROM files ORDER BY id").fetchall()
+        self.assertEqual([r["id"] for r in rows if keep(r)], [1])
+        page = main.files(tag=main.FAVOURITE)["files"]
+        self.assertTrue(all(main.FAVOURITE in f["tags"] for f in page))
+        self.assertEqual(main.facets({"tag": main.FAVOURITE})["total"], 2)
+        main.tags_define({"name": "Client work", "rename": "Clients"})
+        self.assertEqual(main.files(tag="Clients", ids_only=True)["ids"], [1])
+        main.tags_delete("Clients")
+        self.assertNotIn("Clients", {t["name"] for t in main.tags_list()["tags"]})
 
     def test_semantic_search_respects_media_filters(self):
         keep = main._search_filter({"filters": {"min_width": 90, "aspect": "landscape"}})

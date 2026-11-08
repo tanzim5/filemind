@@ -31,6 +31,9 @@ public sealed class AppRuntime
 
     public EngineEdition EditionInfo => Manifest.Editions[Edition];
 
+    /// <summary>True when the release zip carries the engine (engine\FileMind.exe): no edition download is needed.</summary>
+    public bool HasBundledEngine => File.Exists(Path.Combine(AppContext.BaseDirectory, "engine", "FileMind.exe"));
+
     /// <summary>Looks at the hardware and decides the edition. Quick and offline.</summary>
     public void DetectHardware()
     {
@@ -56,6 +59,8 @@ public sealed class AppRuntime
             return source;
         }
         SourceLabel = null;
+        var accel = Settings.Engine switch { "cpu" => "cpu", "nvidia" => "cuda", _ => null };
+        if (EngineLocator.FindBundled(AppContext.BaseDirectory, Paths, accel) is { } bundled) return bundled;
         var exe = Installer.InstalledExe(Edition);
         return exe is null ? null : EngineLocator.ForInstalled(exe, Paths, EditionInfo.Title);
     }

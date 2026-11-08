@@ -13,11 +13,7 @@ import urllib.request
 from pathlib import Path
 
 FROZEN = getattr(sys, "frozen", False)
-if FROZEN and sys.platform == "darwin":                           # inside FileMind.app: keep user data outside the bundle
-    HOME = Path.home() / "Library" / "Application Support" / "File Mind"
-    HOME.mkdir(parents=True, exist_ok=True)
-else:
-    HOME = Path(sys.executable).parent if FROZEN else Path(__file__).resolve().parent
+HOME = Path(sys.executable).parent if FROZEN else Path(__file__).resolve().parent
 BUNDLE = Path(getattr(sys, "_MEIPASS", HOME))
 
 os.environ.setdefault("FILEMIND_DATA", str(HOME / "data"))
@@ -27,12 +23,13 @@ if sys.stdout is None or sys.stderr is None or (FROZEN and not sys.stdout.isatty
     print(f"--- File Mind started {time.ctime()}")
 os.environ.setdefault("FILEMIND_MODELS", str(HOME / "models"))
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
-if (BUNDLE / "runtime.json").exists():                           # NVIDIA build: PyTorch+CUDA is fetched on first
-    os.environ["FILEMIND_RUNTIME_SPEC"] = str(BUNDLE / "runtime.json")    # run into runtime/ (see app/runtime.py)
+if (BUNDLE / "runtime.json").exists():                           # Windows build: PyTorch (CUDA or CPU, by the GPU found)
+    os.environ["FILEMIND_RUNTIME_SPEC"] = str(BUNDLE / "runtime.json")    # is fetched on first run (app/runtime.py)
     os.environ.setdefault("FILEMIND_RUNTIME", str(HOME / "runtime"))
-    _site = Path(os.environ["FILEMIND_RUNTIME"]) / "site-packages"
-    _site.mkdir(parents=True, exist_ok=True)                     # must exist now, or the import system skips it
-    sys.path.append(str(_site))
+    from app import runtime as _runtime                           # stdlib only: safe before torch is importable
+    _runtime.SITE.mkdir(parents=True, exist_ok=True)              # must exist now, or the import system skips it
+    sys.path.append(str(_runtime.SITE))
+    print(f"File Mind: PyTorch for {_runtime.ACCEL.upper()} ({_runtime.REASON})", flush=True)
 if (BUNDLE / "ffmpeg").is_dir():                                  # ffmpeg + ffprobe shipped inside the app
     os.environ["PATH"] = str(BUNDLE / "ffmpeg") + os.pathsep + os.environ.get("PATH", "")
 

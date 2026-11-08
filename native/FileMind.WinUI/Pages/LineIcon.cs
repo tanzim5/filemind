@@ -38,6 +38,21 @@ public sealed class LineIcon : UserControl
         ["spaces"] = "M3,7 A2,2 0 0 1 5,5 H9.4 A2,2 0 0 1 11,5.8 L11.9,7 H19 A2,2 0 0 1 21,9 V17 A2,2 0 0 1 19,19 H5 A2,2 0 0 1 3,17 Z",
         ["duplicates"] = Box(8, 8, 14, 14, 2) + " M4,16 C2.9,16 2,15.1 2,14 V4 C2,2.9 2.9,2 4,2 H14 C15.1,2 16,2.9 16,4",
         ["settings"] = "M12.22,2 H11.78 A2,2 0 0 0 9.78,4 V4.18 A2,2 0 0 1 8.78,5.91 L8.35,6.16 A2,2 0 0 1 6.35,6.16 L6.2,6.08 A2,2 0 0 0 3.47,6.81 L3.25,7.19 A2,2 0 0 0 3.98,9.92 L4.13,10.02 A2,2 0 0 1 5.13,11.74 V12.25 A2,2 0 0 1 4.13,13.99 L3.98,14.08 A2,2 0 0 0 3.25,16.81 L3.47,17.19 A2,2 0 0 0 6.2,17.92 L6.35,17.84 A2,2 0 0 1 8.35,17.84 L8.78,18.09 A2,2 0 0 1 9.78,19.82 V20 A2,2 0 0 0 11.78,22 H12.22 A2,2 0 0 0 14.22,20 V19.82 A2,2 0 0 1 15.22,18.09 L15.65,17.84 A2,2 0 0 1 17.65,17.84 L17.8,17.92 A2,2 0 0 0 20.53,17.53 L20.75,17.14 A2,2 0 0 0 20.02,14.41 L19.87,14.33 A2,2 0 0 1 18.87,12.59 V12.09 A2,2 0 0 1 19.87,10.35 L20.02,10.26 A2,2 0 0 0 20.75,7.53 L20.53,7.15 A2,2 0 0 0 17.8,6.42 L17.65,6.5 A2,2 0 0 1 15.65,6.5 L15.22,6.25 A2,2 0 0 1 14.22,4.52 V4 A2,2 0 0 0 12.22,2 Z " + Circle(12, 12, 3),
+        ["folder"] = "M3,7 A2,2 0 0 1 5,5 H9.4 A2,2 0 0 1 11,5.8 L11.9,7 H19 A2,2 0 0 1 21,9 V17 A2,2 0 0 1 19,19 H5 A2,2 0 0 1 3,17 Z",
+        ["trash"] = "M3,6 H21 M8,6 V4 A2,2 0 0 1 10,2 H14 A2,2 0 0 1 16,4 V6 M19,6 L18.1,19.2 A2,2 0 0 1 16.1,21 H7.9 A2,2 0 0 1 5.9,19.2 L5,6 M10,11 V16 M14,11 V16",
+        ["bolt"] = "M13,2 L4,14 H12 L11,22 L20,10 H12 Z",
+        ["keyboard"] = Box(2, 5, 20, 14, 2) + " M6,9 H6.01 M10,9 H10.01 M14,9 H14.01 M18,9 H18.01 M6,13 H6.01 M18,13 H18.01 M10,13 H14 M7,16 H17",
+        ["chip"] = Box(5, 5, 14, 14, 2) + " " + Box(9, 9, 6, 6, 1) + " M9,2 V5 M15,2 V5 M9,19 V22 M15,19 V22 M2,9 H5 M2,15 H5 M19,9 H22 M19,15 H22",
+        ["info"] = Circle(12, 12, 9.5) + " M12,16 V11.5 M12,8 H12.01",
+        ["eye"] = "M2,12 C4.5,7 8,5 12,5 C16,5 19.5,7 22,12 C19.5,17 16,19 12,19 C8,19 4.5,17 2,12 Z " + Circle(12, 12, 3),
+        ["power"] = "M12,3 V12 M18.4,6.6 A9,9 0 1 1 5.6,6.6",
+        ["sliders"] = "M4,21 V14 M4,10 V3 M12,21 V12 M12,8 V3 M20,21 V16 M20,12 V3 M1,14 H7 M9,8 H15 M17,16 H23",
+        ["sound"] = "M11,5 L6,9 H3 V15 H6 L11,19 Z M15.5,8.5 A5,5 0 0 1 15.5,15.5 M18.5,5.5 A9,9 0 0 1 18.5,18.5",
+        ["scan"] = "M3,7 V5 A2,2 0 0 1 5,3 H7 M17,3 H19 A2,2 0 0 1 21,5 V7 M21,17 V19 A2,2 0 0 1 19,21 H17 M7,21 H5 A2,2 0 0 1 3,19 V17 M7,12 H17",
+        ["sparkle"] = "M12,3 C12.8,9 15,11.2 21,12 C15,12.8 12.8,15 12,21 C11.2,15 9,12.8 3,12 C9,11.2 11.2,9 12,3 Z",
+        ["command"] = "M15,6 V18 A3,3 0 1 0 18,15 H6 A3,3 0 1 0 9,18 V6 A3,3 0 1 0 6,9 H18 A3,3 0 1 0 15,6 Z",
+        ["star"] = "M12,3.6 L14.6,8.9 L20.4,9.7 L16.2,13.8 L17.2,19.6 L12,16.9 L6.8,19.6 L7.8,13.8 L3.6,9.7 L9.4,8.9 Z",
+        ["tag"] = "M3.5,12 L3.5,4.8 A1.3,1.3 0 0 1 4.8,3.5 L12,3.5 L20.2,11.7 A1.5,1.5 0 0 1 20.2,13.8 L13.8,20.2 A1.5,1.5 0 0 1 11.7,20.2 Z M8,8 L8.01,8",
         ["close"] = "M18,6 L6,18 M6,6 L18,18",
         ["check"] = "M20,6 L9,17 L4,12",
         ["play"] = "M7,4.5 L19,12 L7,19.5 Z",
@@ -75,6 +90,8 @@ public sealed class LineIcon : UserControl
         Foreground = new SolidColorBrush(ActualTheme == ElementTheme.Light ? Windows.UI.Color.FromArgb(0xE6, 24, 24, 28) : Windows.UI.Color.FromArgb(0xE6, 255, 255, 255));
     }
     private bool _auto;
+    /// <summary>Back to the automatic ink/white colour after a temporary tint.</summary>
+    public void ResetColor() { _auto = true; FollowTheme(); }
 
     public string Kind
     {
@@ -89,5 +106,11 @@ public sealed class LineIcon : UserControl
     }
     private string _kind = "";
 
-    public double Size { get => _box.Width; set { _box.Width = value; _box.Height = value; } }
+    // Stroke is the width on screen in pixels, so icons stay equally crisp at every size (the path is drawn on a
+    // 24-unit grid and scaled; a fixed grid stroke would turn hairline-thin and grey at 12-14 px).
+    private double _stroke = 1.5;
+    public double Stroke { get => _stroke; set { _stroke = value; Restroke(); } }
+    private void Restroke() => _path.StrokeThickness = _stroke * 24 / Math.Max(1, _box.Width);
+
+    public double Size { get => _box.Width; set { _box.Width = value; _box.Height = value; Restroke(); } }
 }

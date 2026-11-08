@@ -36,12 +36,45 @@ public sealed partial class MainWindow : Window
             if (pp.IsXButton1Pressed) { e.Handled = true; _ = GoBackAnyAsync(); }
             else if (pp.IsXButton2Pressed) { e.Handled = true; _ = GoForwardAnyAsync(); }
         }), true);
-        ContentFrame.Navigated += (_, e) => SyncRail(e.SourcePageType);
-        Closed += (_, _) => { SavePlacement(); AppRuntime.Current.Shutdown(); };
+        ContentFrame.Navigated += (_, e) =>
+        {
+            SyncRail(e.SourcePageType);
+            // Library filters belong to the library only; other pages get a clean rail.
+            if (e.SourcePageType != typeof(Pages.LibraryPage)) SidebarHost.Content = null;
+        };
+        Closed += (_, e) =>
+        {
+            SavePlacement();
+            // Keep running in the notification area so Ctrl+Alt+Space still works; the tray menu quits for real.
+            if (!App.Quitting && AppRuntime.Current.Settings.KeepRunning && App.Launcher is not null)
+            {
+                e.Handled = true;
+                AppWindow.Hide();
+                return;
+            }
+            App.Quit();
+        };
         Root.Loaded += async (_, _) => await BootAsync();
     }
 
     /// <summary>Applies the user's glass opacity choices to the rail and page panel.</summary>
+    /// <summary>Cheap update for the transparency slider: only colours change, so dragging is smooth (no backdrop swap,
+    /// no rail rebuild).</summary>
+    public void ApplyGlassLight()
+    {
+        try
+        {
+            var st = AppRuntime.Current.Settings;
+            var p = ThemeEngine.Find(st.Theme);
+            if (p.Key == "amoled") return;
+            byte a(double v) => (byte)(Math.Clamp(v, 0.05, 1) * 255);
+            ThemeEngine.Apply(st, Root);
+            RailCard.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(a(ThemeEngine.RailOpacity(st)), p.Rail.R, p.Rail.G, p.Rail.B));
+            PanelCard.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(a(ThemeEngine.PanelOpacity(st)), p.Panel.R, p.Panel.G, p.Panel.B));
+        }
+        catch (Exception ex) { App.Log("glass", ex, ""); }
+    }
+
     public void ApplyGlass()
     {
         try
@@ -60,8 +93,8 @@ public sealed partial class MainWindow : Window
             SystemBackdrop = amoled ? null : (DesktopAcrylicController.IsSupported() ? new DesktopAcrylicBackdrop() : new MicaBackdrop());
             Root.Background = new SolidColorBrush(amoled ? Colors.Black : Colors.Transparent);
             if (amoled) { RailCard.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 8, 8, 8)); PanelCard.Background = new SolidColorBrush(Colors.Black); BuildRail(); return; }
-            RailCard.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(a(st.RailGlass), p.Rail.R, p.Rail.G, p.Rail.B));
-            PanelCard.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(a(st.PanelGlass), p.Panel.R, p.Panel.G, p.Panel.B));
+            RailCard.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(a(ThemeEngine.RailOpacity(st)), p.Rail.R, p.Rail.G, p.Rail.B));
+            PanelCard.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(a(ThemeEngine.PanelOpacity(st)), p.Panel.R, p.Panel.G, p.Panel.B));
             BuildRail();
         }
         catch (Exception ex) { App.Log("glass", ex, ""); }
@@ -113,6 +146,7 @@ public sealed partial class MainWindow : Window
         Add(Windows.System.VirtualKey.Number2, "discover");
         Add(Windows.System.VirtualKey.Number3, "spaces");
         Add(Windows.System.VirtualKey.Number4, "duplicates");
+        Add(Windows.System.VirtualKey.K, "quick");
         Add((Windows.System.VirtualKey)188, "settings"); // Ctrl+,
         void Nav(Windows.System.VirtualKey key, Func<Task> go)
         {
@@ -144,10 +178,19 @@ public sealed partial class MainWindow : Window
 
     private void SyncRail(Type page)
     {
-        var tag = page == typeof(Pages.LibraryPage) ? "library" : page == typeof(Pages.DiscoverPage) ? "discover" : page == typeof(Pages.SpacesPage) ? "spaces" : null;
+        var tag = page == typeof(Pages.LibraryPage) ? "library" : page == typeof(Pages.DiscoverPage) ? "discover" : page == typeof(Pages.SpacesPage) ? "spaces" : page == typeof(Pages.DuplicatesPage) ? "duplicates" : null;
         if (tag is null || tag == _current) return;
         _current = tag;
         foreach (var b in RailButtons) b.IsChecked = (string)b.Tag == tag;
+        TintGlyphs();
+    }
+
+    private readonly Dictionary<string, Pages.LineIcon> _glyphs = [];
+    private void TintGlyphs()
+    {
+        foreach (var (k, g) in _glyphs)
+            if (k == _current) g.Foreground = (Brush)Application.Current.Resources["AccentBrush"];
+            else g.ResetColor();
     }
 
     private static Windows.UI.Color Color(byte a, byte r, byte g, byte b) => Windows.UI.Color.FromArgb(a, r, g, b);
@@ -212,14 +255,15 @@ public sealed partial class MainWindow : Window
 
     private void Select(string tag)
     {
-        if (tag != "settings") { _current = tag; foreach (var b in RailButtons) b.IsChecked = (string)b.Tag == tag; }
+        if (tag is not ("settings" or "quick")) { _current = tag; foreach (var b in RailButtons) b.IsChecked = (string)b.Tag == tag; }
         switch (tag)
         {
             case "library": ShowLibraryPage(); break;
             case "discover": ContentFrame.Navigate(typeof(Pages.DiscoverPage)); break;
             case "spaces": ContentFrame.Navigate(typeof(Pages.SpacesPage)); break;
-            case "duplicates": ContentFrame.Navigate(typeof(Pages.SoonPage), ("Duplicates", "Review copies and near-copies. Nothing is deleted for you.")); break;
+            case "duplicates": ContentFrame.Navigate(typeof(Pages.DuplicatesPage)); break;
             case "settings": OpenSettings(); break;
+            case "quick": App.Launcher?.Toggle(); break;
         }
     }
 
@@ -227,29 +271,57 @@ public sealed partial class MainWindow : Window
     private Microsoft.UI.Xaml.Controls.Primitives.ToggleButton[] RailButtons => [.. _rail];
     private string _current = "library";
 
-    private static readonly Dictionary<string, (string Label, string Icon)> Destinations = new()
-    {
-        ["library"] = ("Library", "library"), ["discover"] = ("Discover", "discover"),
-        ["spaces"] = ("Spaces", "spaces"), ["duplicates"] = ("Duplicates", "duplicates"),
-    };
+    private static readonly (string Key, string Label)[] Destinations =
+        [("library", "Library"), ("discover", "Discover"), ("spaces", "Spaces"), ("duplicates", "Duplicates")];
 
-    /// <summary>Builds the sidebar destinations from the user's order and visibility choices.</summary>
+    private readonly Dictionary<string, TextBlock> _counts = [];
+
+    /// <summary>Builds the four destinations: a colour icon, the name, and a quiet count on the right.</summary>
     public void BuildRail()
     {
-        var st = AppRuntime.Current.Settings;
-        NavStack.Children.Clear(); _rail.Clear();
-        foreach (var key in st.MenuOrder.Where(Destinations.ContainsKey).Distinct().Concat(Destinations.Keys.Except(st.MenuOrder)))
+        NavStack.Children.Clear(); _rail.Clear(); _counts.Clear(); _glyphs.Clear();
+        foreach (var (key, label) in Destinations)
         {
-            if (st.MenuHidden.Contains(key) && key != _current) continue;
-            var (label, icon) = Destinations[key];
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center };
-            row.Children.Add(new Pages.LineIcon { Kind = icon, Size = 18, Width = 20, Height = 20, VerticalAlignment = VerticalAlignment.Center });
-            row.Children.Add(new TextBlock { Text = label, FontSize = 14, VerticalAlignment = VerticalAlignment.Center });
+            // Finder/Raycast-style rows: a quiet monochrome glyph, the name, a dim count. The selected row gets a soft
+            // fill and an accent-coloured glyph; nothing else competes for attention.
+            var row = new Grid { ColumnSpacing = 10 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var glyph = new Pages.LineIcon { Kind = key switch { "library" => "photo", "discover" => "sparkle", "spaces" => "folder", _ => "duplicates" }, Size = 16, VerticalAlignment = VerticalAlignment.Center };
+            _glyphs[key] = glyph;
+            row.Children.Add(glyph);
+            var name = new TextBlock { Text = label, FontSize = 13, VerticalAlignment = VerticalAlignment.Center };
+            Grid.SetColumn(name, 1); row.Children.Add(name);
+            var count = new TextBlock { FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center, Foreground = (Brush)Application.Current.Resources["GlassTextTertiaryBrush"] };
+            Grid.SetColumn(count, 2); row.Children.Add(count);
+            _counts[key] = count;
             var b = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton { Style = (Style)Application.Current.Resources["RailItem"], Tag = key, Content = row, IsChecked = key == _current };
             b.Click += Rail_Click;
             _rail.Add(b); NavStack.Children.Add(b);
         }
+        TintGlyphs();
+        _ = FillCountsAsync();
     }
+
+    /// <summary>Shows a count next to a destination ("" hides it). Pages call this when they learn a better number.</summary>
+    public void SetCount(string key, string text) { if (_counts.TryGetValue(key, out var t)) t.Text = text; }
+
+    private async Task FillCountsAsync()
+    {
+        try
+        {
+            var api = AppRuntime.Current.Api;
+            if (api is null) return;
+            var stats = await api.GetStatsAsync();
+            SetCount("library", stats.Total > 0 ? stats.Total.ToString("N0") : "");
+            var spaces = await api.GetProjectsAsync();
+            SetCount("spaces", spaces.Count > 0 ? spaces.Count.ToString("N0") : "");
+        }
+        catch (Exception) { }
+    }
+
+    private void Quick_Click(object sender, RoutedEventArgs e) => App.Launcher?.Toggle();
 
     /// <summary>The sidebar is the Library's filter panel; using it from another page brings the Library forward.</summary>
     public void EnsureLibrary() { if (_current != "library" || ContentFrame.Content is not Pages.LibraryPage) Select("library"); }
@@ -261,7 +333,10 @@ public sealed partial class MainWindow : Window
                          && ContentFrame.BackStack.Any(e => e.SourcePageType == typeof(Pages.LibraryPage)); i++)
             ContentFrame.GoBack();
         if (ContentFrame.Content is Pages.LibraryPage lp) _ = lp.ShowAgainAsync();
-        else ContentFrame.Navigate(typeof(Pages.LibraryPage));
+        else ContentFrame.Navigate(Environment.GetEnvironmentVariable("FILEMIND_DEV_PAGE") switch
+        {
+            "discover" => typeof(Pages.DiscoverPage), "spaces" => typeof(Pages.SpacesPage), "duplicates" => typeof(Pages.DuplicatesPage), _ => typeof(Pages.LibraryPage),
+        });
     }
 
     private void OpenSettings_Click(object sender, RoutedEventArgs e) => OpenSettings();
@@ -273,10 +348,12 @@ public sealed partial class MainWindow : Window
     {
         SettingsFrame.Navigate(typeof(Pages.SettingsPage));
         SettingsScrim.Visibility = Visibility.Visible;
+        SettingsRail.IsChecked = true;
     }
 
     private void CloseSettings()
     {
+        SettingsRail.IsChecked = false;
         SettingsScrim.Visibility = Visibility.Collapsed;
         SettingsFrame.Content = null;
     }

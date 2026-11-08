@@ -66,23 +66,24 @@ public sealed partial class LibraryPage : Page
     public static LibraryPage? Current { get; private set; }
 
     /// <summary>Puts the sidebar sections in the order chosen in Settings and hides those switched off.</summary>
+    // One deliberate order, most useful first: what kind of file, your own tags, the hard facts (Refine), where it came
+    // from, how it looks, and finally the folders. Spaces have their own page, so they are not repeated here.
     public void ApplySections()
     {
-        var all = new Dictionary<string, UIElement> { ["types"] = SecTypes, ["sources"] = SecSources, ["colours"] = SecColours, ["folders"] = SecFolders, ["moods"] = SecMoods, ["spaces"] = SecSpaces, ["details"] = SecDetails };
-        if (!Settings.SectionOrder.Contains("moods")) { Settings.SectionOrder = ["types", "sources", "colours", "folders", "moods", "spaces", "details"]; Settings.SectionHidden.Remove("colours"); try { Settings.Save(AppRuntime.Current.Paths); } catch { } }
-        var order = Settings.SectionOrder.Where(all.ContainsKey).Distinct().Concat(all.Keys.Except(Settings.SectionOrder)).ToList();
         SectionStack.Children.Clear();
-        foreach (var key in order)
+        foreach (var sec in new UIElement[] { SecTypes, SecTags, SecDetails, SecSources, SecColours, SecMoods, SecFolders })
         {
-            all[key].Visibility = Settings.SectionHidden.Contains(key) ? Visibility.Collapsed : Visibility.Visible;
-            SectionStack.Children.Add(all[key]);
+            sec.Visibility = Visibility.Visible;
+            SectionStack.Children.Add(sec);
         }
+        SecSpaces.Visibility = Visibility.Collapsed;
     }
 
     public LibraryPage()
     {
         InitializeComponent();
         Current = this;
+        KeyboardAcceleratorPlacementMode = Microsoft.UI.Xaml.Input.KeyboardAcceleratorPlacementMode.Hidden;
         ApplySections();
         TileRepeater.ItemsSource = _tiles;
         Layout.Target = Settings.TileSize; Layout.Gap = Settings.TileGap;
@@ -151,6 +152,7 @@ public sealed partial class LibraryPage : Page
             e.Handled = true;
             await action();
         };
+        a.ScopeOwner = null;
         KeyboardAccelerators.Add(a);
     }
 
@@ -178,6 +180,7 @@ public sealed partial class LibraryPage : Page
             _sources = await Api.GetSourcesAsync();
             _moods = await Api.GetMoodsAsync();
             _projects = await Api.GetProjectsAsync();
+            _tagList = (await Api.GetTagsAsync()).Tags;
         }
         catch (Exception) { }
         RebuildPanels();
@@ -393,7 +396,7 @@ public sealed partial class LibraryPage : Page
         {
             e.Handled = true;
             SearchBox.Text = "";
-            await GoAsync(() => { _tags.Add((text, text)); _similarTo = 0; _imagePath = null; _title = ""; });
+            await ApplySmartAsync(text);   // "4K vertical clips of a car": the details become Refine filters, "car" a search tag
         }
         else if (e.Key == VirtualKey.Back && SearchBox.Text.Length == 0 && _tags.Count > 0)
         {
@@ -601,15 +604,15 @@ public sealed partial class LibraryPage : Page
     // ------------------------------------------------------------------ filter panel
     private FrameworkElement Chip(string text, bool on, Func<Task> click, string? dot = null, int? count = null, string? tooltip = null, bool compact = false)
     {
-        var row = new Grid { ColumnSpacing = 6, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var row = new Grid { ColumnSpacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         if (dot is not null) row.Children.Add(new Border { Width = 9, Height = 9, CornerRadius = new CornerRadius(4), Background = Brush(dot), VerticalAlignment = VerticalAlignment.Center });
-        var label = new TextBlock { Text = text, FontSize = compact ? 11.5 : 12, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        var label = new TextBlock { Text = text, FontSize = 12.5, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         Grid.SetColumn(label, 1); row.Children.Add(label);
-        if (count is { } n) { var ct = new TextBlock { Text = n.ToString("N0"), FontSize = 11, Opacity = 0.55, VerticalAlignment = VerticalAlignment.Center }; Grid.SetColumn(ct, 2); row.Children.Add(ct); }
-        var b = new ToggleButton { Content = row, IsChecked = on, Style = Ui.Style("GlassChip"), HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = compact ? new Thickness(9, 3, 9, 3) : new Thickness(9, 5, 9, 5), MinHeight = 0, CornerRadius = new CornerRadius(compact ? 12 : 14) };
+        if (count is { } n) { var ct = new TextBlock { Text = n.ToString("N0"), FontSize = 11.5, Foreground = Ui.Brush("GlassTextTertiaryBrush"), VerticalAlignment = VerticalAlignment.Center }; Grid.SetColumn(ct, 2); row.Children.Add(ct); }
+        var b = new ToggleButton { Content = row, IsChecked = on, Style = Ui.Style("GlassChip"), HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(10, 6, 10, 6), MinHeight = 30, CornerRadius = new CornerRadius(6) };
         b.Click += async (_, _) => await click();
         if (tooltip is not null) ToolTipService.SetToolTip(b, tooltip);
         return b;
@@ -728,7 +731,8 @@ public sealed partial class LibraryPage : Page
                 FolderList.Children.Add(line);
             }
 
-            QuickChips.ItemsSource = BuildQuickChips();
+            BuildTagChips();
+            _ = FillRefineAsync();
 
             RebuildActiveChips();
         }
@@ -813,8 +817,6 @@ public sealed partial class LibraryPage : Page
     {
         _q = new FileQuery { Sort = _q.Sort };
         _tags.Clear(); _similarTo = 0; _imagePath = null; _title = "";
-        SmartStatus.Visibility = Visibility.Collapsed;
-        SmartBox.Text = "";
         SyncDetailFields();
     });
 
@@ -865,49 +867,187 @@ public sealed partial class LibraryPage : Page
     }
 
     // ------------------------------------------------------------------ refine
-    // The meaning of a file is searched with the search bar. These are the hard facts about it, one tap each.
-    // Only what makes sense for the chosen type is shown, and every chip reflects the live query.
-    private List<FrameworkElement> BuildQuickChips()
+    // The hard facts about files (quality, shape, length, size, date), grouped and counted over what is on screen.
+    // An option that would show nothing, or would not narrow anything, is not offered; a chosen one always stays.
+    private int _refineGen;
+
+    private bool FacetOn(string key)
     {
-        var list = new List<FrameworkElement>();
-        var video = _q.Kind is "all" or "video";
-        var visual = _q.Kind is "all" or "video" or "image";
-        var timed = _q.Kind is "all" or "video" or "audio";
-        void Q(string label, Func<bool> on, Action toggle) =>
-            list.Add(Chip(label, on(), () => GoAsync(() => { toggle(); _title = ""; SyncDetailFields(); }), null, null, null, true));
-        long Px4K = 3840L * 2160, PxHd = 1920L * 1080;
         var now = DateTimeOffset.UtcNow;
-        double Since(int days) => now.AddDays(-days).ToUnixTimeSeconds();
-        if (visual)
+        bool Ago(int d) => _q.After is { } a && Math.Abs(a - now.AddDays(-d).ToUnixTimeSeconds()) < 86400;
+        return key switch
         {
-            Q("4K+", () => _q.MinPixels == Px4K, () => _q.MinPixels = _q.MinPixels == Px4K ? null : Px4K);
-            Q("HD+", () => _q.MinPixels == PxHd, () => _q.MinPixels = _q.MinPixels == PxHd ? null : PxHd);
-            Q("Vertical", () => _q.Aspect == "portrait", () => _q.Aspect = _q.Aspect == "portrait" ? null : "portrait");
-            Q("Wide", () => _q.Aspect == "wide", () => _q.Aspect = _q.Aspect == "wide" ? null : "wide");
-            Q("Square", () => _q.Aspect == "square", () => _q.Aspect = _q.Aspect == "square" ? null : "square");
-        }
-        if (timed)
-        {
-            Q("Under 30 s", () => _q.MaxDuration == 30, () => _q.MaxDuration = _q.MaxDuration == 30 ? null : 30);
-            Q("Over 1 min", () => _q.MinDuration == 60, () => _q.MinDuration = _q.MinDuration == 60 ? null : 60);
-        }
-        if (video) Q("60 fps", () => _q.MinFps == 60, () => _q.MinFps = _q.MinFps == 60 ? null : 60);
-        Q("Over 20 MB", () => _q.MinSize == 20_000_000, () => _q.MinSize = _q.MinSize == 20_000_000 ? null : 20_000_000);
-        Q("This week", () => _q.After is { } a && Math.Abs(a - Since(7)) < 86400, () => _q.After = _q.After is { } a && Math.Abs(a - Since(7)) < 86400 ? null : Since(7));
-        Q("This month", () => _q.After is { } a && Math.Abs(a - Since(30)) < 86400, () => _q.After = _q.After is { } a && Math.Abs(a - Since(30)) < 86400 ? null : Since(30));
-        return list;
+            "4k" => _q.MinPixels == 3840L * 2160, "hd" => _q.MinPixels == 1920L * 1080,
+            "portrait" or "square" or "wide" => _q.Aspect == key,
+            "short" => _q.MaxDuration == 30, "long" => _q.MinDuration == 60, "60fps" => _q.MinFps == 50,
+            "big" => _q.MinSize == 20_000_000, "huge" => _q.MinSize == 500_000_000,
+            "today" => Ago(1), "week" => Ago(7), "month" => Ago(30), "year" => Ago(365), _ => false,
+        };
     }
 
-    // ------------------------------------------------------------------ find by details
-    private async void SmartBox_KeyDown(object sender, KeyRoutedEventArgs e)
+    private void ToggleFacet(string key)
     {
-        if (e.Key == VirtualKey.Enter && SmartBox.Text.Trim().Length > 0) { e.Handled = true; await ApplySmartAsync(SmartBox.Text); }
+        var on = FacetOn(key);
+        double Since(int d) => DateTimeOffset.UtcNow.AddDays(-d).ToUnixTimeSeconds();
+        switch (key)
+        {
+            case "4k": _q.MinPixels = on ? null : 3840L * 2160; break;
+            case "hd": _q.MinPixels = on ? null : 1920L * 1080; break;
+            case "portrait" or "square" or "wide": _q.Aspect = on ? null : key; break;
+            case "short": _q.MaxDuration = on ? null : 30; break;
+            case "long": _q.MinDuration = on ? null : 60; break;
+            case "60fps": _q.MinFps = on ? null : 50; break;
+            case "big": _q.MinSize = on ? null : 20_000_000; break;
+            case "huge": _q.MinSize = on ? null : 500_000_000; break;
+            case "today": _q.After = on ? null : Since(1); break;
+            case "week": _q.After = on ? null : Since(7); break;
+            case "month": _q.After = on ? null : Since(30); break;
+            case "year": _q.After = on ? null : Since(365); break;
+        }
+    }
+
+    private async Task FillRefineAsync()
+    {
+        var gen = ++_refineGen;
+        var scope = new Dictionary<string, object?>
+        {
+            ["kind"] = _q.Kind == "all" ? null : _q.Kind, ["root"] = _q.Root, ["project"] = _q.Project,
+            ["unassigned"] = _q.Unassigned ? true : null, ["color"] = _q.Color, ["near"] = _q.Near,
+            ["source"] = _q.Source, ["pattern"] = _q.Pattern, ["discover"] = _q.Discover,
+        };
+        IEnumerable<int>? ids = IsPlainBrowse ? null : _tiles.Select(t => t.Item.Id).ToList();
+        FacetResult r;
+        try { r = await Api.GetFacetsAsync(scope.Where(kv => kv.Value is not null).ToDictionary(kv => kv.Key, kv => kv.Value), ids); }
+        catch (Exception ex) { App.Log("facets", ex, null); return; }
+        if (gen != _refineGen) return;
+
+        RefineGroups.Children.Clear();
+        foreach (var group in r.Facets.GroupBy(f => f.Group))
+        {
+            var shown = group.Where(f => FacetOn(f.Key) || (f.Count > 0 && f.Count < r.Total)).ToList();
+            if (shown.Count == 0) continue;
+            var box = new StackPanel { Spacing = 5 };
+            var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            head.Children.Add(new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = Brush(group.Key switch { "Quality" => "#3B82F6", "Shape" => "#8B5CF6", "Length" => "#22A559", "Motion" => "#EC4899", "File size" => "#F59E0B", _ => "#14B8A6" }), VerticalAlignment = VerticalAlignment.Center });
+            head.Children.Add(new TextBlock { Text = group.Key, FontSize = 12, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
+            box.Children.Add(head);
+            var wrap = new WrapPanel { Spacing = 5, Justify = true };
+            var hint = group.Key switch { "Quality" => "#3B82F6", "Shape" => "#8B5CF6", "Length" => "#22A559", "Motion" => "#EC4899", "File size" => "#F59E0B", _ => "#14B8A6" };
+            foreach (var f in shown)
+            {
+                var key = f.Key;
+                wrap.Children.Add(Chip(f.Label, FacetOn(key), () => GoAsync(() => { ToggleFacet(key); _title = ""; SyncDetailFields(); }),
+                    hint, f.Count, $"{f.Hint} · {f.Count:N0} of {r.Total:N0}"));
+            }
+            box.Children.Add(wrap);
+            RefineGroups.Children.Add(box);
+        }
+        RefineEmpty.Visibility = RefineGroups.Children.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // ------------------------------------------------------------------ tags and favourites
+    private List<TagInfo> _tagList = [];
+
+    private void BuildTagChips()
+    {
+        TagChips.Children.Clear();
+        foreach (var t in _tagList)
+        {
+            if (t.Name != TagInfo.Favourite && t.Count == 0 && _q.Tag != t.Name) continue;
+            var name = t.Name;
+            var fav = name == TagInfo.Favourite;
+            var chip = Chip(fav ? "\u2605  Favourites" : t.Name, string.Equals(_q.Tag, name, StringComparison.OrdinalIgnoreCase),
+                () => GoAsync(() => { _q.Tag = string.Equals(_q.Tag, name, StringComparison.OrdinalIgnoreCase) ? null : name; _title = ""; }),
+                fav ? null : t.Color, t.Count);
+            if (!fav)
+            {
+                var menu = new MenuFlyout();
+                var rename = new MenuFlyoutItem { Text = "Rename..." };
+                rename.Click += async (_, _) => { var n = await PromptAsync("Rename tag", name); if (n is null) return; _tagList = (await Api.DefineTagAsync(name, null, n)).Tags; BuildTagChips(); };
+                var colour = new MenuFlyoutSubItem { Text = "Colour" };
+                foreach (var (hex, label) in new[] { ("#EF4444", "Red"), ("#F59E0B", "Orange"), ("#22A559", "Green"), ("#3B82F6", "Blue"), ("#8B5CF6", "Purple"), ("#EC4899", "Pink"), ("#64748B", "Grey") })
+                {
+                    var item = new MenuFlyoutItem { Text = label, Icon = new FontIcon { Glyph = "\u25CF", Foreground = Brush(hex) } };
+                    item.Click += async (_, _) => { _tagList = (await Api.DefineTagAsync(name, hex)).Tags; BuildTagChips(); };
+                    colour.Items.Add(item);
+                }
+                var delete = new MenuFlyoutItem { Text = "Delete tag" };
+                delete.Click += async (_, _) => { await Api.DeleteTagAsync(name); _tagList = (await Api.GetTagsAsync()).Tags; if (_q.Tag == name) await GoAsync(() => _q.Tag = null); BuildTagChips(); };
+                menu.Items.Add(rename); menu.Items.Add(colour); menu.Items.Add(new MenuFlyoutSeparator()); menu.Items.Add(delete);
+                chip.ContextFlyout = menu;
+            }
+            TagChips.Children.Add(chip);
+        }
+    }
+
+    private List<FileItem> SelectedItems() => _tiles.Where(t => _sel.Contains(t.Item.Id)).Select(t => t.Item).ToList();
+
+    private async Task ApplyTagsAsync(IReadOnlyCollection<int> ids, string? add, string? remove)
+    {
+        try
+        {
+            _tagList = (await Api.TagFilesAsync(ids, add is null ? null : [add], remove is null ? null : [remove])).Tags;
+            foreach (var t in _tiles.Where(t => ids.Contains(t.Item.Id)))
+            {
+                if (add is not null && !t.Item.Tags.Contains(add, StringComparer.OrdinalIgnoreCase)) t.Item.Tags.Add(add);
+                if (remove is not null) t.Item.Tags.RemoveAll(x => string.Equals(x, remove, StringComparison.OrdinalIgnoreCase));
+            }
+            BuildTagChips();
+            SyncFavButton();
+        }
+        catch (Exception ex) { ShowToast(ex.Message); }
+    }
+
+    private void SyncFavButton()
+    {
+        var items = SelectedItems();
+        var all = items.Count > 0 && items.All(i => i.IsFavourite);
+        FavText.Text = all ? "Unfavourite" : "Favourite";
+        if (all) FavIcon.Foreground = Ui.Brush("AccentBrush"); else FavIcon.ResetColor();
+    }
+
+    private async void Favourite_Click(object sender, RoutedEventArgs e)
+    {
+        var items = SelectedItems();
+        if (items.Count == 0) return;
+        var ids = items.Select(i => i.Id).ToList();
+        if (items.All(i => i.IsFavourite)) { await ApplyTagsAsync(ids, null, TagInfo.Favourite); ShowToast($"Removed {ids.Count:N0} from Favourites."); }
+        else { await ApplyTagsAsync(ids, TagInfo.Favourite, null); ShowToast($"Added {ids.Count:N0} to Favourites."); }
+    }
+
+    // Every tag, ticked when all selected files carry it, plus "New tag...".
+    private void TagSel_Click(object sender, RoutedEventArgs e)
+    {
+        var items = SelectedItems();
+        if (items.Count == 0) return;
+        var ids = items.Select(i => i.Id).ToList();
+        var menu = new MenuFlyout();
+        foreach (var t in _tagList.Where(t => t.Name != TagInfo.Favourite))
+        {
+            var name = t.Name;
+            var on = items.All(i => i.Tags.Contains(name, StringComparer.OrdinalIgnoreCase));
+            var item = new ToggleMenuFlyoutItem { Text = name, IsChecked = on, Icon = new FontIcon { Glyph = "\u25CF", Foreground = Brush(t.Color) } };
+            item.Click += async (_, _) => await ApplyTagsAsync(ids, on ? null : name, on ? name : null);
+            menu.Items.Add(item);
+        }
+        if (menu.Items.Count > 0) menu.Items.Add(new MenuFlyoutSeparator());
+        var add = new MenuFlyoutItem { Text = "New tag..." };
+        add.Click += async (_, _) => { var n = await PromptAsync("New tag", "Name the tag"); if (n is not null && n.Trim().Length > 0) await ApplyTagsAsync(ids, n.Trim(), null); };
+        menu.Items.Add(add);
+        menu.ShowAt((FrameworkElement)sender);
+    }
+
+    private async void NewTag_Click(object sender, RoutedEventArgs e)
+    {
+        var n = await PromptAsync("New tag", "Name the tag");
+        if (n is null || n.Trim().Length == 0) return;
+        try { _tagList = (await Api.DefineTagAsync(n.Trim(), null)).Tags; BuildTagChips(); ShowToast($"Made the tag {n.Trim()}. Select files and choose Tag to add it."); }
+        catch (Exception ex) { ShowToast(ex.Message); }
     }
 
     private async Task ApplySmartAsync(string input)
     {
         var r = SmartFilter.Parse(input);
-        SmartBox.Text = input;
         await GoAsync(() =>
         {
             var s = r.Query;
@@ -923,8 +1063,6 @@ public sealed partial class LibraryPage : Page
             _title = "";
             SyncDetailFields();
         });
-        SmartStatus.Text = r.Understood.Count > 0 ? "Understood: " + string.Join(", ", r.Understood) + (r.Text.Length > 0 ? $" · searching “{r.Text}”" : "") : "No exact details found; searching by meaning.";
-        SmartStatus.Visibility = Visibility.Visible;
     }
 
     private void SyncDetailFields()
@@ -1041,6 +1179,7 @@ public sealed partial class LibraryPage : Page
         var any = _sel.Count > 0;
         foreach (var t in _tiles) t.AnyChecked = any;
         ActionBar.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+        if (any) SyncFavButton();
         SelCount.Text = $"{_sel.Count:N0} selected";
         RemoveFromSpaceBtn.Visibility = _q.Project is not null ? Visibility.Visible : Visibility.Collapsed;
     }

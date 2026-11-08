@@ -1,5 +1,5 @@
-"""First run: download what File Mind needs, once — the model from Hugging Face, and in the NVIDIA build
-also PyTorch with CUDA from pytorch.org (see runtime.py).
+"""First run: download what File Mind needs, once — the model from Hugging Face, and in the Windows build
+also PyTorch (CUDA or CPU, whichever this PC can use) from pytorch.org (see runtime.py).
 
 Each file is written as *.part and renamed only when complete, so a cut connection never leaves
 a half-written file behind; running again resumes from the bytes already on disk."""
@@ -23,7 +23,9 @@ _lock = threading.Lock()
 
 
 def status():
-    return {"ready": embedder.ready(), "gpu": bool(runtime.WHEELS), "device": embedder.DEVICE, **state}
+    return {"ready": embedder.ready(), "gpu": runtime.ACCEL == "cuda", "accel": runtime.ACCEL,
+            "accel_reason": runtime.REASON, "runtime_bytes": sum(w["size"] for w in runtime.WHEELS),
+            "device": embedder.DEVICE, **state}
 
 
 def start(on_done=None):

@@ -23,8 +23,9 @@ MIN_BYTES = 4096                              # skip empty / stub files
 state = {
     "running": False, "stop": False, "root_id": None, "root": None,
     "phase": "idle", "total": 0, "done": 0, "errors": 0, "current": "", "started": 0.0,
-    "message": "", "device": "",
+    "message": "", "device": "", "rate": 0.0, "eta": 0,   # seconds per file, seconds left (estimates)
 }
+COMMIT_SECONDS = 4.0                          # newly read files become searchable at least this often
 _thread: threading.Thread | None = None
 
 # cache of all vectors for search
@@ -100,7 +101,8 @@ def _run(root_id: int, root: str):
         c.commit()
         pending = c.execute(
             "SELECT id, path, name, kind FROM files WHERE root_id=? AND status='pending' "
-            "ORDER BY CASE kind WHEN 'image' THEN 0 WHEN 'audio' THEN 1 ELSE 2 END, id",
+            "ORDER BY CASE kind WHEN 'image' THEN 0 WHEN 'doc' THEN 1 WHEN 'text' THEN 1 WHEN 'audio' THEN 2 ELSE 3 END, "
+            "mtime DESC, id",                 # recent files first: they're the ones people look for
             (root_id,)).fetchall()
         # regenerate thumbnails made by older versions (different size)
         for r in c.execute("SELECT id, path, kind, thumb FROM files WHERE root_id=? AND status='done' "
@@ -122,9 +124,14 @@ def _run(root_id: int, root: str):
             return
         state.update(phase="loading", total=len(pending), message="Loading the embedding model…")
         embedder.get_model()
-        state.update(phase="embedding", device=embedder.DEVICE, message=f"Embedding files on {embedder.DEVICE or 'this computer'}…")
-        if runtime.WHEELS and embedder.DEVICE == "CPU":
-            print("File Mind: NVIDIA edition, but CUDA is not usable on this PC (driver or GPU too old?); using the CPU", flush=True)
+        state.update(phase="embedding", device=embedder.DEVICE, rate=0.0, eta=0,
+                     message=f"Embedding files on {embedder.DEVICE or 'this computer'}…")
+        # A GPU gains a lot from batching images; a CPU does not (8 images took exactly 8x one image), and batching
+        # there only makes progress jump in big steps, so on a CPU every file goes through on its own.
+        batch = 1 if embedder.ON_CPU else 8
+        t_begin, last_commit = time.time(), time.time()
+        if runtime.ACCEL == "cuda" and embedder.DEVICE == "CPU":
+            print("File Mind: CUDA PyTorch is installed but did not start on this GPU; using the CPU", flush=True)
         # CPU work (decoding, thumbnails, ffmpeg) runs on a few worker threads, a handful of files ahead of the model,
         # so the GPU is never left waiting. Database writes stay on this thread.
         def work(r):
@@ -146,7 +153,7 @@ def _run(root_id: int, root: str):
                     nxt += 1
                 # take the next file, plus the images right behind it (up to 8): they go through the model together
                 group = [ahead.popleft()]
-                while ahead and group[0][0]["kind"] == "image" and ahead[0][0]["kind"] == "image" and len(group) < 8:
+                while ahead and group[0][0]["kind"] == "image" and ahead[0][0]["kind"] == "image" and len(group) < batch:
                     group.append(ahead.popleft())
                 ready = []                                # (row, thumb, prepared)
                 for r, fut in group:
@@ -196,9 +203,14 @@ def _run(root_id: int, root: str):
                         c.execute("UPDATE files SET vec=?, embed_mode=?, thumb=?, dom=?, pal=?, status='done', error=NULL WHERE id=?",
                                   (vec.astype(np.float32).tobytes(), mode, thumb, dom, pal, r["id"]))
                     state["done"] += 1
-                if state["done"] // 20 != (state["done"] - len(group)) // 20:
+                now = time.time()
+                if state["done"]:
+                    state["rate"] = round((now - t_begin) / state["done"], 2)
+                    state["eta"] = int(state["rate"] * max(state["total"] - state["done"], 0))
+                if now - last_commit >= COMMIT_SECONDS or state["done"] // 20 != (state["done"] - len(group)) // 20:
                     c.commit()
                     invalidate()
+                    last_commit = now
         except embedder.GPUError as e:                    # the files stay 'pending': nothing is blamed on them
             print(f"File Mind: stopping, the GPU keeps failing: {e}", flush=True)
             state.update(phase="error", stop=True, message=(
