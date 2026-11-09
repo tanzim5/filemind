@@ -11,10 +11,6 @@ namespace FileMind.Pages;
 
 public sealed partial class SettingsPage : Page
 {
-    private static readonly (string Key, string Label)[] Menus =
-        [("library", "Library"), ("discover", "Discover"), ("spaces", "Spaces"), ("duplicates", "Duplicates")];
-    private static readonly (string Key, string Label)[] Sections =
-        [("types", "Types"), ("sources", "Sources"), ("colours", "Colours"), ("folders", "Folders"), ("moods", "Looks & moods"), ("spaces", "Spaces"), ("details", "Refine")];
     private static readonly (string Key, string Label)[] Layouts =
         [("masonry", "Masonry"), ("rows", "Rows"), ("contact", "Contact sheet"), ("story", "Story")];
 
@@ -182,56 +178,11 @@ public sealed partial class SettingsPage : Page
         St.Volume = VolumeSlider.Value / 100; Save(); Labels(); ViewerPage.SetDefaultVolume(St.Volume);
     }
 
-    // ---- Reorderable lists (sidebar menu and filter sections) ----
-    private void RailChanged() { Save(); App.Window?.BuildRail(); }
-    private void SectionsChanged() { Save(); LibraryPage.Current?.ApplySections(); }
-
-    private void BuildList(StackPanel host, (string Key, string Label)[] known, List<string> order, List<string> hidden, Action changed)
-    {
-        host.Children.Clear();
-        var labels = known.ToDictionary(k => k.Key, k => k.Label);
-        var keys = order.Where(labels.ContainsKey).Distinct().Concat(labels.Keys.Except(order)).ToList();
-        order.Clear(); order.AddRange(keys);
-        for (var i = 0; i < keys.Count; i++)
-        {
-            var key = keys[i]; var idx = i;
-            var row = new Grid { Padding = new Thickness(12, 6, 8, 6), CornerRadius = new CornerRadius(4), Background = Ui.Brush("GlassFillBrush"), ColumnSpacing = 6 };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.Children.Add(new TextBlock { Text = labels[key], VerticalAlignment = VerticalAlignment.Center, FontSize = 13.5 });
-            var up = Arrow("back", idx > 0, () => Move(order, idx, -1, host, known, hidden, changed), 90);
-            var down = Arrow("back", idx < keys.Count - 1, () => Move(order, idx, 1, host, known, hidden, changed), -90);
-            var sw = new ToggleSwitch { IsOn = !hidden.Contains(key), OnContent = "", OffContent = "", MinWidth = 0, Margin = new Thickness(8, 0, 0, 0) };
-            sw.Toggled += (_, _) => { if (sw.IsOn) hidden.Remove(key); else if (!hidden.Contains(key)) hidden.Add(key); changed(); };
-            Grid.SetColumn(up, 1); Grid.SetColumn(down, 2); Grid.SetColumn(sw, 3);
-            row.Children.Add(up); row.Children.Add(down); row.Children.Add(sw);
-            host.Children.Add(row);
-        }
-    }
-
-    private static Button Arrow(string icon, bool enabled, Action click, double rotate)
-    {
-        var b = new Button { Style = Ui.Style("GlassButton"), Width = 30, Height = 30, Padding = new Thickness(0), CornerRadius = new CornerRadius(5), IsEnabled = enabled,
-            Content = new LineIcon { Kind = icon, Size = 13, RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5), RenderTransform = new RotateTransform { Angle = rotate } } };
-        b.Click += (_, _) => click();
-        return b;
-    }
-
-    private void Move(List<string> order, int i, int d, StackPanel host, (string Key, string Label)[] known, List<string> hidden, Action changed)
-    {
-        (order[i], order[i + d]) = (order[i + d], order[i]);
-        BuildList(host, known, order, hidden, changed);
-        changed();
-    }
-
     private void Reset_Click(object sender, RoutedEventArgs e)
     {
         var d = new AppSettings();
         St.Theme = d.Theme; St.Accent = d.Accent; St.Transparency = d.Transparency;
         St.Layout = d.Layout; St.TileSize = d.TileSize; St.TileGap = d.TileGap; St.ShowNames = d.ShowNames; St.Volume = d.Volume;
-        
         Save();
         _ready = false;
         GlassSlider.Value = St.Transparency * 100;

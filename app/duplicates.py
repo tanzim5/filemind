@@ -1,7 +1,6 @@
 """Read-only duplicate candidates; deletion always remains a separate user action."""
 import hashlib
 from collections import defaultdict
-from pathlib import Path
 
 from PIL import Image
 

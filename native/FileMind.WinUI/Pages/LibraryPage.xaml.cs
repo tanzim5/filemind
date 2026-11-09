@@ -545,9 +545,8 @@ public sealed partial class LibraryPage : Page
     }
 
     private bool _allSources;
-    private bool _allColors;
-    private void Colors_Enter(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e) { _allColors = true; ColorBox.MaxHeight = double.PositiveInfinity; }
-    private void Colors_Exit(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e) { _allColors = false; ColorBox.MaxHeight = 51; }
+    private void Colors_Enter(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e) { ColorBox.MaxHeight = double.PositiveInfinity; }
+    private void Colors_Exit(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e) { ColorBox.MaxHeight = 51; }
 
     private void Layout_Click(object sender, RoutedEventArgs e)
     {

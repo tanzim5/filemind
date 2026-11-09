@@ -767,20 +767,18 @@ async def voice(file: UploadFile = File(...)):
 
 @app.get("/api/voice/model")
 def voice_model():
-    return transcribe.dictation_status()
+    return transcribe_mod.dictation_status()
 
 
 @app.post("/api/voice/model")
 def voice_model_prepare():
-    return transcribe.prepare_dictation()
+    return transcribe_mod.prepare_dictation()
 
 
 @app.post("/api/voice/text")
 async def voice_text(file: UploadFile = File(...)):
     """Speech to text for the quick-search launcher: the words become an ordinary typed search, so phrases like
     "videos of the beach without people" are understood the same way as typing them."""
-    import subprocess
-    from . import transcribe
     stamp = int(time.time() * 1000)
     raw, wav = extract.TMP_DIR / f"dict_{stamp}.bin", extract.TMP_DIR / f"dict_{stamp}.wav"
     raw.write_bytes(await file.read())
@@ -789,7 +787,7 @@ async def voice_text(file: UploadFile = File(...)):
                         str(wav)], capture_output=True, timeout=60)
         if not wav.exists() or wav.stat().st_size < 4000:
             raise HTTPException(400, "Didn't catch that. Speak a little longer.")
-        return await asyncio.to_thread(transcribe.dictate, str(wav))
+        return await asyncio.to_thread(transcribe_mod.dictate, str(wav))
     finally:
         raw.unlink(missing_ok=True); wav.unlink(missing_ok=True)
 

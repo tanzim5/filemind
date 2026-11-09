@@ -91,7 +91,7 @@ def make_thumb(path: Path, kind: str) -> str | None:
                 im.save(out, "JPEG", quality=80)
             return out.name
         if kind == "video":
-            r = subprocess.run(
+            subprocess.run(
                 ["ffmpeg", "-y", "-loglevel", "error", "-ss", "1", "-i", str(path),
                  "-frames:v", "1", "-vf", "scale=480:-2", str(out)],
                 capture_output=True, timeout=60)

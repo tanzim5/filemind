@@ -16,21 +16,13 @@ public sealed class AppSettings
     public int WinW { get; set; }
     public int WinH { get; set; }
     public bool WinMax { get; set; }
-    /// <summary>How see-through the sidebar glass is (0 clear, 1 solid) and how solid the page panel is.</summary>
-    public double RailGlass { get; set; } = 0.35;
-    public double PanelGlass { get; set; } = 0.9;
-    public double Transparency { get; set; } = 0.6;   // 0 solid … 1 most glass; replaces RailGlass/PanelGlass
+    public double Transparency { get; set; } = 0.6;   // 0 solid … 1 most glass
     /// <summary>Colour theme key (see ThemeEngine) and the accent colour as #RRGGBB.</summary>
     public string Theme { get; set; } = "ink";
     public string Accent { get; set; } = "#FF5A1F";
     public double TileGap { get; set; } = 12;
-    /// <summary>Sidebar destinations in the order shown, and those hidden. Sections of the filter rail likewise.</summary>
-    public List<string> MenuOrder { get; set; } = ["library", "discover", "spaces", "duplicates"];
-    public List<string> MenuHidden { get; set; } = ["duplicates"];
-    public List<string> SectionOrder { get; set; } = ["types", "sources", "colours", "folders", "moods", "spaces", "details"];
     /// <summary>Volume the viewer starts at (0 to 1).</summary>
     public double Volume { get; set; } = 0.8;
-    public List<string> SectionHidden { get; set; } = [];
     /// <summary>System-wide shortcut that opens the quick-search launcher.</summary>
     public string QuickSearchHotkey { get; set; } = "Ctrl+Shift+Space";
     /// <summary>Closing the window keeps File Mind in the notification area so the shortcut keeps working.</summary>
