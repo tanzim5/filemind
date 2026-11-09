@@ -1,6 +1,5 @@
 """Opt-in background and login settings for the local desktop app."""
 import json
-import os
 import plistlib
 import subprocess
 import sys

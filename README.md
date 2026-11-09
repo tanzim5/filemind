@@ -36,6 +36,8 @@ that runs on your own machine. Type what you remember ("red logo on black", "a m
 - **Find moments.** Search inside videos and sounds and open the result at the matching time.
 - **More like this.** Keep following similar files, endlessly.
 - **Automatic tags and colours** on every file. Filter by colour, type, source tool, date or size.
+- **Quick search from anywhere.** Press **Ctrl+Shift+Space** for a launcher with results, a preview and file details.
+- **Favourites and your own tags.** Star files, make coloured tags, and filter by them.
 
 ### 🧭 Explore your library
 - **Discover** visual themes (architecture, products, illustrations…) or start from a suggested question.
@@ -51,8 +53,8 @@ that runs on your own machine. Type what you remember ("red logo on black", "a m
 - **Preview renames** before anything on disk changes; commits can be undone.
 
 ### 🎨 Make it yours
-- Ten themes (including dark **Night** and **Ink**), accent colours, four gallery layouts (masonry, rows, contact sheet, storyboard), tile size and a sidebar you can reorder or hide.
-- Optionally keep File Mind running after you close the window, or start it quietly at login. Both are off by default.
+- Four themes (Midnight, Graphite, Black and Light), six accent colours, a transparency slider, four gallery layouts (masonry, rows, contact sheet, storyboard) and tile size.
+- File Mind stays in the notification area after you close the window so the quick-search shortcut keeps working. You can turn that off in Settings.
 
 <p align="center"><img src="docs/search-2026.jpg" alt="Semantic search results in the Ink theme" width="49%"> <img src="docs/discover-2026.jpg" alt="Discover visual themes and questions" width="49%"></p>
 <p align="center"><img src="docs/customize-2026.jpg" alt="Customize themes, layouts, spacing and sidebar" width="75%"></p>
@@ -78,7 +80,7 @@ Nothing to install: Python, ffmpeg and everything else are inside the download. 
 
 **Requirements:** Windows 10/11 (64-bit), about 8 GB RAM. No graphics card needed. Searching is instant; reading a new library is a one-time job of a few seconds per photo (more for videos), you can keep using the app meanwhile, and it resumes where it left off.
 
-**Uninstall:** turn off *Start at login* in Customize, close the app, delete the folder. If the NVIDIA version can't use your card, it quietly runs on the CPU.
+**Uninstall:** quit File Mind from its notification-area icon and delete the folder. If your NVIDIA card can't be used, it quietly runs on the CPU.
 
 <p align="center"><img src="docs/setup.png" alt="First launch: the model downloads once" width="70%"></p>
 </details>
@@ -132,16 +134,16 @@ python filemind.py                     # or: python -m uvicorn app.main:app --po
 
 Set `FILEMIND_MODELS` to put the model elsewhere and `FILEMIND_DATA` for the index. You can also place model files in `models/embeddinggemma-2/` yourself.
 
-**Speed.** Apple Silicon uses the GPU through MLX (installed by `./run.sh`, 1.1 GB 5-bit model). With an NVIDIA GPU and CUDA PyTorch, indexing is also much faster. Everything else runs on the CPU: search is instant, reading a new library takes a few seconds per photo. To force PyTorch on a Mac, set `FILEMIND_BACKEND=torch` (downloads the original 1.5 GB model).
+**Speed.** With an NVIDIA GPU and CUDA PyTorch, indexing is much faster. Everything else runs on the CPU: search is instant, reading a new library takes a few seconds per photo.
 
 **Linux.** "Browse…" uses `zenity` or `kdialog` if installed; otherwise paste the folder path. "Show in folder" opens your file manager.
 
-**Building the apps.** See `packaging/build_windows.py`. GitHub Actions builds the single Windows download for every `v*` tag, checks each archive's contents and smoke-tests the standard Windows and Mac apps. You can also run the **Release builds** workflow manually; to publish from a manual run, give it an existing `v*` tag in `release_tag`. NVIDIA first-run CUDA download and GPU use need testing on an NVIDIA PC.
+**Building the apps.** See `packaging/build_windows.py`. GitHub Actions builds the single Windows download for every `v*` tag, checks the archive's contents and smoke-tests the engine. You can also run the **Release builds** workflow manually; to publish from a manual run, give it an existing `v*` tag in `release_tag`. NVIDIA first-run CUDA download and GPU use need testing on an NVIDIA PC.
 </details>
 
 ## Licence
 
-The EmbeddingGemma 2 weights are Apache-2.0. The Windows and Mac apps bundle [FFmpeg](https://ffmpeg.org) (LGPL/GPL). Interface fonts: Inter and Instrument Serif (SIL OFL).
+The EmbeddingGemma 2 weights are Apache-2.0. The Windows app bundles [FFmpeg](https://ffmpeg.org) (LGPL/GPL). Interface fonts: Geist, Inter and Instrument Serif (SIL OFL).
 
 ---
 
