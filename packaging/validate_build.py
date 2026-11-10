@@ -11,7 +11,7 @@ from zipfile import ZipFile
 # archive, folder inside the zip that holds the engine, files that must be there (relative to the zip root)
 EXPECTED = {
     "windows": ("FileMind-Windows.zip", "FileMind/engine/",
-                ["FileMind/FileMind.exe", "FileMind/engine-manifest.json"]),
+                ["FileMind/FileMind.exe"]),
     "engine": ("FileMind-Engine.zip", "FileMind/", []),
 }
 ENGINE_FILES = ["FileMind.exe", "_internal/runtime.json"]

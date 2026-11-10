@@ -28,7 +28,6 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="engine-manifest.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <!-- Unpackaged publish leaves out the app's own compiled XAML (.xbf) and resource index (.pri); without them the
        app dies at startup with "Cannot locate resource from ms-appx:///MainWindow.xaml". Copy them in after publish. -->

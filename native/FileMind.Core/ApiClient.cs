@@ -77,8 +77,6 @@ public sealed class ApiClient(Uri baseUri) : IDisposable
         return PostAsync<FacetResult>("/api/facets", body, ct);
     }
 
-    public Task<VoiceModelState> GetVoiceModelAsync(CancellationToken ct = default) => GetAsync<VoiceModelState>("/api/voice/model", ct);
-    public Task<VoiceModelState> PrepareVoiceModelAsync(CancellationToken ct = default) => PostAsync<VoiceModelState>("/api/voice/model", null, ct);
 
     /// <summary>Speech to text on the engine (local Whisper): used when Windows speech recognition is unavailable.</summary>
     public async Task<string> VoiceToTextAsync(string audioPath, CancellationToken ct = default)
@@ -131,16 +129,6 @@ public sealed class ApiClient(Uri baseUri) : IDisposable
         PostAsync<JsonElement>($"/api/projects/{project}/add", new { file_ids = fileIds.ToArray() }, ct);
     public Task RemoveFromProjectAsync(int project, IEnumerable<int> fileIds, CancellationToken ct = default) =>
         PostAsync<JsonElement>($"/api/projects/{project}/remove", new { file_ids = fileIds.ToArray() }, ct);
-    public async Task DeleteProjectAsync(int project, CancellationToken ct = default)
-    {
-        using var response = await _http.DeleteAsync($"/api/projects/{project}", ct);
-        if (!response.IsSuccessStatusCode) throw new EngineException(await ReadErrorAsync(response), (int)response.StatusCode);
-    }
-    public async Task RenameProjectAsync(int project, string name, CancellationToken ct = default)
-    {
-        using var response = await _http.PatchAsJsonAsync($"/api/projects/{project}", new { name }, ct);
-        if (!response.IsSuccessStatusCode) throw new EngineException(await ReadErrorAsync(response), (int)response.StatusCode);
-    }
 
     /// <summary>"copy", "move" or "delete" (to the Recycle Bin) on indexed originals. The engine never overwrites.</summary>
     public Task FileActionAsync(string action, IEnumerable<int> fileIds, string? destination = null, CancellationToken ct = default) =>

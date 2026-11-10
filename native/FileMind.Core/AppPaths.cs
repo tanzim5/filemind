@@ -4,8 +4,6 @@ namespace FileMind.Core;
 public sealed class AppPaths
 {
     public string Root { get; }
-    public string Engine => Path.Combine(Root, "engine");
-    public string Downloads => Path.Combine(Root, "downloads");
     public string Data => Path.Combine(Root, "data");
     public string Models => Path.Combine(Root, "models");
     public string Runtime => Path.Combine(Root, "runtime");

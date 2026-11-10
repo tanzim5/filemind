@@ -9,9 +9,7 @@ public sealed class AppRuntime
 
     public AppPaths Paths { get; } = new();
     public AppSettings Settings { get; }
-    public EngineManifest Manifest { get; }
     public HttpClient Http { get; } = new() { Timeout = Timeout.InfiniteTimeSpan };
-    public EngineInstaller Installer { get; }
     public EngineHost Host { get; } = new();
     public ApiClient? Api { get; private set; }
 
@@ -24,20 +22,13 @@ public sealed class AppRuntime
     private AppRuntime()
     {
         Settings = AppSettings.Load(Paths);
-        Manifest = EngineManifest.Load(Path.Combine(AppContext.BaseDirectory, "engine-manifest.json"));
         Http.DefaultRequestHeaders.UserAgent.ParseAdd("FileMind-Native");
-        Installer = new EngineInstaller(Http, Paths);
     }
-
-    public EngineEdition EditionInfo => Manifest.Editions[Edition];
-
-    /// <summary>True when the release zip carries the engine (engine\FileMind.exe): no edition download is needed.</summary>
-    public bool HasBundledEngine => File.Exists(Path.Combine(AppContext.BaseDirectory, "engine", "FileMind.exe"));
 
     /// <summary>Looks at the hardware and decides the edition. Quick and offline.</summary>
     public void DetectHardware()
     {
-        Gpu = GpuProbe.Detect(Manifest.Cuda);
+        Gpu = GpuProbe.Detect(new CudaRequirement());
         Edition = GpuProbe.ChooseEdition(Settings.Engine, Gpu);
     }
 
@@ -49,7 +40,7 @@ public sealed class AppRuntime
         Edition = GpuProbe.ChooseEdition(preference, Gpu);
     }
 
-    /// <summary>What to run right now, or null when the engine still has to be installed.</summary>
+    /// <summary>What to run right now, or null when the engine folder is missing from the app.</summary>
     public EngineLaunch? ResolveLaunch()
     {
         var wantInstalled = Environment.GetEnvironmentVariable("FILEMIND_ENGINE") == "installed";
@@ -60,9 +51,7 @@ public sealed class AppRuntime
         }
         SourceLabel = null;
         var accel = Settings.Engine switch { "cpu" => "cpu", "nvidia" => "cuda", _ => null };
-        if (EngineLocator.FindBundled(AppContext.BaseDirectory, Paths, accel) is { } bundled) return bundled;
-        var exe = Installer.InstalledExe(Edition);
-        return exe is null ? null : EngineLocator.ForInstalled(exe, Paths, EditionInfo.Title);
+        return EngineLocator.FindBundled(AppContext.BaseDirectory, Paths, accel);
     }
 
     public async Task StartEngineAsync(EngineLaunch launch, CancellationToken ct)

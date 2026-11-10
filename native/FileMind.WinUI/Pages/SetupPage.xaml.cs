@@ -4,11 +4,9 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace FileMind.Pages;
 
-/// <summary>Everything between launching the app and seeing the library: check the hardware, install the right engine
-/// once, start it, and make sure the AI model is downloaded.</summary>
+/// <summary>Everything between launching the app and seeing the library: check the hardware, start the engine and make sure the AI model is downloaded.</summary>
 public sealed partial class SetupPage : Page
 {
-    private TaskCompletionSource<string>? _choice;
     private TaskCompletionSource<bool>? _retry;
     private bool _forceCpu;
     private string? _lastAccel;
@@ -25,12 +23,8 @@ public sealed partial class SetupPage : Page
                 rt.DetectHardware();
                 if (_forceCpu) rt.ChooseEdition(EngineManifest.Cpu);
 
-                var launch = rt.ResolveLaunch();
-                if (launch is null)
-                {
-                    await ChooseAndInstallAsync();
-                    launch = rt.ResolveLaunch() ?? throw new InvalidOperationException("The engine was installed but could not be found.");
-                }
+                var launch = rt.ResolveLaunch() ?? throw new InvalidOperationException(
+                    "The engine folder is missing next to FileMind.exe. Unzip the whole download again and start File Mind from there.");
 
                 ShowBusy("Starting File Mind", rt.SourceLabel is null ? "Waking the engine…" : $"Waking the engine ({rt.SourceLabel})…");
                 await Task.Delay(300);   // let the setup page draw before the engine process is spawned
@@ -44,56 +38,6 @@ public sealed partial class SetupPage : Page
                 await ShowErrorAsync(e.Message);
             }
         }
-    }
-
-    private async Task ChooseAndInstallAsync()
-    {
-        var rt = AppRuntime.Current;
-        var gpu = rt.Gpu;
-        Headline.Text = "Choose your engine";
-        Detail.Text = "File Mind downloads its engine once. Everything after that works offline.";
-        GpuName.Text = gpu.Headline;
-        GpuReason.Text = gpu.Reason;
-
-        var nvidia = rt.Manifest.Editions[EngineManifest.Nvidia];
-        var cpu = rt.Manifest.Editions[EngineManifest.Cpu];
-        NvidiaNote.Text = gpu.CudaUsable
-            ? $"Recommended for this PC. {Mb(nvidia.Size)} now, plus about 2.8 GB of GPU libraries with the AI model on first start."
-            : "Not available on this PC.";
-        CpuNote.Text = $"Works on any PC. {Mb(cpu.Size)}, slower indexing.";
-        NvidiaOption.IsEnabled = gpu.CudaUsable;
-        EditionChoice.SelectedItem = gpu.CudaUsable ? NvidiaOption : CpuOption;
-
-        _choice = new TaskCompletionSource<string>();
-        ChoicePanel.Visibility = Visibility.Visible;
-        BusyPanel.Visibility = ErrorPanel.Visibility = Visibility.Collapsed;
-        var picked = await _choice.Task;
-        ChoicePanel.Visibility = Visibility.Collapsed;
-
-        var auto = GpuProbe.ChooseEdition("auto", gpu);
-        rt.ChooseEdition(picked == auto ? "auto" : picked);   // "auto" keeps following the hardware if it changes later
-
-        var edition = rt.EditionInfo;
-        ShowBusy($"Installing the {edition.Title} engine", "Starting the download…");
-        var progress = new Progress<InstallProgress>(p =>
-        {
-            switch (p.Stage)
-            {
-                case "download":
-                    SetBar(p.Done, p.Total);
-                    BusyText.Text = $"Downloading · {Mb(p.Done)} of {Mb(p.Total)}";
-                    break;
-                case "verify":
-                    SetBar(0, 0);
-                    BusyText.Text = "Checking the download…";
-                    break;
-                case "unpack":
-                    SetBar(p.Done, p.Total);
-                    BusyText.Text = "Unpacking…";
-                    break;
-            }
-        });
-        await rt.Installer.InstallAsync(rt.Edition, edition, rt.Manifest.Version, progress, CancellationToken.None);
     }
 
     private async Task EnsureModelAsync()
@@ -134,7 +78,7 @@ public sealed partial class SetupPage : Page
     {
         Headline.Text = "That didn't work";
         Detail.Text = "";
-        ChoicePanel.Visibility = BusyPanel.Visibility = Visibility.Collapsed;
+        BusyPanel.Visibility = Visibility.Collapsed;
         ErrorText.Text = message;
         var rt = AppRuntime.Current;
         UseCpuButton.Visibility = rt.SourceLabel is null && rt.Settings.Engine != "cpu"
@@ -149,7 +93,7 @@ public sealed partial class SetupPage : Page
     {
         Headline.Text = headline;
         Detail.Text = "";
-        ChoicePanel.Visibility = ErrorPanel.Visibility = Visibility.Collapsed;
+        ErrorPanel.Visibility = Visibility.Collapsed;
         BusyPanel.Visibility = Visibility.Visible;
         BusyText.Text = text;
         Bar.IsIndeterminate = true;
@@ -163,9 +107,6 @@ public sealed partial class SetupPage : Page
     }
 
     private static string Mb(long bytes) => bytes >= 1L << 30 ? $"{bytes / (double)(1L << 30):0.0} GB" : $"{bytes / (1024.0 * 1024):0} MB";
-
-    private void Install_Click(object sender, RoutedEventArgs e) =>
-        _choice?.TrySetResult((EditionChoice.SelectedItem as RadioButton)?.Tag as string ?? EngineManifest.Cpu);
 
     private void Retry_Click(object sender, RoutedEventArgs e) => _retry?.TrySetResult(true);
 

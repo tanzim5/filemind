@@ -19,7 +19,6 @@
 </p>
 
 <p align="center"><img src="docs/library-0.6.png" alt="The File Mind Windows app: library with tags, favourites and counted Refine filters" width="100%"></p>
-<p align="center"><img src="docs/sounds-2026.jpg" alt="Sounds in the library: every file is a waveform you can play and scrub right on its tile" width="100%"></p>
 <p align="center"><img src="docs/duplicates-0.6.png" alt="Duplicates: find exact copies and look-alikes, remove to the Recycle Bin" width="100%"></p>
 
 File Mind reads a folder — Downloads, Pictures, a project drive — and understands **what is in** your photos, videos
@@ -30,7 +29,7 @@ that runs on your own machine. Type what you remember ("red logo on black", "a m
 
 ### 🔎 Find anything
 - **Search in plain language.** Stack several searches as tags to narrow down.
-- **Search by voice.** The recording itself is understood by the model: no speech-to-text, nothing sent anywhere.
+- **Search by voice.** In the main window the recording itself is understood by the model, on your computer. The quick-search launcher uses Windows speech recognition, which may send audio to Microsoft when Windows' *Online speech recognition* setting is on; with it off, a local speech model is used instead.
 - **Search with a reference.** Open any image, video or audio file and choose *Search with this file*, optionally adding words.
 - **Find by details.** "4K videos of motorcycles", "vertical clips under 30 seconds", "images larger than 20 MB": media details become exact filters, the rest searches by meaning.
 - **Find moments.** Search inside videos and sounds and open the result at the matching time.
@@ -56,8 +55,6 @@ that runs on your own machine. Type what you remember ("red logo on black", "a m
 - Four themes (Midnight, Graphite, Black and Light), six accent colours, a transparency slider, four gallery layouts (masonry, rows, contact sheet, storyboard) and tile size.
 - File Mind stays in the notification area after you close the window so the quick-search shortcut keeps working. You can turn that off in Settings.
 
-<p align="center"><img src="docs/search-2026.jpg" alt="Semantic search results in the Ink theme" width="49%"> <img src="docs/discover-2026.jpg" alt="Discover visual themes and questions" width="49%"></p>
-<p align="center"><img src="docs/customize-2026.jpg" alt="Customize themes, layouts, spacing and sidebar" width="75%"></p>
 
 ## Get started
 
@@ -88,7 +85,7 @@ Nothing to install: Python, ffmpeg and everything else are inside the download. 
 ## Privacy
 
 - Everything runs on your computer. Your files, the index and every search stay there.
-- The only network use is downloading models from Hugging Face when needed. The speech model (~148 MB) downloads only if you choose **Transcribe audio**.
+- File Mind's own network use is downloading models from Hugging Face (and PyTorch on first run). The one exception is voice in the quick-search launcher, which uses Windows speech recognition: see *Search by voice* above. The speech model (~148 MB) downloads only if you choose **Transcribe audio**.
 - Indexing only reads your folders. Staged renames and moves happen when you press commit and can be undone. Right-click Copy, Move and Move to Trash act immediately; deletion uses the system Trash.
 - The index lives in a `data` folder next to the app. Delete it to forget everything.
 

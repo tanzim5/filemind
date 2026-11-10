@@ -41,15 +41,6 @@ public static class EngineLocator
         return new EngineLaunch(exe, [], Path.GetDirectoryName(exe)!, env, "bundled engine");
     }
 
-    /// <summary>An installed edition. Data, models and the CUDA runtime go to the user's folder, not beside the
-    /// exe, so updating or reinstalling the engine never touches the library.</summary>
-    public static EngineLaunch ForInstalled(string exe, AppPaths paths, string editionTitle) =>
-        new(exe, [], Path.GetDirectoryName(exe)!, new Dictionary<string, string>
-        {
-            ["FILEMIND_DATA"] = paths.Data,
-            ["FILEMIND_MODELS"] = paths.Models,
-            ["FILEMIND_RUNTIME"] = paths.Runtime,
-        }, editionTitle);
 }
 
 /// <summary>Runs the engine on a private local port and stops it with the app, even if the app is killed.</summary>
