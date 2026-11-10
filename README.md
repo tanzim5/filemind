@@ -29,7 +29,7 @@ that runs on your own machine. Type what you remember ("red logo on black", "a m
 
 ### 🔎 Find anything
 - **Search in plain language.** Stack several searches as tags to narrow down.
-- **Search by voice.** In the main window the recording itself is understood by the model, on your computer. The quick-search launcher uses Windows speech recognition, which may send audio to Microsoft when Windows' *Online speech recognition* setting is on; with it off, a local speech model is used instead.
+- **Search by voice.** Your voice stays on your computer. In the main window the recording itself is understood by the model; the quick-search launcher turns it into text with a local Whisper model (downloaded on first use) and stops listening when you pause. Settings can switch the launcher to Windows speech recognition instead, which shows words as you speak but may send audio to Microsoft when Windows' *Online speech recognition* setting is on.
 - **Search with a reference.** Open any image, video or audio file and choose *Search with this file*, optionally adding words.
 - **Find by details.** "4K videos of motorcycles", "vertical clips under 30 seconds", "images larger than 20 MB": media details become exact filters, the rest searches by meaning.
 - **Find moments.** Search inside videos and sounds and open the result at the matching time.
@@ -66,6 +66,8 @@ Nothing to install: Python, ffmpeg and everything else are inside the download. 
 
 **Quick search anywhere:** press **Ctrl+Shift+Space** for the Raycast-style launcher. Change the shortcut in Settings.
 
+**Keyboard:** in the viewer, **Space** plays or pauses, **Left/Right** skip 5 seconds (or step between pictures), **Ctrl+Left/Right** go to the previous or next file, **Up/Down** change the volume, **M** mutes, **[** and **]** change the speed, **F** fills the screen and **Esc** goes back. In the Library, **Ctrl+C** copies the selected files, **Ctrl+Shift+C** copies their paths and **Enter** opens the selected file.
+
 ➡ Get them from the **[latest release](https://github.com/tanzim5/filemind/releases/latest)**.
 
 <details>
@@ -85,7 +87,7 @@ Nothing to install: Python, ffmpeg and everything else are inside the download. 
 ## Privacy
 
 - Everything runs on your computer. Your files, the index and every search stay there.
-- File Mind's own network use is downloading models from Hugging Face (and PyTorch on first run). The one exception is voice in the quick-search launcher, which uses Windows speech recognition: see *Search by voice* above. The speech model (~148 MB) downloads only if you choose **Transcribe audio**.
+- File Mind's own network use is downloading models from Hugging Face (and PyTorch on first run). Voice search is local unless you choose Windows speech recognition in Settings: see *Search by voice* above. The speech model (~148 MB) downloads only if you choose **Transcribe audio**.
 - Indexing only reads your folders. Staged renames and moves happen when you press commit and can be undone. Right-click Copy, Move and Move to Trash act immediately; deletion uses the system Trash.
 - The index lives in a `data` folder next to the app. Delete it to forget everything.
 

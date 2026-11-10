@@ -87,6 +87,12 @@ public sealed class ApiClient(Uri baseUri) : IDisposable
         return (await ReadAsync<JsonElement>(response, ct)).GetProperty("text").GetString() ?? "";
     }
 
+    /// <summary>Loads the local voice model ahead of the first words, so the answer comes back sooner.</summary>
+    public async Task WarmVoiceAsync()
+    {
+        try { using var r = await _http.PostAsync("/api/voice/warm", null); } catch (Exception) { }
+    }
+
     /// <summary>Find files that look or sound like a picture on disk.</summary>
     public async Task<List<FileItem>> SearchByImageAsync(string path, FileQuery query, CancellationToken ct = default)
     {

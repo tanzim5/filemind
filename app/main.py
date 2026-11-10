@@ -775,6 +775,14 @@ def voice_model_prepare():
     return transcribe_mod.prepare_dictation()
 
 
+@app.post("/api/voice/warm")
+def voice_warm():
+    """Loads the voice model in the background while the person is still speaking."""
+    import threading
+    threading.Thread(target=transcribe_mod.warm_dictation, daemon=True).start()
+    return {"ok": True}
+
+
 @app.post("/api/voice/text")
 async def voice_text(file: UploadFile = File(...)):
     """Speech to text for the quick-search launcher: the words become an ordinary typed search, so phrases like
