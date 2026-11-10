@@ -48,6 +48,11 @@
             <Button x:Name="HotkeyBtn" Grid.Column="1" Style="{StaticResource GlassButton}" MinWidth="190" Click="Hotkey_Click" PreviewKeyDown="Hotkey_KeyDown" LostFocus="Hotkey_Lost" Padding="12,8"/>
           </Grid>
           <TextBlock x:Name="HotkeyNote" Style="{StaticResource SecondaryText}" TextWrapping="Wrap" Visibility="Collapsed" FontSize="12"/>
+          <RadioButtons x:Name="VoiceChoice" Header="Voice search uses" SelectionChanged="Voice_Changed">
+            <RadioButton Tag="local" Content="On this PC (Whisper, private)"/>
+            <RadioButton Tag="windows" Content="Windows speech recognition"/>
+          </RadioButtons>
+          <TextBlock Text="On this PC keeps your voice on this computer. Windows speech recognition shows words as you speak, but Windows may send the audio to Microsoft when its online speech setting is on." Style="{StaticResource SecondaryText}" TextWrapping="Wrap" FontSize="12"/>
           <ToggleSwitch x:Name="KeepSwitch" Header="Keep running in the tray when the window is closed" Toggled="Keep_Toggled"/>
         </StackPanel>
       </Border>

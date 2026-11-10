@@ -21,12 +21,32 @@ public sealed partial class DiscoverPage : Page
     private bool _allQuestions;
 
     private ApiClient Api => AppRuntime.Current.Api!;
+    private readonly SidePanel _side = new();
+
+    private void BuildSide()
+    {
+        _side.Clear();
+        _side.Header("On this page");
+        void Add(FrameworkElement box, string icon, string label)
+        {
+            if (box.Visibility != Visibility.Visible) return;
+            _side.Row(icon, label, null, () => box.StartBringIntoView(new BringIntoViewOptions { VerticalAlignmentRatio = 0, AnimationDesired = true }));
+        }
+        Add(ThemesBox, "photo", "Visual themes");
+        Add(QuestionsBox, "search", "Questions worth asking");
+        Add(DeeperBox, "sparkle", "Explore deeper");
+        Add(ThoughtsBox, "sparkle", "Try a thought");
+        Add(TypesBox, "file", "By file type");
+    }
 
     public DiscoverPage()
     {
         InitializeComponent();
         BuildDeeper();
-        Loaded += async (_, _) => await LoadAsync();
+        // Sections appear as the engine answers; the sidebar list follows them.
+        foreach (var box in new FrameworkElement[] { ThemesBox, QuestionsBox, DeeperBox, ThoughtsBox, TypesBox })
+            box.RegisterPropertyChangedCallback(VisibilityProperty, (_, _) => BuildSide());
+        Loaded += async (_, _) => { BuildSide(); App.Window?.SetSidebar(_side.Root); await LoadAsync(); };
         Unloaded += (_, _) => _cts.Cancel();
     }
 

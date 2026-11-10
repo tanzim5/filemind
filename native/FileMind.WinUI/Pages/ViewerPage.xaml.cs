@@ -52,7 +52,10 @@ public sealed partial class ViewerPage : Page
         DragHelper.Attach(StageHost, () => _item.Path, null);          // drag the picture, clip or track itself out of the viewer
         DragHelper.Attach(TitleBox, () => _item.Path, () => _item.Path);
         var esc = new KeyboardAccelerator { Key = Windows.System.VirtualKey.Escape };
-        esc.Invoked += (_, e) => { GoBack(); e.Handled = true; };
+        esc.Invoked += (_, e) => { if (_full) SetFull(false); else GoBack(); e.Handled = true; };
+        IsTabStop = true;
+        PreviewKeyDown += Keys_Down;
+        Loaded += (_, _) => Focus(FocusState.Programmatic);
         KeyboardAccelerators.Add(esc);
         _tick.Tick += (_, _) => UpdateProgress();
     }
@@ -73,6 +76,7 @@ public sealed partial class ViewerPage : Page
     protected override void OnNavigatedFrom(NavigationEventArgs e)
     {
         base.OnNavigatedFrom(e);
+        if (_full) SetFull(false);
         Teardown();
         _cts.Cancel();
     }
@@ -81,6 +85,125 @@ public sealed partial class ViewerPage : Page
     private void Back_Click(object sender, RoutedEventArgs e) => GoBack();
     private void Prev_Click(object sender, RoutedEventArgs e) { if (_index > 0) Show(_index - 1); }
     private void Next_Click(object sender, RoutedEventArgs e) { if (_index < _siblings.Count - 1) Show(_index + 1); }
+
+    // ------------------------------------------------------------------ keyboard, speed, full screen
+    private static readonly double[] Speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
+    private double _speed = 1;
+    private bool _full;
+    private double _stageHeight;
+
+    private static bool Down(Windows.System.VirtualKey k) =>
+        Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(k).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+    /// <summary>Space plays or pauses, the arrows skip or step between files, M mutes, F fills the screen.</summary>
+    private void Keys_Down(object sender, KeyRoutedEventArgs e)
+    {
+        if (FocusManager.GetFocusedElement(XamlRoot) is TextBox or PasswordBox or AutoSuggestBox or NumberBox or RichEditBox) return;
+        var ctrl = Down(Windows.System.VirtualKey.Control);
+        if (Down(Windows.System.VirtualKey.Menu)) return;                 // Alt+Left/Right stay Back and Forward
+        var media = _player is not null;
+        var handled = true;
+        switch (e.Key)
+        {
+            case Windows.System.VirtualKey.Space when media: TogglePlay(); break;
+            case Windows.System.VirtualKey.K when media && !ctrl: TogglePlay(); break;
+            case Windows.System.VirtualKey.Left when ctrl || !media: Prev_Click(this, new RoutedEventArgs()); break;
+            case Windows.System.VirtualKey.Right when ctrl || !media: Next_Click(this, new RoutedEventArgs()); break;
+            case Windows.System.VirtualKey.Left: Skip(-5); break;
+            case Windows.System.VirtualKey.Right: Skip(5); break;
+            case Windows.System.VirtualKey.J when media && !ctrl: Skip(-10); break;
+            case Windows.System.VirtualKey.L when media && !ctrl: Skip(10); break;
+            case Windows.System.VirtualKey.PageUp: Prev_Click(this, new RoutedEventArgs()); break;
+            case Windows.System.VirtualKey.PageDown: Next_Click(this, new RoutedEventArgs()); break;
+            case Windows.System.VirtualKey.Up when media: VolumeSlider.Value = Math.Min(100, VolumeSlider.Value + 5); break;
+            case Windows.System.VirtualKey.Down when media: VolumeSlider.Value = Math.Max(0, VolumeSlider.Value - 5); break;
+            case Windows.System.VirtualKey.M when media && !ctrl: Mute_Tapped(this, new TappedRoutedEventArgs()); break;
+            case Windows.System.VirtualKey.F when !ctrl: SetFull(!_full); break;
+            case (Windows.System.VirtualKey)219 when media: StepSpeed(-1); break;   // [
+            case (Windows.System.VirtualKey)221 when media: StepSpeed(1); break;    // ]
+            case Windows.System.VirtualKey.C when ctrl && Down(Windows.System.VirtualKey.Shift): CopyPath(); break;
+            case Windows.System.VirtualKey.C when ctrl: _ = CopyFileAsync(); break;
+            case (Windows.System.VirtualKey)187 when _item.Kind is "image" or "video": SetZoom(_zoom * 1.25); break;   // +
+            case (Windows.System.VirtualKey)189 when _item.Kind is "image" or "video": SetZoom(_zoom / 1.25); break;   // -
+            case Windows.System.VirtualKey.Number0 when !ctrl && _item.Kind is "image" or "video": SetZoom(1); break;
+            default: handled = false; break;
+        }
+        e.Handled = handled;
+    }
+
+    private void TogglePlay()
+    {
+        try
+        {
+            if (_player is null) return;
+            if (_player.PlaybackSession.PlaybackState == MediaPlaybackState.Playing) _player.Pause(); else _player.Play();
+        }
+        catch (Exception ex) { App.Log("viewer-keys", ex, ex.Message); }
+    }
+
+    private void Skip(double seconds)
+    {
+        try
+        {
+            if (_player is null) return;
+            var s = _player.PlaybackSession;
+            var d = s.NaturalDuration.TotalSeconds;
+            var to = s.Position.TotalSeconds + seconds;
+            s.Position = TimeSpan.FromSeconds(d > 0 ? Math.Clamp(to, 0, Math.Max(0, d - 0.2)) : Math.Max(0, to));
+        }
+        catch (Exception ex) { App.Log("viewer-keys", ex, ex.Message); }
+    }
+
+    private void StepSpeed(int by)
+    {
+        var i = Array.IndexOf(Speeds, _speed);
+        if (i < 0) i = 2;
+        SetSpeed(Speeds[Math.Clamp(i + by, 0, Speeds.Length - 1)]);
+    }
+
+    private void SetSpeed(double v)
+    {
+        _speed = v;
+        SpeedText.Text = v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "×";
+        try { if (_player is not null) _player.PlaybackSession.PlaybackRate = v; } catch (Exception ex) { App.Log("viewer-speed", ex, ex.Message); }
+    }
+
+    private void Speed_Click(object sender, RoutedEventArgs e)
+    {
+        var i = Array.IndexOf(Speeds, _speed);
+        SetSpeed(Speeds[(Math.Max(i, 0) + 1) % Speeds.Length]);
+        Focus(FocusState.Programmatic);
+    }
+
+    private void Full_Click(object sender, RoutedEventArgs e) { SetFull(!_full); Focus(FocusState.Programmatic); }
+
+    /// <summary>Fills the screen with the stage: the window goes full screen and the sidebar steps aside.</summary>
+    private void SetFull(bool on)
+    {
+        if (_full == on) return;
+        _full = on;
+        try
+        {
+            App.Window?.SetImmersive(on);
+            if (on) { _stageHeight = StageCard.Height; StageCard.Height = Math.Max(400, (XamlRoot?.Size.Height ?? 900) - 76); SizeChanged += Full_SizeChanged; }
+            else { SizeChanged -= Full_SizeChanged; if (_stageHeight > 0) StageCard.Height = _stageHeight; }
+            Scroll.ChangeView(null, 0, null, true);
+        }
+        catch (Exception ex) { App.Log("viewer-full", ex, ex.Message); }
+    }
+
+    private void Full_SizeChanged(object sender, SizeChangedEventArgs e) { if (_full) StageCard.Height = Math.Max(400, e.NewSize.Height - 76); }
+
+    private void CopyPath()
+    {
+        var d = new DataPackage(); d.SetText(_item.Path); Clipboard.SetContent(d);
+    }
+
+    private async Task CopyFileAsync()
+    {
+        try { var d = new DataPackage { RequestedOperation = DataPackageOperation.Copy }; d.SetStorageItems([await StorageFile.GetFileFromPathAsync(_item.Path)]); Clipboard.SetContent(d); }
+        catch (Exception ex) { App.Log("viewer-copyfile", ex, ex.Message); }
+    }
 
     // ------------------------------------------------------------------ one file
     private void Show(int index)
@@ -104,6 +227,8 @@ public sealed partial class ViewerPage : Page
         CopyFrameText.Text = _item.Kind == "video" ? "Copy frame" : "Copy image";
         ZoomBox.Visibility = visual ? Visibility.Visible : Visibility.Collapsed;
         VolumeBox.Visibility = _item.Kind is "video" or "audio" ? Visibility.Visible : Visibility.Collapsed;
+        SpeedButton.Visibility = VolumeBox.Visibility;
+        _speed = 1; SpeedText.Text = "1×";
 
         try { BuildStage(); } catch (Exception ex) { App.Log("viewer-stage", ex, ex.Message); ShowStageMessage("This file can't be previewed here."); }
         BuildDetails();
@@ -611,15 +736,8 @@ public sealed partial class ViewerPage : Page
         {
             try { await Windows.System.Launcher.LaunchFileAsync(await StorageFile.GetFileFromPathAsync(_item.Path)); } catch (Exception ex) { App.Log("viewer-open", ex, ex.Message); }
         }));
-        actions.Children.Add(IconButton("text", "Copy the file path", (_, _) =>
-        {
-            var d = new DataPackage(); d.SetText(_item.Path); Clipboard.SetContent(d);
-        }));
-        actions.Children.Add(IconButton("file", "Copy the file", async (_, _) =>
-        {
-            try { var d = new DataPackage { RequestedOperation = DataPackageOperation.Copy }; d.SetStorageItems([await StorageFile.GetFileFromPathAsync(_item.Path)]); Clipboard.SetContent(d); }
-            catch (Exception ex) { App.Log("viewer-copyfile", ex, ex.Message); }
-        }));
+        actions.Children.Add(IconButton("text", "Copy the file path (Ctrl+Shift+C)", (_, _) => CopyPath()));
+        actions.Children.Add(IconButton("file", "Copy the file (Ctrl+C)", async (_, _) => await CopyFileAsync()));
         actions.Children.Add(IconButton("search", "Search with this file", (_, _) =>
         {
             LibraryPage.Request = new LibraryRequest(new FileQuery(), "", null, _item.Id, _item.Name);

@@ -27,6 +27,8 @@ public sealed class AppSettings
     public string QuickSearchHotkey { get; set; } = "Ctrl+Shift+Space";
     /// <summary>Closing the window keeps File Mind in the notification area so the shortcut keeps working.</summary>
     public bool KeepRunning { get; set; } = true;
+    /// <summary>Voice search: "local" (Whisper on this PC) or "windows" (Windows speech recognition).</summary>
+    public string VoiceEngine { get; set; } = "local";
 
     public static AppSettings Load(AppPaths paths)
     {

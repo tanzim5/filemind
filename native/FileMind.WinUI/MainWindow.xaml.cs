@@ -39,8 +39,8 @@ public sealed partial class MainWindow : Window
         ContentFrame.Navigated += (_, e) =>
         {
             SyncRail(e.SourcePageType);
-            // Library filters belong to the library only; other pages get a clean rail.
-            if (e.SourcePageType != typeof(Pages.LibraryPage)) SidebarHost.Content = null;
+            // Every page brings its own sidebar content; the viewer has none.
+            if (e.SourcePageType == typeof(Pages.ViewerPage)) SetSidebar(null);
         };
         Closed += (_, e) =>
         {
@@ -243,9 +243,40 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>Pages put their own sidebar content (the Library's filters) into the rail through this.</summary>
-    public void SetSidebar(UIElement? content) => SidebarHost.Content = content;
+    public void SetSidebar(UIElement? content)
+    {
+        if (ReferenceEquals(SidebarHost.Content, content)) return;
+        SidebarHost.Content = content;
+        if (content is null) return;
+        // The new content eases in, so changing page reads as one surface changing rather than a jump.
+        try
+        {
+            var sb = new Microsoft.UI.Xaml.Media.Animation.Storyboard();
+            var fade = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimation { From = 0, To = 1, Duration = TimeSpan.FromMilliseconds(160) };
+            Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(fade, SidebarHost);
+            Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(fade, "Opacity");
+            sb.Children.Add(fade); sb.Begin();
+        }
+        catch (Exception) { SidebarHost.Opacity = 1; }
+    }
 
     public void ClearSidebar(UIElement mine) { if (ReferenceEquals(SidebarHost.Content, mine)) SidebarHost.Content = null; }
+
+    /// <summary>Full screen for the viewer: the window fills the display and the title bar and sidebar step aside.</summary>
+    public void SetImmersive(bool on)
+    {
+        try
+        {
+            AppWindow.SetPresenter(on ? AppWindowPresenterKind.FullScreen : AppWindowPresenterKind.Overlapped);
+            TitleRow.Height = new GridLength(on ? 0 : 38);
+            TitleBar.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+            RailColumn.Width = new GridLength(on ? 0 : 284);
+            RailCard.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+            PanelCard.Margin = on ? new Thickness(0) : new Thickness(0, 0, 8, 8);
+            PanelCard.CornerRadius = new CornerRadius(on ? 0 : 8);
+        }
+        catch (Exception ex) { App.Log("immersive", ex, ex.Message); }
+    }
 
     /// <summary>Other pages hand the Library a request (set on LibraryPage.Request) and bring it to the front.</summary>
     public void ShowLibrary() => Select("library");

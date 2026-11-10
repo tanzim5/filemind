@@ -21,10 +21,30 @@ public sealed partial class DuplicatesPage : Page
     // The last scan survives leaving the page, so coming back is instant.
     private static DuplicatesResponse? _cached;
 
+    private readonly SidePanel _side = new();
+
     public DuplicatesPage()
     {
         InitializeComponent();
-        Loaded += (_, _) => { if (_cached is not null) Show(_cached); };
+        Loaded += (_, _) => { BuildSide(); App.Window?.SetSidebar(_side.Root); if (_cached is not null) Show(_cached); };
+    }
+
+    private void BuildSide()
+    {
+        _side.Clear();
+        _side.Header("Duplicates");
+        if (_data is null)
+        {
+            _side.Note("Scan to see the files you have twice.");
+            _side.Row("duplicates", "Scan now", null, async () => await ScanAsync());
+            return;
+        }
+        _side.Row("duplicates", "Exact copies", _data.Exact.Count.ToString("N0"), () => { _tab = "exact"; Render(); }, _tab == "exact");
+        _side.Row("photo", "Look-alikes", _data.Visual.Count.ToString("N0"), () => { _tab = "visual"; Render(); }, _tab == "visual");
+        var waste = _data.Exact.Sum(g => g.Skip(1).Sum(f => f.Size));
+        if (waste > 0) { _side.Header("Space to get back"); _side.Note($"{Size(waste)} in extra exact copies."); }
+        _side.Header("Actions");
+        _side.Row("search", "Scan again", null, async () => await ScanAsync());
     }
 
     private async void Scan_Click(object sender, RoutedEventArgs e) => await ScanAsync();
@@ -58,6 +78,7 @@ public sealed partial class DuplicatesPage : Page
         RescanBtn.Visibility = Visibility.Visible;
         if (sets == 0)
         {
+            BuildSide();
             Hero.Visibility = Visibility.Visible; Scroll.Visibility = Visibility.Collapsed; Bar.Visibility = Visibility.Collapsed;
             HeroIcon.Glyph = "check"; HeroIcon.Tone = "spaces";
             HeroTitle.Text = "No duplicates"; HeroBody.Text = "Every file in your folders is one of a kind."; ScanBtn.Visibility = Visibility.Collapsed;
@@ -77,6 +98,7 @@ public sealed partial class DuplicatesPage : Page
     private void Render()
     {
         ExactTab.IsChecked = _tab == "exact"; VisualTab.IsChecked = _tab == "visual";
+        BuildSide();
         Groups.Children.Clear(); _marks.Clear();
         foreach (var g in Current.Where(g => g.Count > 1)) Groups.Children.Add(GroupCard(g));
         if (Groups.Children.Count == 0)

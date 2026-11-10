@@ -164,24 +164,24 @@
   <Style x:Key="RailItem" TargetType="ToggleButton">
     <Setter Property="HorizontalAlignment" Value="Stretch"/>
     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-    <Setter Property="Padding" Value="8,6"/>
-    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="Padding" Value="10,0"/>
+    <Setter Property="MinHeight" Value="38"/>
+    <Setter Property="CornerRadius" Value="8"/>
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ToggleButton">
-          <Grid>
+          <Grid MinHeight="{TemplateBinding MinHeight}">
             <Border x:Name="On" Background="{StaticResource GlassHighlightBrush}" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
             <Border x:Name="Hl" Background="{StaticResource GlassHoverSoftBrush}" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
-            <Border x:Name="Bar" Width="3" Height="16" CornerRadius="1.5" HorizontalAlignment="Left" Margin="-1,0,0,0" Background="{StaticResource AccentBrush}" Opacity="0"/>
-            <ContentPresenter Padding="{TemplateBinding Padding}" HorizontalContentAlignment="Stretch" Foreground="{TemplateBinding Foreground}"/>
+            <ContentPresenter Padding="{TemplateBinding Padding}" HorizontalContentAlignment="Stretch" VerticalAlignment="Center" Foreground="{TemplateBinding Foreground}"/>
             <VisualStateManager.VisualStateGroups>
               <VisualStateGroup x:Name="CommonStates">
                 <VisualState x:Name="Normal"/>
                 <VisualState x:Name="PointerOver"><VisualState.Setters><Setter Target="Hl.Opacity" Value="1"/></VisualState.Setters></VisualState>
-                <VisualState x:Name="Pressed"><VisualState.Setters><Setter Target="Hl.Opacity" Value="1"/></VisualState.Setters></VisualState>
-                <VisualState x:Name="Checked"><VisualState.Setters><Setter Target="On.Opacity" Value="1"/><Setter Target="Bar.Opacity" Value="1"/></VisualState.Setters></VisualState>
-                <VisualState x:Name="CheckedPointerOver"><VisualState.Setters><Setter Target="On.Opacity" Value="1"/><Setter Target="Bar.Opacity" Value="1"/></VisualState.Setters></VisualState>
-                <VisualState x:Name="CheckedPressed"><VisualState.Setters><Setter Target="On.Opacity" Value="1"/><Setter Target="Bar.Opacity" Value="1"/></VisualState.Setters></VisualState>
+                <VisualState x:Name="Pressed"><VisualState.Setters><Setter Target="Hl.Opacity" Value="1"/><Setter Target="On.Opacity" Value="0.6"/></VisualState.Setters></VisualState>
+                <VisualState x:Name="Checked"><VisualState.Setters><Setter Target="On.Opacity" Value="1"/></VisualState.Setters></VisualState>
+                <VisualState x:Name="CheckedPointerOver"><VisualState.Setters><Setter Target="On.Opacity" Value="1"/></VisualState.Setters></VisualState>
+                <VisualState x:Name="CheckedPressed"><VisualState.Setters><Setter Target="On.Opacity" Value="1"/></VisualState.Setters></VisualState>
               </VisualStateGroup>
             </VisualStateManager.VisualStateGroups>
           </Grid>

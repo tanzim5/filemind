@@ -23,6 +23,7 @@ public sealed partial class SettingsPage : Page
         Loaded += async (_, _) => await FillAsync();
         GlassSlider.Value = St.Transparency * 100;
         ShowHotkey(); KeepSwitch.IsOn = St.KeepRunning;
+        VoiceChoice.SelectedIndex = St.VoiceEngine == "windows" ? 1 : 0;
         SizeSlider.Value = St.TileSize;
         GapSlider.Value = St.TileGap;
         NamesSwitch.IsOn = St.ShowNames;
@@ -30,6 +31,13 @@ public sealed partial class SettingsPage : Page
         BuildAll();
         _ready = true;
         Labels();
+    }
+
+    private void Voice_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_ready) return;
+        St.VoiceEngine = VoiceChoice.SelectedIndex == 1 ? "windows" : "local";
+        Save();
     }
 
     private void BuildAll() { BuildThemes(); BuildAccents(); BuildLayouts(); }

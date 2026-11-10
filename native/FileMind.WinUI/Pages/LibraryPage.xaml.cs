@@ -98,6 +98,9 @@ public sealed partial class LibraryPage : Page
         AddAccelerator(VirtualKey.F, VirtualKeyModifiers.Control, () => { SearchBox.Focus(FocusState.Programmatic); return Task.CompletedTask; }, true);
         AddAccelerator(VirtualKey.Escape, VirtualKeyModifiers.None, () => { ClearSelection(); return Task.CompletedTask; }, false);
         AddAccelerator(VirtualKey.Delete, VirtualKeyModifiers.None, async () => await DeleteSelectedAsync(), false);
+        AddAccelerator(VirtualKey.C, VirtualKeyModifiers.Control, async () => await CopySelectedAsync(false), false);
+        AddAccelerator(VirtualKey.C, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, async () => await CopySelectedAsync(true), false);
+        AddAccelerator(VirtualKey.Enter, VirtualKeyModifiers.None, () => { OpenSelected(); return Task.CompletedTask; }, false);
 
         // The filters live in the app's left rail, always in the same spot, while this page is showing.
         BodyGrid.Children.Remove(FilterPanel);
@@ -1329,6 +1332,38 @@ public sealed partial class LibraryPage : Page
         if (!File.Exists(_focused.Item.Path)) { ShowToast("That file has moved."); return; }
         // Explorer wants the whole thing as one quoted argument: /select,"C:\path with spaces\file.png"
         Process.Start(new ProcessStartInfo("explorer.exe") { Arguments = $"/select,\"{_focused.Item.Path}\"", UseShellExecute = false });
+    }
+
+    /// <summary>Ctrl+C puts the selected files on the clipboard (paste them into any folder or app); with Shift, their paths.</summary>
+    private async Task CopySelectedAsync(bool paths)
+    {
+        var items = _tiles.Where(t => t.Checked).Select(t => t.Item).ToList();
+        if (items.Count == 0 && _focused is not null) items.Add(_focused.Item);
+        if (items.Count == 0) return;
+        try
+        {
+            var data = new DataPackage { RequestedOperation = DataPackageOperation.Copy };
+            if (paths) data.SetText(string.Join(Environment.NewLine, items.Select(i => i.Path)));
+            else
+            {
+                var files = new List<IStorageItem>();
+                foreach (var i in items.Where(i => File.Exists(i.Path))) files.Add(await StorageFile.GetFileFromPathAsync(i.Path));
+                if (files.Count == 0) { ShowToast("Those files have moved."); return; }
+                data.SetStorageItems(files);
+            }
+            Clipboard.SetContent(data);
+            try { Clipboard.Flush(); } catch (Exception) { }
+            ShowToast(paths ? (items.Count == 1 ? "Path copied." : $"Copied {items.Count:N0} paths.") : (items.Count == 1 ? "Copied. Paste it anywhere." : $"Copied {items.Count:N0} files. Paste them anywhere."));
+        }
+        catch (Exception ex) { App.Log("copy", ex, ex.Message); ShowToast("Couldn't copy that."); }
+    }
+
+    /// <summary>Enter opens the one selected file in the viewer.</summary>
+    private void OpenSelected()
+    {
+        var picked = _tiles.Where(t => t.Checked).ToList();
+        if (picked.Count != 1) return;
+        Frame.Navigate(typeof(ViewerPage), new ViewerRequest(picked[0].Item, _tiles.Select(t => t.Item).ToList()));
     }
 
     private void CopyPath_Click(object sender, RoutedEventArgs e)
