@@ -201,8 +201,7 @@ public sealed partial class SettingsPage : Page
 
         Running.Text = rt.SourceLabel is not null
             ? $"Running from a {rt.SourceLabel}" + (device is null ? "." : $" on {device}.")
-            : rt.HasBundledEngine ? "Running" + (device is null ? "." : $" on {device}.")
-            : $"Running the {rt.EditionInfo.Title} engine" + (device is null ? "." : $" on {device}.");
+            : "Running" + (device is null ? "." : $" on {device}.");
         GpuLine.Text = $"This PC: {gpu.Headline}. {gpu.Reason}";
 
         NvidiaRadio.IsEnabled = gpu.CudaUsable;
@@ -214,8 +213,7 @@ public sealed partial class SettingsPage : Page
         Apply.IsEnabled = !fromSource;
         ChoiceNote.Text = fromSource
             ? "This copy runs from a source checkout, so the choice only applies to installed builds."
-            : rt.HasBundledEngine ? "Switching to NVIDIA downloads GPU support (about 2.8 GB) the first time. AMD and Intel graphics run on the processor. Your library is kept."
-            : "Switching downloads the other engine the first time. Your library and settings are kept.";
+            : "Switching to NVIDIA downloads GPU support (about 2.8 GB) the first time. AMD and Intel graphics run on the processor. Your library is kept.";
 
         try
         {

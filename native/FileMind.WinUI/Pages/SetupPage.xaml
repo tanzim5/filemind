@@ -10,33 +10,6 @@
           <TextBlock x:Name="Detail" Style="{StaticResource SecondaryText}" FontSize="14" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
         </StackPanel>
 
-        <!-- Hardware check and edition choice (first run, or when the engine is missing) -->
-        <StackPanel x:Name="ChoicePanel" Spacing="16" Visibility="Collapsed">
-          <Border Style="{StaticResource GlassCard}" Background="{StaticResource GlassFillStrongBrush}" Padding="18,14" CornerRadius="6">
-            <StackPanel Spacing="4">
-              <TextBlock Text="THIS PC" FontSize="11" CharacterSpacing="120" Foreground="{StaticResource GlassTextTertiaryBrush}"/>
-              <TextBlock x:Name="GpuName" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
-              <TextBlock x:Name="GpuReason" Style="{StaticResource SecondaryText}" TextWrapping="Wrap"/>
-            </StackPanel>
-          </Border>
-          <RadioButtons x:Name="EditionChoice" SelectedIndex="0">
-            <RadioButton x:Name="NvidiaOption" Tag="nvidia">
-              <StackPanel>
-                <TextBlock Text="NVIDIA CUDA" FontWeight="SemiBold"/>
-                <TextBlock x:Name="NvidiaNote" Style="{StaticResource SecondaryText}" TextWrapping="Wrap"/>
-              </StackPanel>
-            </RadioButton>
-            <RadioButton x:Name="CpuOption" Tag="cpu">
-              <StackPanel>
-                <TextBlock Text="CPU" FontWeight="SemiBold"/>
-                <TextBlock x:Name="CpuNote" Style="{StaticResource SecondaryText}" TextWrapping="Wrap"/>
-              </StackPanel>
-            </RadioButton>
-          </RadioButtons>
-          <Button x:Name="InstallButton" Content="Install and continue" Style="{StaticResource AccentButtonStyle}"
-                  HorizontalAlignment="Stretch" Height="44" Click="Install_Click"/>
-        </StackPanel>
-
         <!-- Progress -->
         <StackPanel x:Name="BusyPanel" Spacing="10" Visibility="Collapsed">
           <ProgressBar x:Name="Bar" IsIndeterminate="True" Minimum="0" Maximum="1"/>
@@ -48,7 +21,7 @@
           <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Foreground="#FFFF8A80"/>
           <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center">
             <Button Content="Try again" Style="{StaticResource AccentButtonStyle}" Click="Retry_Click"/>
-            <Button x:Name="UseCpuButton" Content="Use the CPU edition instead" Click="UseCpu_Click"/>
+            <Button x:Name="UseCpuButton" Content="Use the processor instead" Click="UseCpu_Click"/>
           </StackPanel>
         </StackPanel>
       </StackPanel>
