@@ -142,7 +142,7 @@ Set `FILEMIND_MODELS` to put the model elsewhere and `FILEMIND_DATA` for the ind
 
 ## Licence
 
-The EmbeddingGemma 2 weights are Apache-2.0. The Windows app bundles [FFmpeg](https://ffmpeg.org) (LGPL/GPL). Interface fonts: Geist, Inter and Instrument Serif (SIL OFL).
+The EmbeddingGemma 2 weights are Apache-2.0. The Windows app bundles [FFmpeg](https://ffmpeg.org) (LGPL/GPL). Interface fonts: Geist, Inter and Instrument Serif (SIL OFL). Sidebar icons: [Phosphor Icons](https://phosphoricons.com) (MIT).
 
 ---
 

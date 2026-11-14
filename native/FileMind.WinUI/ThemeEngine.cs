@@ -27,20 +27,30 @@ public static class ThemeEngine
 
     public static ElementTheme Element() => Find(AppRuntime.Current.Settings.Theme).Dark ? ElementTheme.Dark : ElementTheme.Light;
 
-    public static Palette Find(string key) => All.FirstOrDefault(p => p.Key == key) ?? All[0];
+    // "system" follows Windows: Midnight when apps are set to dark, Light when they are set to light.
+    public static Palette Find(string key) => key == "system" ? (SystemDark() ? All[0] : All[3]) : All.FirstOrDefault(p => p.Key == key) ?? All[0];
+
+    private static readonly Windows.UI.ViewManagement.UISettings Ui = new();
+
+    private static bool SystemDark()
+    {
+        try { var bg = Ui.GetColorValue(Windows.UI.ViewManagement.UIColorType.Background); return bg.R + bg.G + bg.B < 384; }
+        catch (Exception) { return true; }
+    }
+
+    /// <summary>The accent colour Windows is using (Settings > Personalisation > Colours).</summary>
+    public static Color SystemAccent()
+    {
+        try { var c = Ui.GetColorValue(Windows.UI.ViewManagement.UIColorType.Accent); return Windows.UI.Color.FromArgb(255, c.R, c.G, c.B); }
+        catch (Exception) { return C("#FF5A1F"); }
+    }
+
+    /// <summary>The accent in use: one of the six, or Windows' own when the setting is "system".</summary>
+    public static Color AccentColor(AppSettings st) => st.Accent == "system" ? SystemAccent() : C(st.Accent.Length == 7 ? st.Accent : "#FF5A1F");
 
     private static void Set(string key, Color c)
     {
         if (Application.Current.Resources.TryGetValue(key, out var v) && v is SolidColorBrush b) b.Color = c;
-    }
-
-    private static void Fade(string key, Color c)
-    {
-        if (Application.Current.Resources.TryGetValue(key, out var v) && v is LinearGradientBrush g && g.GradientStops.Count == 2)
-        {
-            g.GradientStops[0].Color = c;
-            g.GradientStops[1].Color = Windows.UI.Color.FromArgb(0, c.R, c.G, c.B);
-        }
     }
 
     private static Color Lift(Color c, int d) => Windows.UI.Color.FromArgb(255, (byte)Math.Clamp(c.R + d, 0, 255), (byte)Math.Clamp(c.G + d, 0, 255), (byte)Math.Clamp(c.B + d, 0, 255));
@@ -73,7 +83,7 @@ public static class ThemeEngine
         Set("SurfaceBrush", p.Dark ? Lift(surf, 10) : Lift(surf, -6));
         Set("OverlayBrush", Windows.UI.Color.FromArgb(0xF4, surf.R, surf.G, surf.B));
 
-        var ac = C(st.Accent.Length == 7 ? st.Accent : "#FF5A1F");
+        var ac = AccentColor(st);
         Set("AccentFillBrush", Windows.UI.Color.FromArgb(0xCC, ac.R, ac.G, ac.B));
         Set("AccentTintBrush", Windows.UI.Color.FromArgb(0x4D, ac.R, ac.G, ac.B));
         Set("AccentOnFillBrush", Windows.UI.Color.FromArgb(0x66, ac.R, ac.G, ac.B));
@@ -85,7 +95,13 @@ public static class ThemeEngine
             aura.GradientStops[1].Color = Windows.UI.Color.FromArgb(0, ac.R, ac.G, ac.B);
         }
 
-        var fade = Windows.UI.Color.FromArgb((byte)(PanelOpacity(st) * 255), p.Panel.R, p.Panel.G, p.Panel.B);
-        Fade("FadeTopBrush", fade); Fade("FadeBottomBrush", fade);
+        // Toolbars are frosted: whatever scrolls beneath them shows through blurred, tinted with the page colour.
+        // True black stays solid, since blur over black only adds grey.
+        if (Application.Current.Resources.TryGetValue("ToolbarGlassBrush", out var tv) && tv is AcrylicBrush glass)
+        {
+            glass.TintColor = p.Panel; glass.FallbackColor = Windows.UI.Color.FromArgb(0xF2, p.Panel.R, p.Panel.G, p.Panel.B);
+            glass.TintOpacity = p.Key == "amoled" ? 1 : p.Dark ? 0.62 : 0.7;
+            glass.TintLuminosityOpacity = p.Key == "amoled" ? 1 : p.Dark ? 0.72 : 0.8;
+        }
     }
 }

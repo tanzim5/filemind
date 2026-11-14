@@ -90,7 +90,8 @@ public sealed partial class SettingsPage : Page
     {
         ThemeChips.Children.Clear();
         var accent = (SolidColorBrush)Ui.Brush("AccentBrush");
-        foreach (var p in ThemeEngine.All)
+        // The last tile follows Windows' own light or dark setting.
+        foreach (var p in ThemeEngine.All.Append(ThemeEngine.Find("system") with { Key = "system", Name = "Match Windows" }))
         {
             var selected = p.Key == St.Theme;
             var ink = p.Dark ? Windows.UI.Color.FromArgb(0x55, 255, 255, 255) : Windows.UI.Color.FromArgb(0x40, 0, 0, 0);
@@ -130,13 +131,14 @@ public sealed partial class SettingsPage : Page
     private void BuildAccents()
     {
         AccentRow.Children.Clear();
-        foreach (var hex in ThemeEngine.Accents)
+        // Six of our own, then the accent colour Windows itself is using.
+        foreach (var hex in ThemeEngine.Accents.Append("system"))
         {
-            var c = Windows.UI.Color.FromArgb(255, Convert.ToByte(hex[1..3], 16), Convert.ToByte(hex[3..5], 16), Convert.ToByte(hex[5..7], 16));
+            var c = hex == "system" ? ThemeEngine.SystemAccent() : Windows.UI.Color.FromArgb(255, Convert.ToByte(hex[1..3], 16), Convert.ToByte(hex[3..5], 16), Convert.ToByte(hex[5..7], 16));
             var selected = string.Equals(hex, St.Accent, StringComparison.OrdinalIgnoreCase);
             var b = new Button { Width = 28, Height = 28, Padding = new Thickness(0), CornerRadius = new CornerRadius(14), Background = new SolidColorBrush(c),
                 BorderBrush = new SolidColorBrush(selected ? (ThemeEngine.Find(St.Theme).Dark ? Colors.White : Windows.UI.Color.FromArgb(255, 24, 24, 28)) : Colors.Transparent), BorderThickness = new Thickness(2.5) };
-            ToolTipService.SetToolTip(b, hex);
+            ToolTipService.SetToolTip(b, hex == "system" ? "Windows accent colour" : hex);
             b.Click += (_, _) => { St.Accent = hex; Save(); App.Window?.ApplyGlass(); BuildAccents(); };
             AccentRow.Children.Add(b);
         }

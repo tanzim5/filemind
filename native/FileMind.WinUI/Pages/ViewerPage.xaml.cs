@@ -55,7 +55,7 @@ public sealed partial class ViewerPage : Page
         esc.Invoked += (_, e) => { if (_full) SetFull(false); else GoBack(); e.Handled = true; };
         IsTabStop = true;
         PreviewKeyDown += Keys_Down;
-        Loaded += (_, _) => Focus(FocusState.Programmatic);
+        Loaded += (_, _) => { App.Window?.SetTitleParts(BackButton, RevealButton); Focus(FocusState.Programmatic); };
         KeyboardAccelerators.Add(esc);
         _tick.Tick += (_, _) => UpdateProgress();
     }

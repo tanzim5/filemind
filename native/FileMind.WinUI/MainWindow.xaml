@@ -4,55 +4,48 @@
         xmlns:p="using:FileMind.Pages"
         Title="File Mind">
   <Grid x:Name="Root" RequestedTheme="Dark">
-    <Grid.RowDefinitions>
-      <RowDefinition x:Name="TitleRow" Height="38"/>
-      <RowDefinition Height="*"/>
-    </Grid.RowDefinitions>
+    <!-- The strip you drag the window by. It has no fill, so it never takes a click from the controls drawn over it;
+         MainWindow.UpdateTitleRegions tells Windows which parts of it are buttons and boxes. -->
+    <Grid x:Name="TitleBar" Height="48" VerticalAlignment="Top"/>
 
-    <Grid x:Name="TitleBar" Padding="20,0,0,0">
-      <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-        <Image Source="ms-appx:///Assets/icon.png" Width="20" Height="20"/>
-        <TextBlock Text="File Mind" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center"/>
-        <ToggleButton x:Name="SettingsRail" Style="{StaticResource GlassChip}" Click="OpenSettings_Click" AutomationProperties.Name="Settings" ToolTipService.ToolTip="Settings (Ctrl+,)"
-                      Padding="7" MinHeight="0" Margin="6,0,0,0" CornerRadius="6" Background="Transparent" VerticalAlignment="Center">
-          <p:LineIcon Kind="settings" Size="15"/>
-        </ToggleButton>
-      </StackPanel>
-    </Grid>
-
-    <Grid x:Name="Shell" Grid.Row="1" Visibility="Collapsed">
+    <Grid x:Name="Shell" Visibility="Collapsed">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition x:Name="RailColumn" Width="284"/>
+        <ColumnDefinition x:Name="RailColumn" Width="276"/>
         <ColumnDefinition Width="*"/>
       </Grid.ColumnDefinitions>
 
-      <!-- The sidebar sits on the window itself: brand, quick search, destinations, the page's filters, settings. -->
-      <Grid x:Name="RailCard" Padding="12,6,10,0">
+      <!-- The page fills the window to its right and bottom edges: no card, no border, no gap. -->
+      <Grid x:Name="PanelCard" Grid.Column="1" Background="#E617171B">
+        <Rectangle IsHitTestVisible="False" Fill="{StaticResource AuraBrush}"/>
+        <Frame x:Name="ContentFrame"/>
+        <!-- Frosted strip under the window buttons, so a page scrolling beneath them stays readable.
+             The Library draws its own taller toolbar and hides this one. -->
+        <Border x:Name="TopGlass" Height="48" VerticalAlignment="Top" IsHitTestVisible="False" Background="{StaticResource ToolbarGlassBrush}"/>
+      </Grid>
+
+      <!-- The sidebar is the window's own frosted glass, top to bottom: destinations, filters, settings. -->
+      <Grid x:Name="RailCard" Padding="10,10,10,8">
         <Grid.RowDefinitions>
-          <RowDefinition Height="0"/>
-          <RowDefinition Height="Auto"/>
           <RowDefinition Height="Auto"/>
           <RowDefinition Height="*"/>
           <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <StackPanel x:Name="NavStack" Grid.Row="2" Spacing="2" Margin="0,4,0,16"/>
-        <ContentControl x:Name="SidebarHost" Grid.Row="3" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
-
+        <StackPanel x:Name="NavStack" Spacing="1" Margin="0,0,0,14"/>
+        <ContentControl x:Name="SidebarHost" Grid.Row="1" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
+        <ToggleButton x:Name="SettingsRail" Grid.Row="2" Style="{StaticResource RailItem}" MinHeight="32" Margin="0,6,0,0" Click="OpenSettings_Click"
+                      AutomationProperties.Name="Settings" ToolTipService.ToolTip="Settings (Ctrl+,)">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <p:LineIcon Kind="f-settings" Size="16" Opacity="0.75" VerticalAlignment="Center"/>
+            <TextBlock Text="Settings" FontSize="13" VerticalAlignment="Center"/>
+          </StackPanel>
+        </ToggleButton>
       </Grid>
 
-      <!-- The page sits on one calm panel; a soft glow in the accent colour gives it depth. -->
-      <Border x:Name="PanelCard" Grid.Column="1" Margin="0,0,8,8" CornerRadius="8" Background="#E617171B" BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1">
-        <Grid>
-          <Rectangle IsHitTestVisible="False" Fill="{StaticResource AuraBrush}"/>
-          <Frame x:Name="ContentFrame"/>
-        </Grid>
-      </Border>
-
-      <!-- Settings slide in from the right -->
+      <!-- Settings slide in from the right, below the window buttons -->
       <Grid x:Name="SettingsScrim" Grid.ColumnSpan="2" Visibility="Collapsed" Background="{StaticResource ScrimBrush}" Tapped="SettingsScrim_Tapped">
-        <Border x:Name="SettingsPanel" HorizontalAlignment="Right" Width="520" Margin="0,0,8,8" CornerRadius="8" Background="{StaticResource OverlayBrush}"
-                BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1" Tapped="SettingsPanel_Tapped">
+        <Border x:Name="SettingsPanel" HorizontalAlignment="Right" Width="520" Margin="0,48,0,0" CornerRadius="8,0,0,0" Background="{StaticResource OverlayBrush}"
+                BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1,1,0,0" Tapped="SettingsPanel_Tapped">
           <Grid>
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
             <Grid Margin="24,18,14,6">
@@ -67,6 +60,6 @@
     </Grid>
 
     <!-- First run, engine start-up and model download happen here, over the shell. -->
-    <Frame x:Name="SetupFrame" Grid.Row="1" Visibility="Collapsed" Background="{StaticResource SurfaceBrush}"/>
+    <Frame x:Name="SetupFrame" Visibility="Collapsed" Background="{StaticResource SurfaceBrush}"/>
   </Grid>
 </Window>

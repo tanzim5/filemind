@@ -35,114 +35,9 @@
     </DataTemplate>
   </Page.Resources>
 
-  <Grid x:Name="Host" Padding="16,12,16,0" RowSpacing="10" AllowDrop="True" DragOver="Host_DragOver" Drop="Host_Drop">
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="*"/>
-    </Grid.RowDefinitions>
-
-    <!-- Toolbar -->
-    <Grid Grid.Row="0" ColumnSpacing="10">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="Auto"/>
-        <ColumnDefinition Width="Auto"/>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="Auto"/>
-      </Grid.ColumnDefinitions>
-
-      <StackPanel Orientation="Horizontal" Spacing="6">
-        <Button x:Name="BackBtn" Style="{StaticResource GlassButton}" Padding="11,9" Click="NavBack_Click" IsEnabled="False" ToolTipService.ToolTip="Back (Alt+Left)">
-          <local:LineIcon Kind="back" Size="14"/></Button>
-        <Button x:Name="FwdBtn" Style="{StaticResource GlassButton}" Padding="11,9" Click="NavFwd_Click" IsEnabled="False" ToolTipService.ToolTip="Forward (Alt+Right)">
-          <local:LineIcon Kind="fwd" Size="14"/></Button>
-      </StackPanel>
-
-      <ToggleButton x:Name="FilterToggle" Visibility="Collapsed" Grid.Column="1" Style="{StaticResource GlassChip}" Padding="14,9" CornerRadius="6"
-                    Checked="FilterToggle_Changed" Unchecked="FilterToggle_Changed" ToolTipService.ToolTip="Show filters">
-        <StackPanel Orientation="Horizontal" Spacing="8"><local:LineIcon Kind="filter" Size="14"/><TextBlock Text="Filters" FontSize="13"/></StackPanel>
-      </ToggleButton>
-
-      <!-- The search pill: a frosted capsule. Each Enter adds a search tag; tags combine. -->
-      <Border Grid.Column="2" Style="{StaticResource GlassPill}" Height="48" Padding="16,0,8,0" CornerRadius="8">
-        <Grid ColumnSpacing="10">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
-          </Grid.ColumnDefinitions>
-          <local:LineIcon Kind="search" Size="15" Opacity="0.7" VerticalAlignment="Center"/>
-          <StackPanel x:Name="QueryTags" Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"/>
-          <TextBox x:Name="SearchBox" Grid.Column="2" PlaceholderText="Describe what you are looking for…" FontSize="15"
-                   BorderThickness="0" VerticalAlignment="Center" KeyDown="SearchBox_KeyDown" TextChanged="SearchBox_TextChanged"
-                   AutomationProperties.Name="Search your files">
-            <TextBox.Resources>
-              <SolidColorBrush x:Key="TextControlBackground" Color="Transparent"/>
-              <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent"/>
-              <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent"/>
-              <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent"/>
-              <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent"/>
-              <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent"/>
-            </TextBox.Resources>
-          </TextBox>
-          <Button x:Name="VoiceBtn" Grid.Column="3" Style="{StaticResource GlassButton}" Padding="10,7" CornerRadius="6" Click="Voice_Click"
-                  ToolTipService.ToolTip="Search by voice" AutomationProperties.Name="Search by voice">
-            <local:LineIcon x:Name="VoiceIcon" Kind="mic" Size="15"/></Button>
-        </Grid>
-      </Border>
-
-      <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8">
-        <DropDownButton x:Name="SortBtn" Style="{StaticResource GlassButton}" Padding="12,9" ToolTipService.ToolTip="Sort">
-          <DropDownButton.Content><StackPanel Orientation="Horizontal" Spacing="8"><local:LineIcon Kind="sort" Size="14"/><TextBlock x:Name="SortText" Text="Newest" FontSize="13"/></StackPanel></DropDownButton.Content>
-          <DropDownButton.Flyout>
-            <MenuFlyout>
-              <MenuFlyoutItem Text="Newest first" Tag="mtime" Click="Sort_Click"/>
-              <MenuFlyoutItem Text="Name A–Z" Tag="name" Click="Sort_Click"/>
-              <MenuFlyoutItem Text="Largest first" Tag="size" Click="Sort_Click"/>
-              <MenuFlyoutItem Text="By colour (rainbow)" Tag="color" Click="Sort_Click"/>
-            </MenuFlyout>
-          </DropDownButton.Flyout>
-        </DropDownButton>
-        <DropDownButton Style="{StaticResource GlassButton}" Padding="12,9" ToolTipService.ToolTip="Layout">
-          <DropDownButton.Content><local:LineIcon x:Name="LayoutIcon" Kind="grid" Size="15"/></DropDownButton.Content>
-          <DropDownButton.Flyout>
-            <MenuFlyout>
-              <MenuFlyoutItem Text="Masonry · original shapes" Tag="masonry" Click="Layout_Click"></MenuFlyoutItem>
-              <MenuFlyoutItem Text="Rows · edge-to-edge gallery" Tag="rows" Click="Layout_Click"></MenuFlyoutItem>
-              <MenuFlyoutItem Text="Contact sheet · see more at once" Tag="contact" Click="Layout_Click"></MenuFlyoutItem>
-              <MenuFlyoutItem Text="Storyboard · wide frames" Tag="story" Click="Layout_Click"></MenuFlyoutItem>
-            </MenuFlyout>
-          </DropDownButton.Flyout>
-        </DropDownButton>
-        <Button Style="{StaticResource GlassButton}" Padding="11,9" Click="SizeDown_Click" ToolTipService.ToolTip="Smaller tiles"><local:LineIcon Kind="minus" Size="14"/></Button>
-        <Button Style="{StaticResource GlassButton}" Padding="11,9" Click="SizeUp_Click" ToolTipService.ToolTip="Bigger tiles"><local:LineIcon Kind="plus" Size="14"/></Button>
-        <Button Style="{StaticResource GlassAccentButton}" Click="AddFolder_Click" Padding="14,9">
-          <StackPanel Orientation="Horizontal" Spacing="8"><local:LineIcon Kind="folderplus" Size="14"/><TextBlock Text="Add folder" FontSize="13"/></StackPanel>
-        </Button>
-      </StackPanel>
-    </Grid>
-
-    <!-- Title, active filters and indexing progress -->
-    <Grid Grid.Row="1" ColumnSpacing="16">
-      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-      <StackPanel Spacing="6">
-        <StackPanel Orientation="Horizontal" Spacing="14">
-          <TextBlock x:Name="PageTitle" Text="Library" Style="{StaticResource TitleText}" FontSize="26"/>
-          <TextBlock x:Name="Summary" Style="{StaticResource SecondaryText}" VerticalAlignment="Bottom" Margin="0,0,0,5"/>
-        </StackPanel>
-        <local:WrapPanel x:Name="ActiveChips"/>
-      </StackPanel>
-      <Border x:Name="IndexStrip" Grid.Column="1" Visibility="Collapsed" Style="{StaticResource GlassCard}" Padding="16,10" CornerRadius="6" VerticalAlignment="Top">
-        <StackPanel Orientation="Horizontal" Spacing="14">
-          <StackPanel Spacing="5" VerticalAlignment="Center">
-            <TextBlock x:Name="IndexText" FontSize="13"/>
-            <ProgressBar x:Name="IndexBar" Width="220" Minimum="0" Maximum="1"/>
-          </StackPanel>
-          <Button Style="{StaticResource GlassButton}" Content="Pause" Click="PauseIndex_Click" Padding="12,6" VerticalAlignment="Center"/>
-        </StackPanel>
-      </Border>
-    </Grid>
-
-    <!-- Filters | tiles | inspector -->
-    <Grid x:Name="BodyGrid" Grid.Row="2" ColumnSpacing="16">
+  <Grid x:Name="Host" AllowDrop="True" DragOver="Host_DragOver" Drop="Host_Drop">
+    <!-- Filters | tiles | inspector. The tiles fill the page and scroll under the toolbar and off the bottom edge. -->
+    <Grid x:Name="BodyGrid" ColumnSpacing="16" Padding="16,0,16,0">
       <Grid.ColumnDefinitions>
         <ColumnDefinition x:Name="FilterColumn" Width="0"/>
         <ColumnDefinition Width="*"/>
@@ -239,13 +134,9 @@
       <!-- Tiles -->
       <Grid Grid.Column="1">
         <ScrollViewer x:Name="TileScroll" ViewChanged="TileScroll_ViewChanged" VerticalScrollBarVisibility="Hidden" Padding="0">
-          <ItemsRepeater x:Name="TileRepeater" Margin="0,8,0,0" ItemTemplate="{StaticResource TileTemplate}" Layout="{StaticResource TileLayoutInstance}"/>
+          <ItemsRepeater x:Name="TileRepeater" Margin="0,112,0,24" ItemTemplate="{StaticResource TileTemplate}" Layout="{StaticResource TileLayoutInstance}"/>
         </ScrollViewer>
 
-
-        <!-- Tiles dissolve into the page at both edges instead of being cut off -->
-        <Rectangle Height="34" VerticalAlignment="Top" IsHitTestVisible="False" Fill="{StaticResource FadeTopBrush}"/>
-        <Rectangle Height="28" VerticalAlignment="Bottom" IsHitTestVisible="False" Fill="{StaticResource FadeBottomBrush}"/>
 
         <Border x:Name="EmptyCard" Visibility="Collapsed" Style="{StaticResource GlassCard}" MaxWidth="460"
                 HorizontalAlignment="Center" VerticalAlignment="Center" Padding="32">
@@ -260,7 +151,7 @@
         <!-- Floating bar for whatever is ticked -->
         <Border x:Name="ActionBar" Visibility="Collapsed" Style="{StaticResource GlassCard}" CornerRadius="8" Padding="18,10"
                 HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,22"
-                Background="{StaticResource OverlayBrush}" BorderBrush="{StaticResource GlassStrokeBrush}">
+                Background="{StaticResource ToolbarGlassBrush}" BorderBrush="{StaticResource GlassStrokeBrush}">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <TextBlock x:Name="SelCount" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,6,0"/>
             <Button x:Name="FavBtn" Style="{StaticResource GlassButton}" Click="Favourite_Click" Padding="10,7" ToolTipService.ToolTip="Favourite (F)">
@@ -283,13 +174,13 @@
 
         <!-- A short message that fades by itself -->
         <Border x:Name="Toast" Visibility="Collapsed" Style="{StaticResource GlassCard}" CornerRadius="6" Padding="18,10"
-                HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,8,0,0" Background="{StaticResource OverlayBrush}">
+                HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,120,0,0" Background="{StaticResource OverlayBrush}">
           <TextBlock x:Name="ToastText" FontSize="13"/>
         </Border>
       </Grid>
 
       <!-- Inspector -->
-      <Border x:Name="Detail" Grid.Column="2" Style="{StaticResource GlassCard}" Visibility="Collapsed" Padding="0">
+      <Border x:Name="Detail" Grid.Column="2" Style="{StaticResource GlassCard}" Visibility="Collapsed" Padding="0" Margin="0,112,0,16">
         <ScrollViewer VerticalScrollBarVisibility="Hidden">
           <StackPanel Spacing="14" Padding="18">
             <Border CornerRadius="6" Height="250" Background="{StaticResource GlassFillBrush}">
@@ -327,6 +218,110 @@
         </ScrollViewer>
       </Border>
     </Grid>
+
+    <!-- One frosted band over the top of the tiles: the toolbar, then the page title. Tiles blur as they pass under it. -->
+    <Border x:Name="TopBand" VerticalAlignment="Top" Background="{StaticResource ToolbarGlassBrush}" Padding="16,5,16,10" SizeChanged="TopBand_SizeChanged">
+      <StackPanel Spacing="8">
+        <!-- Toolbar: sits on the window's title line, beside the window buttons (the right margin keeps clear of them) -->
+        <Grid x:Name="ToolbarRow" Height="38" Margin="0,0,152,0" ColumnSpacing="10">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+
+          <StackPanel x:Name="NavButtons" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <Button x:Name="BackBtn" Style="{StaticResource GlassButton}" Padding="11,9" Click="NavBack_Click" IsEnabled="False" ToolTipService.ToolTip="Back (Alt+Left)">
+              <local:LineIcon Kind="back" Size="14"/></Button>
+            <Button x:Name="FwdBtn" Style="{StaticResource GlassButton}" Padding="11,9" Click="NavFwd_Click" IsEnabled="False" ToolTipService.ToolTip="Forward (Alt+Right)">
+              <local:LineIcon Kind="fwd" Size="14"/></Button>
+          </StackPanel>
+
+          <ToggleButton x:Name="FilterToggle" Visibility="Collapsed" Grid.Column="1" Style="{StaticResource GlassChip}" Padding="14,9" CornerRadius="6"
+                        Checked="FilterToggle_Changed" Unchecked="FilterToggle_Changed" ToolTipService.ToolTip="Show filters">
+            <StackPanel Orientation="Horizontal" Spacing="8"><local:LineIcon Kind="filter" Size="14"/><TextBlock Text="Filters" FontSize="13"/></StackPanel>
+          </ToggleButton>
+
+          <!-- The search pill: a frosted capsule. Each Enter adds a search tag; tags combine. -->
+          <Border x:Name="SearchPill" Grid.Column="2" Style="{StaticResource GlassPill}" Height="38" MaxWidth="760" Padding="14,0,5,0" CornerRadius="8">
+        <Grid ColumnSpacing="10">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+              </Grid.ColumnDefinitions>
+              <local:LineIcon Kind="search" Size="15" Opacity="0.7" VerticalAlignment="Center"/>
+              <StackPanel x:Name="QueryTags" Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"/>
+              <TextBox x:Name="SearchBox" Grid.Column="2" PlaceholderText="Describe what you are looking for…" FontSize="14"
+                       BorderThickness="0" VerticalAlignment="Center" KeyDown="SearchBox_KeyDown" TextChanged="SearchBox_TextChanged"
+                       AutomationProperties.Name="Search your files">
+                <TextBox.Resources>
+                  <SolidColorBrush x:Key="TextControlBackground" Color="Transparent"/>
+                  <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent"/>
+                  <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent"/>
+                  <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent"/>
+                  <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent"/>
+                  <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent"/>
+                </TextBox.Resources>
+              </TextBox>
+              <Button x:Name="VoiceBtn" Grid.Column="3" Style="{StaticResource GlassButton}" Padding="9,6" CornerRadius="6" Click="Voice_Click"
+                      ToolTipService.ToolTip="Search by voice" AutomationProperties.Name="Search by voice">
+                <local:LineIcon x:Name="VoiceIcon" Kind="mic" Size="15"/></Button>
+            </Grid>
+          </Border>
+
+          <StackPanel x:Name="ToolButtons" Grid.Column="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <DropDownButton x:Name="SortBtn" Style="{StaticResource GlassButton}" Padding="12,9" ToolTipService.ToolTip="Sort">
+              <DropDownButton.Content><StackPanel Orientation="Horizontal" Spacing="8"><local:LineIcon Kind="sort" Size="14"/><TextBlock x:Name="SortText" Text="Newest" FontSize="13"/></StackPanel></DropDownButton.Content>
+              <DropDownButton.Flyout>
+                <MenuFlyout>
+                  <MenuFlyoutItem Text="Newest first" Tag="mtime" Click="Sort_Click"/>
+                  <MenuFlyoutItem Text="Name A–Z" Tag="name" Click="Sort_Click"/>
+                  <MenuFlyoutItem Text="Largest first" Tag="size" Click="Sort_Click"/>
+                  <MenuFlyoutItem Text="By colour (rainbow)" Tag="color" Click="Sort_Click"/>
+                </MenuFlyout>
+              </DropDownButton.Flyout>
+            </DropDownButton>
+            <DropDownButton Style="{StaticResource GlassButton}" Padding="12,9" ToolTipService.ToolTip="Layout">
+              <DropDownButton.Content><local:LineIcon x:Name="LayoutIcon" Kind="grid" Size="15"/></DropDownButton.Content>
+              <DropDownButton.Flyout>
+                <MenuFlyout>
+                  <MenuFlyoutItem Text="Masonry · original shapes" Tag="masonry" Click="Layout_Click"></MenuFlyoutItem>
+                  <MenuFlyoutItem Text="Rows · edge-to-edge gallery" Tag="rows" Click="Layout_Click"></MenuFlyoutItem>
+                  <MenuFlyoutItem Text="Contact sheet · see more at once" Tag="contact" Click="Layout_Click"></MenuFlyoutItem>
+                  <MenuFlyoutItem Text="Storyboard · wide frames" Tag="story" Click="Layout_Click"></MenuFlyoutItem>
+                </MenuFlyout>
+              </DropDownButton.Flyout>
+            </DropDownButton>
+            <Button Style="{StaticResource GlassButton}" Padding="11,9" Click="SizeDown_Click" ToolTipService.ToolTip="Smaller tiles"><local:LineIcon Kind="minus" Size="14"/></Button>
+            <Button Style="{StaticResource GlassButton}" Padding="11,9" Click="SizeUp_Click" ToolTipService.ToolTip="Bigger tiles"><local:LineIcon Kind="plus" Size="14"/></Button>
+            <Button Style="{StaticResource GlassAccentButton}" Click="AddFolder_Click" Padding="14,9">
+              <StackPanel Orientation="Horizontal" Spacing="8"><local:LineIcon Kind="folderplus" Size="14"/><TextBlock Text="Add folder" FontSize="13"/></StackPanel>
+            </Button>
+          </StackPanel>
+        </Grid>
+
+        <!-- Title, active filters and indexing progress -->
+        <Grid ColumnSpacing="16">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <StackPanel Spacing="6">
+            <StackPanel Orientation="Horizontal" Spacing="14">
+              <TextBlock x:Name="PageTitle" Text="Library" Style="{StaticResource TitleText}" FontSize="26"/>
+              <TextBlock x:Name="Summary" Style="{StaticResource SecondaryText}" VerticalAlignment="Bottom" Margin="0,0,0,5"/>
+            </StackPanel>
+            <local:WrapPanel x:Name="ActiveChips"/>
+          </StackPanel>
+          <Border x:Name="IndexStrip" Grid.Column="1" Visibility="Collapsed" Style="{StaticResource GlassCard}" Padding="16,10" CornerRadius="6" VerticalAlignment="Top">
+            <StackPanel Orientation="Horizontal" Spacing="14">
+              <StackPanel Spacing="5" VerticalAlignment="Center">
+                <TextBlock x:Name="IndexText" FontSize="13"/>
+                <ProgressBar x:Name="IndexBar" Width="220" Minimum="0" Maximum="1"/>
+              </StackPanel>
+              <Button Style="{StaticResource GlassButton}" Content="Pause" Click="PauseIndex_Click" Padding="12,6" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Border>
+        </Grid>
+      </StackPanel>
+    </Border>
   </Grid>
 </Page>
 

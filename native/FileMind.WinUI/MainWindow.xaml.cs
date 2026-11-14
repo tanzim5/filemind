@@ -19,6 +19,8 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBar);
         var bar = AppWindow.TitleBar;
+        // The tall bar puts the window buttons on the same line as the page's toolbar, like a unified Mac toolbar.
+        bar.PreferredHeightOption = TitleBarHeightOption.Tall;
         bar.ButtonBackgroundColor = Colors.Transparent;
         bar.ButtonInactiveBackgroundColor = Colors.Transparent;
         bar.ButtonForegroundColor = Colors.White;
@@ -36,9 +38,18 @@ public sealed partial class MainWindow : Window
             if (pp.IsXButton1Pressed) { e.Handled = true; _ = GoBackAnyAsync(); }
             else if (pp.IsXButton2Pressed) { e.Handled = true; _ = GoForwardAnyAsync(); }
         }), true);
+        Root.SizeChanged += (_, _) => QueueTitleRegions();
+        // Follow Windows when it changes between light and dark or gets a new accent colour.
+        _ui.ColorValuesChanged += (_, _) => DispatcherQueue.TryEnqueue(() =>
+        {
+            var st = AppRuntime.Current.Settings;
+            if (st.Theme == "system" || st.Accent == "system") ApplyGlass();
+        });
         ContentFrame.Navigated += (_, e) =>
         {
             SyncRail(e.SourcePageType);
+            SetTitleParts();
+            TopGlass.Visibility = e.SourcePageType == typeof(Pages.LibraryPage) ? Visibility.Collapsed : Visibility.Visible;
             // Every page brings its own sidebar content; the viewer has none.
             if (e.SourcePageType == typeof(Pages.ViewerPage)) SetSidebar(null);
         };
@@ -55,6 +66,52 @@ public sealed partial class MainWindow : Window
             App.Quit();
         };
         Root.Loaded += async (_, _) => await BootAsync();
+    }
+
+    private readonly Windows.UI.ViewManagement.UISettings _ui = new();
+
+    // ---- Title bar: the top 48 px of the window drags it, except where a page has put controls ----
+    private readonly List<FrameworkElement> _titleParts = [];
+    private bool _regionsQueued;
+
+    /// <summary>A page names the controls it has placed in the top strip, so they take clicks instead of dragging the window.</summary>
+    public void SetTitleParts(params FrameworkElement[] parts)
+    {
+        foreach (var e in _titleParts) e.SizeChanged -= TitlePart_SizeChanged;
+        _titleParts.Clear(); _titleParts.AddRange(parts);
+        foreach (var e in _titleParts) e.SizeChanged += TitlePart_SizeChanged;
+        QueueTitleRegions();
+    }
+
+    private void TitlePart_SizeChanged(object sender, SizeChangedEventArgs e) => QueueTitleRegions();
+
+    private void QueueTitleRegions()
+    {
+        if (_regionsQueued) return;
+        _regionsQueued = true;
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () => { _regionsQueued = false; UpdateTitleRegions(); });
+    }
+
+    private void UpdateTitleRegions()
+    {
+        try
+        {
+            if (Root.XamlRoot is null) return;
+            var scale = Root.XamlRoot.RasterizationScale;
+            var rects = new List<RectInt32>();
+            void Add(FrameworkElement e)
+            {
+                if (!e.IsLoaded || e.Visibility != Visibility.Visible || e.ActualWidth <= 0) return;
+                var b = e.TransformToVisual(null).TransformBounds(new Windows.Foundation.Rect(0, 0, e.ActualWidth, e.ActualHeight));
+                if (b.Top >= TitleBar.Height || b.Bottom <= 0) return;
+                rects.Add(new RectInt32((int)(b.X * scale), (int)(b.Y * scale), (int)Math.Ceiling(b.Width * scale), (int)Math.Ceiling(b.Height * scale)));
+            }
+            if (Shell.Visibility == Visibility.Visible && RailCard.Visibility == Visibility.Visible) Add(NavStack);
+            foreach (var e in _titleParts) Add(e);
+            Microsoft.UI.Input.InputNonClientPointerSource.GetForWindowId(AppWindow.Id)
+                .SetRegionRects(Microsoft.UI.Input.NonClientRegionKind.Passthrough, [.. rects]);
+        }
+        catch (Exception ex) { App.Log("title-regions", ex, ex.Message); }
     }
 
     /// <summary>Applies the user's glass opacity choices to the rail and page panel.</summary>
@@ -182,15 +239,6 @@ public sealed partial class MainWindow : Window
         if (tag is null || tag == _current) return;
         _current = tag;
         foreach (var b in RailButtons) b.IsChecked = (string)b.Tag == tag;
-        TintGlyphs();
-    }
-
-    private readonly Dictionary<string, Pages.LineIcon> _glyphs = [];
-    private void TintGlyphs()
-    {
-        foreach (var (k, g) in _glyphs)
-            if (k == _current) g.Foreground = (Brush)Application.Current.Resources["AccentBrush"];
-            else g.ResetColor();
     }
 
     private static Windows.UI.Color Color(byte a, byte r, byte g, byte b) => Windows.UI.Color.FromArgb(a, r, g, b);
@@ -212,6 +260,7 @@ public sealed partial class MainWindow : Window
             SetupFrame.Visibility = Visibility.Collapsed;
             SetupFrame.Content = null;
             Shell.Visibility = Visibility.Visible;
+            QueueTitleRegions();
             Select("library");
             if (!_watch.IsEnabled) { _watch.Tick += async (_, _) => await WatchEngineAsync(); _watch.Start(); }
         }
@@ -268,12 +317,11 @@ public sealed partial class MainWindow : Window
         try
         {
             AppWindow.SetPresenter(on ? AppWindowPresenterKind.FullScreen : AppWindowPresenterKind.Overlapped);
-            TitleRow.Height = new GridLength(on ? 0 : 38);
             TitleBar.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
-            RailColumn.Width = new GridLength(on ? 0 : 284);
+            RailColumn.Width = new GridLength(on ? 0 : 276);
             RailCard.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
-            PanelCard.Margin = on ? new Thickness(0) : new Thickness(0, 0, 8, 8);
-            PanelCard.CornerRadius = new CornerRadius(on ? 0 : 8);
+            TopGlass.Visibility = on || ContentFrame.Content is Pages.LibraryPage ? Visibility.Collapsed : Visibility.Visible;
+            QueueTitleRegions();
         }
         catch (Exception ex) { App.Log("immersive", ex, ex.Message); }
     }
@@ -307,31 +355,28 @@ public sealed partial class MainWindow : Window
 
     private readonly Dictionary<string, TextBlock> _counts = [];
 
-    /// <summary>Builds the four destinations: a colour icon, the name, and a quiet count on the right.</summary>
+    /// <summary>Builds the four destinations: an accent-coloured icon, the name, and a quiet count on the right.</summary>
     public void BuildRail()
     {
-        NavStack.Children.Clear(); _rail.Clear(); _counts.Clear(); _glyphs.Clear();
+        NavStack.Children.Clear(); _rail.Clear(); _counts.Clear();
         foreach (var (key, label) in Destinations)
         {
-            // Finder/Raycast-style rows: a quiet monochrome glyph, the name, a dim count. The selected row gets a soft
-            // fill and an accent-coloured glyph; nothing else competes for attention.
+            // Finder-style rows: a solid glyph in the accent colour, the name, a dim count. The selected row gets a
+            // soft fill; nothing else competes for attention.
             var row = new Grid { ColumnSpacing = 10 };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var glyph = new Pages.LineIcon { Kind = key switch { "library" => "photo", "discover" => "sparkle", "spaces" => "folder", _ => "duplicates" }, Size = 16, VerticalAlignment = VerticalAlignment.Center };
-            _glyphs[key] = glyph;
-            row.Children.Add(glyph);
+            row.Children.Add(new Pages.LineIcon { Kind = "f-" + key, Size = 17, VerticalAlignment = VerticalAlignment.Center, Foreground = (Brush)Application.Current.Resources["AccentBrush"] });
             var name = new TextBlock { Text = label, FontSize = 13, VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(name, 1); row.Children.Add(name);
             var count = new TextBlock { FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center, Foreground = (Brush)Application.Current.Resources["GlassTextTertiaryBrush"] };
             Grid.SetColumn(count, 2); row.Children.Add(count);
             _counts[key] = count;
-            var b = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton { Style = (Style)Application.Current.Resources["RailItem"], Tag = key, Content = row, IsChecked = key == _current };
+            var b = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton { Style = (Style)Application.Current.Resources["RailItem"], Tag = key, Content = row, IsChecked = key == _current, MinHeight = 32, CornerRadius = new CornerRadius(6) };
             b.Click += Rail_Click;
             _rail.Add(b); NavStack.Children.Add(b);
         }
-        TintGlyphs();
         _ = FillCountsAsync();
     }
 

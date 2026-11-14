@@ -65,8 +65,8 @@
   <SolidColorBrush x:Key="AccentOnStrokeBrush" Color="#99FF7A45"/>
   <SolidColorBrush x:Key="GlassHighlightBrush" Color="#26FFFFFF"/>
   <SolidColorBrush x:Key="GlassHoverSoftBrush" Color="#14FFFFFF"/>
-  <LinearGradientBrush x:Key="FadeTopBrush" StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#FF17171B" Offset="0"/><GradientStop Color="#0017171B" Offset="1"/></LinearGradientBrush>
-  <LinearGradientBrush x:Key="FadeBottomBrush" StartPoint="0,1" EndPoint="0,0"><GradientStop Color="#FF17171B" Offset="0"/><GradientStop Color="#0017171B" Offset="1"/></LinearGradientBrush>
+  <!-- Frosted toolbar: blurs the tiles scrolling beneath it (recoloured by ThemeEngine). -->
+  <AcrylicBrush x:Key="ToolbarGlassBrush" TintColor="#0C0D14" TintOpacity="0.62" TintLuminosityOpacity="0.72" FallbackColor="#F20C0D14"/>
   <SolidColorBrush x:Key="AccentTintStrongBrush" Color="#80FF5A1F"/>
   <SolidColorBrush x:Key="SurfaceBrush" Color="#FF1B1B21"/>
   <SolidColorBrush x:Key="OverlayBrush" Color="#F01D1D22"/>

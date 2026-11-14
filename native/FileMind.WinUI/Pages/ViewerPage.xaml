@@ -7,9 +7,10 @@
       <StackPanel Padding="20,0,20,90" Spacing="0">
 
         <!-- top bar: back, title, folder -->
-        <Grid Height="60" Padding="0,10,0,0">
+        <!-- The last column keeps the Explorer button clear of the window buttons. -->
+        <Grid Height="56" Padding="0,7,0,0">
           <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="136"/>
           </Grid.ColumnDefinitions>
           <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
             <Button x:Name="BackButton" Style="{StaticResource GlassButton}" Width="34" Height="34" Padding="0" CornerRadius="6" Click="Back_Click" ToolTipService.ToolTip="Back (Esc)">
@@ -20,7 +21,7 @@
             <TextBlock x:Name="TitleBox" FontSize="14" FontWeight="SemiBold" TextAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="760"/>
             <TextBlock x:Name="SubtitleBox" FontSize="11" TextAlignment="Center" Foreground="{StaticResource GlassTextTertiaryBrush}"/>
           </StackPanel>
-          <Button Grid.Column="2" Style="{StaticResource GlassButton}" Width="34" Height="34" Padding="0" CornerRadius="6" Click="Reveal_Click" ToolTipService.ToolTip="Show in Explorer">
+          <Button x:Name="RevealButton" Grid.Column="2" Style="{StaticResource GlassButton}" Width="34" Height="34" Padding="0" CornerRadius="6" Click="Reveal_Click" ToolTipService.ToolTip="Show in Explorer">
             <local:LineIcon Kind="library" Size="16"/>
           </Button>
         </Grid>
@@ -103,7 +104,5 @@
       </StackPanel>
     </ScrollViewer>
 
-    <Rectangle Height="20" VerticalAlignment="Top" IsHitTestVisible="False" Fill="{StaticResource FadeTopBrush}"/>
-    <Rectangle Height="70" VerticalAlignment="Bottom" IsHitTestVisible="False" Fill="{StaticResource FadeBottomBrush}"/>
   </Grid>
 </Page>

@@ -110,6 +110,7 @@ public sealed partial class LibraryPage : Page
         Loaded += async (_, _) =>
         {
             App.Window?.SetSidebar(FilterPanel);
+            App.Window?.SetTitleParts(NavButtons, SearchPill, ToolButtons);
             if (_cts.IsCancellationRequested) _cts = new CancellationTokenSource();
             _timer.Start();
             if (_ready) return;          // coming back from the viewer: everything is exactly where it was
@@ -122,6 +123,16 @@ public sealed partial class LibraryPage : Page
     }
 
     private bool _ready, _pending;
+
+    // The toolbar band floats over the tiles, so everything beneath starts just below it, however tall it gets
+    // (active filter chips can wrap onto more lines).
+    private void TopBand_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var h = Math.Ceiling(e.NewSize.Height);
+        TileRepeater.Margin = new Thickness(0, h + 4, 0, 24);
+        Detail.Margin = new Thickness(0, h + 4, 0, 16);
+        Toast.Margin = new Thickness(0, h + 8, 0, 0);
+    }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
@@ -652,12 +663,12 @@ public sealed partial class LibraryPage : Page
             int Kind(string k) => _stats.Kinds.GetValueOrDefault(k);
             var types = new List<FrameworkElement>
             {
-                TypeTile("All", "grid", _q.Kind == "all", "all", _stats.Total),
-                TypeTile("Photos", "photo", _q.Kind == "image", "image", Kind("image")),
-                TypeTile("Videos", "video", _q.Kind == "video", "video", Kind("video")),
-                TypeTile("Sounds", "music", _q.Kind == "audio", "audio", Kind("audio")),
+                TypeTile("All", "f-all", _q.Kind == "all", "all", _stats.Total),
+                TypeTile("Photos", "f-photo", _q.Kind == "image", "image", Kind("image")),
+                TypeTile("Videos", "f-video", _q.Kind == "video", "video", Kind("video")),
+                TypeTile("Sounds", "f-music", _q.Kind == "audio", "audio", Kind("audio")),
             };
-            foreach (var (key, label, icon) in new[] { ("doc", "Docs", "file"), ("text", "Text", "text"), ("code", "Code", "text") })
+            foreach (var (key, label, icon) in new[] { ("doc", "Docs", "f-file"), ("text", "Text", "f-text"), ("code", "Code", "f-text") })
                 if (Kind(key) > 0 || _q.Kind == key) types.Add(TypeTile(label, icon, _q.Kind == key, key, Kind(key)));
             TypeChips.ItemsSource = types;
 
