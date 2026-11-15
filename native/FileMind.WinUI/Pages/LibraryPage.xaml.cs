@@ -767,7 +767,7 @@ public sealed partial class LibraryPage : Page
     }
 
     private static readonly string[] RingColours = ["#F2552C", "#3B82F6", "#22A559", "#8B5CF6", "#F59E0B", "#EC4899", "#14B8A6", "#64748B"];
-    private static string SpaceRing(int id) => RingColours[Math.Abs(id) % RingColours.Length];
+    internal static string SpaceRing(int id) => RingColours[Math.Abs(id) % RingColours.Length];
 
     /// <summary>One space in the sidebar: a small coloured ring, the name, a quiet count. Clicking opens it in the Library.</summary>
     private ToggleButton SpaceRow(string name, string? ring, string? count, bool on, Func<Task> click)
@@ -984,7 +984,7 @@ public sealed partial class LibraryPage : Page
             head.Children.Add(new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = Brush(group.Key switch { "Quality" => "#3B82F6", "Shape" => "#8B5CF6", "Length" => "#22A559", "Motion" => "#EC4899", "File size" => "#F59E0B", _ => "#14B8A6" }), VerticalAlignment = VerticalAlignment.Center });
             head.Children.Add(new TextBlock { Text = group.Key, FontSize = 12, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
             box.Children.Add(head);
-            var wrap = new WrapPanel { Spacing = 5, Justify = true };
+            var wrap = new WrapPanel { Spacing = 5 };   // natural widths, left to right, wrapping: no stretched rows
             var hint = group.Key switch { "Quality" => "#3B82F6", "Shape" => "#8B5CF6", "Length" => "#22A559", "Motion" => "#EC4899", "File size" => "#F59E0B", _ => "#14B8A6" };
             foreach (var f in shown)
             {
