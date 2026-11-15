@@ -30,6 +30,8 @@ public sealed partial class MainWindow : Window
         RestorePlacement();
         AddShortcuts();
         ApplyGlass();
+        // The only accelerators are Ctrl+digits, Alt+arrows and Esc; none of them should pop a key-name tooltip over the page.
+        Root.KeyboardAcceleratorPlacementMode = KeyboardAcceleratorPlacementMode.Hidden;
 
         // Back and Forward everywhere: the mouse's side buttons, Alt+Left/Right, and the same in every page.
         Root.AddHandler(UIElement.PointerPressedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler((_, e) =>
@@ -48,10 +50,8 @@ public sealed partial class MainWindow : Window
         ContentFrame.Navigated += (_, e) =>
         {
             SyncRail(e.SourcePageType);
-            SetTitleParts();
-            TopGlass.Visibility = e.SourcePageType == typeof(Pages.LibraryPage) ? Visibility.Collapsed : Visibility.Visible;
-            // Every page brings its own sidebar content; the viewer has none.
-            if (e.SourcePageType == typeof(Pages.ViewerPage)) SetSidebar(null);
+            SetActions(null);              // the new page puts its own buttons in the bar once it has loaded
+            SyncNav();
         };
         Closed += (_, e) =>
         {
@@ -70,20 +70,35 @@ public sealed partial class MainWindow : Window
 
     private readonly Windows.UI.ViewManagement.UISettings _ui = new();
 
-    // ---- Title bar: the top 48 px of the window drags it, except where a page has put controls ----
-    private readonly List<FrameworkElement> _titleParts = [];
+    // ---- Top bar: back/forward, the page title and the page's own buttons. The 48 px strip drags the window, except the buttons ----
     private bool _regionsQueued;
 
-    /// <summary>A page names the controls it has placed in the top strip, so they take clicks instead of dragging the window.</summary>
-    public void SetTitleParts(params FrameworkElement[] parts)
+    /// <summary>Title in the middle of the bar, with an optional quiet count or note after it.</summary>
+    public void SetTitle(string title, string? note = null)
     {
-        foreach (var e in _titleParts) e.SizeChanged -= TitlePart_SizeChanged;
-        _titleParts.Clear(); _titleParts.AddRange(parts);
-        foreach (var e in _titleParts) e.SizeChanged += TitlePart_SizeChanged;
+        TitleText.Text = title;
+        TitleNote.Text = note ?? "";
         QueueTitleRegions();
     }
 
-    private void TitlePart_SizeChanged(object sender, SizeChangedEventArgs e) => QueueTitleRegions();
+    /// <summary>The right side of the bar: a page hands over small icon buttons (null clears them).</summary>
+    public void SetActions(UIElement? actions)
+    {
+        if (ReferenceEquals(ActionsHost.Content, actions)) return;
+        ActionsHost.Content = actions;
+        QueueTitleRegions();
+    }
+
+    /// <summary>Keeps the back and forward buttons in step with what Back would do right now.</summary>
+    public void SyncNav()
+    {
+        var back = SettingsScrim.Visibility == Visibility.Visible || (ContentFrame.Content is Pages.LibraryPage lp && lp.CanStepBack) || ContentFrame.CanGoBack;
+        var fwd = SettingsScrim.Visibility != Visibility.Visible && ((ContentFrame.Content is Pages.LibraryPage lp2 && lp2.CanStepForward) || ContentFrame.CanGoForward);
+        BackBtn.IsEnabled = back; FwdBtn.IsEnabled = fwd;
+    }
+
+    private async void NavBack_Click(object sender, RoutedEventArgs e) { await GoBackAnyAsync(); SyncNav(); }
+    private async void NavFwd_Click(object sender, RoutedEventArgs e) { await GoForwardAnyAsync(); SyncNav(); }
 
     private void QueueTitleRegions()
     {
@@ -106,8 +121,12 @@ public sealed partial class MainWindow : Window
                 if (b.Top >= TitleBar.Height || b.Bottom <= 0) return;
                 rects.Add(new RectInt32((int)(b.X * scale), (int)(b.Y * scale), (int)Math.Ceiling(b.Width * scale), (int)Math.Ceiling(b.Height * scale)));
             }
-            if (Shell.Visibility == Visibility.Visible && RailCard.Visibility == Visibility.Visible) Add(NavStack);
-            foreach (var e in _titleParts) Add(e);
+            if (Shell.Visibility == Visibility.Visible && TopBar.Visibility == Visibility.Visible)
+            {
+                Add(NavButtons);
+                // The actions host is as wide as its column; only what the page put in it takes clicks.
+                if (ActionsHost.Content is FrameworkElement a) Add(a);
+            }
             Microsoft.UI.Input.InputNonClientPointerSource.GetForWindowId(AppWindow.Id)
                 .SetRegionRects(Microsoft.UI.Input.NonClientRegionKind.Passthrough, [.. rects]);
         }
@@ -243,7 +262,7 @@ public sealed partial class MainWindow : Window
 
     private static Windows.UI.Color Color(byte a, byte r, byte g, byte b) => Windows.UI.Color.FromArgb(a, r, g, b);
 
-    private bool _booting;
+    private bool _booting, _devPageDone;
     private int _restarts;
     private DateTime _lastRestart = DateTime.MinValue;
     private readonly DispatcherTimer _watch = new() { Interval = TimeSpan.FromSeconds(4) };
@@ -261,6 +280,7 @@ public sealed partial class MainWindow : Window
             SetupFrame.Content = null;
             Shell.Visibility = Visibility.Visible;
             QueueTitleRegions();
+            // The Library is created first, even when something else is shown, so its filters already sit in the sidebar.
             Select("library");
             if (!_watch.IsEnabled) { _watch.Tick += async (_, _) => await WatchEngineAsync(); _watch.Start(); }
         }
@@ -384,8 +404,6 @@ public sealed partial class MainWindow : Window
         catch (Exception) { SidebarHost.Opacity = 1; }
     }
 
-    public void ClearSidebar(UIElement mine) { if (ReferenceEquals(SidebarHost.Content, mine)) SidebarHost.Content = null; }
-
     /// <summary>Full screen for the viewer: the window fills the display and the title bar and sidebar step aside.</summary>
     public void SetImmersive(bool on)
     {
@@ -393,9 +411,9 @@ public sealed partial class MainWindow : Window
         {
             AppWindow.SetPresenter(on ? AppWindowPresenterKind.FullScreen : AppWindowPresenterKind.Overlapped);
             TitleBar.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
-            RailColumn.Width = new GridLength(on ? 0 : 276);
+            RailColumn.Width = new GridLength(on ? 0 : 248);
             RailCard.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
-            TopGlass.Visibility = on || ContentFrame.Content is Pages.LibraryPage ? Visibility.Collapsed : Visibility.Visible;
+            TopBar.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
             QueueTitleRegions();
         }
         catch (Exception ex) { App.Log("immersive", ex, ex.Message); }
@@ -442,13 +460,13 @@ public sealed partial class MainWindow : Window
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.Children.Add(new Pages.LineIcon { Kind = "f-" + key, Size = 17, VerticalAlignment = VerticalAlignment.Center, Foreground = (Brush)Application.Current.Resources["AccentBrush"] });
+            row.Children.Add(new Pages.LineIcon { Kind = "f-" + key, Size = 16, VerticalAlignment = VerticalAlignment.Center, Foreground = (Brush)Application.Current.Resources["AccentBrush"] });
             var name = new TextBlock { Text = label, FontSize = 13, VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(name, 1); row.Children.Add(name);
             var count = new TextBlock { FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center, Foreground = (Brush)Application.Current.Resources["GlassTextTertiaryBrush"] };
             Grid.SetColumn(count, 2); row.Children.Add(count);
             _counts[key] = count;
-            var b = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton { Style = (Style)Application.Current.Resources["RailItem"], Tag = key, Content = row, IsChecked = key == _current, MinHeight = 32, CornerRadius = new CornerRadius(6) };
+            var b = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton { Style = (Style)Application.Current.Resources["RailItem"], Tag = key, Content = row, IsChecked = key == _current, MinHeight = 30, CornerRadius = new CornerRadius(6) };
             b.Click += Rail_Click;
             _rail.Add(b); NavStack.Children.Add(b);
         }
@@ -484,10 +502,18 @@ public sealed partial class MainWindow : Window
                          && ContentFrame.BackStack.Any(e => e.SourcePageType == typeof(Pages.LibraryPage)); i++)
             ContentFrame.GoBack();
         if (ContentFrame.Content is Pages.LibraryPage lp) _ = lp.ShowAgainAsync();
-        else ContentFrame.Navigate(Environment.GetEnvironmentVariable("FILEMIND_DEV_PAGE") switch
+        else
         {
-            "discover" => typeof(Pages.DiscoverPage), "spaces" => typeof(Pages.SpacesPage), "duplicates" => typeof(Pages.DuplicatesPage), _ => typeof(Pages.LibraryPage),
-        });
+            ContentFrame.Navigate(typeof(Pages.LibraryPage));
+            // Screenshot helper: land on another page, with the Library already built behind it.
+            var dev = Environment.GetEnvironmentVariable("FILEMIND_DEV_PAGE");
+            if (!_devPageDone && dev is "discover" or "spaces" or "duplicates")
+            {
+                _devPageDone = true;
+                ContentFrame.Navigate(dev switch { "discover" => typeof(Pages.DiscoverPage), "spaces" => typeof(Pages.SpacesPage), _ => typeof(Pages.DuplicatesPage) });
+                _ = Pages.LibraryPage.Current?.PrimeAsync();
+            }
+        }
     }
 
     private void OpenSettings_Click(object sender, RoutedEventArgs e) => OpenSettings();
@@ -500,6 +526,7 @@ public sealed partial class MainWindow : Window
         SettingsFrame.Navigate(typeof(Pages.SettingsPage));
         SettingsScrim.Visibility = Visibility.Visible;
         SettingsRail.IsChecked = true;
+        SyncNav();
     }
 
     private void CloseSettings()
@@ -507,5 +534,6 @@ public sealed partial class MainWindow : Window
         SettingsRail.IsChecked = false;
         SettingsScrim.Visibility = Visibility.Collapsed;
         SettingsFrame.Content = null;
+        SyncNav();
     }
 }

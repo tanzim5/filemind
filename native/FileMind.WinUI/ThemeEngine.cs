@@ -20,7 +20,7 @@ public static class ThemeEngine
         new("ink", "Midnight", true, C("#10111A"), C("#0C0D14")),
         new("graphite", "Graphite", true, C("#1E2024"), C("#17181B")),
         new("amoled", "Black", true, C("#000000"), C("#000000")),
-        new("paper", "Light", false, C("#ECEAE6"), C("#F7F6F3")),
+        new("paper", "Light", false, C("#EFEDEA"), C("#F6F5F3")),
     ];
 
     public static readonly string[] Accents = ["#FF5A1F", "#F43F5E", "#F59E0B", "#22A559", "#3B82F6", "#8B5CF6"];
@@ -66,22 +66,33 @@ public static class ThemeEngine
         root.RequestedTheme = p.Dark ? ElementTheme.Dark : ElementTheme.Light;
         byte W = p.Dark ? (byte)255 : (byte)0;           // glass veils are white on dark, black on light
         Color A(byte a) => Windows.UI.Color.FromArgb(a, W, W, W);
-        Set("GlassFillBrush", A(0x1A)); Set("GlassFillStrongBrush", A(0x2A)); Set("GlassFillHoverBrush", A(0x24));
-        Set("GlassHighlightBrush", A(0x26)); Set("GlassHoverSoftBrush", A(0x14));
-        Set("GlassTextSecondaryBrush", p.Dark ? Windows.UI.Color.FromArgb(0xD1, 255, 255, 255) : Windows.UI.Color.FromArgb(0xD6, 20, 20, 24));
-        Set("GlassTextTertiaryBrush", p.Dark ? Windows.UI.Color.FromArgb(0xA3, 255, 255, 255) : Windows.UI.Color.FromArgb(0xA8, 20, 20, 24));
+        if (p.Dark)
+        {
+            Set("GlassFillBrush", A(0x1A)); Set("GlassFillStrongBrush", A(0x2A)); Set("GlassFillHoverBrush", A(0x24));
+            Set("GlassHighlightBrush", A(0x26)); Set("GlassHoverSoftBrush", A(0x14));
+            Set("GlassTextSecondaryBrush", Windows.UI.Color.FromArgb(0xD1, 255, 255, 255));
+            Set("GlassTextTertiaryBrush", Windows.UI.Color.FromArgb(0xA3, 255, 255, 255));
+        }
+        else
+        {
+            // Light: white cards on a very light grey page, solid greys for text (never faded below 0.6), hairline borders.
+            Set("GlassFillBrush", C("#FFFFFF")); Set("GlassFillStrongBrush", C("#E9E7E3")); Set("GlassFillHoverBrush", C("#F3F1EE"));
+            Set("GlassHighlightBrush", A(0x10)); Set("GlassHoverSoftBrush", A(0x0A));
+            Set("GlassTextSecondaryBrush", C("#6B6B73"));
+            Set("GlassTextTertiaryBrush", C("#85858D"));
+        }
 
         if (Application.Current.Resources.TryGetValue("GlassStrokeBrush", out var sv) && sv is LinearGradientBrush sg && sg.GradientStops.Count == 3)
         {
-            sg.GradientStops[0].Color = A((byte)(p.Dark ? 0x40 : 0x30));
+            sg.GradientStops[0].Color = A((byte)(p.Dark ? 0x40 : 0x14));
             sg.GradientStops[1].Color = A((byte)(p.Dark ? 0x10 : 0x14));
-            sg.GradientStops[2].Color = A((byte)(p.Dark ? 0x22 : 0x20));
+            sg.GradientStops[2].Color = A((byte)(p.Dark ? 0x22 : 0x14));
         }
-        Set("DividerBrush", A((byte)(p.Dark ? 0x1F : 0x24)));
+        Set("DividerBrush", A((byte)(p.Dark ? 0x1F : 0x14)));
         Set("ScrimBrush", Windows.UI.Color.FromArgb(p.Dark ? (byte)0x66 : (byte)0x40, 0, 0, 0));
         var surf = Windows.UI.Color.FromArgb(255, p.Panel.R, p.Panel.G, p.Panel.B);
-        Set("SurfaceBrush", p.Dark ? Lift(surf, 10) : Lift(surf, -6));
-        Set("OverlayBrush", Windows.UI.Color.FromArgb(0xF4, surf.R, surf.G, surf.B));
+        Set("SurfaceBrush", p.Dark ? Lift(surf, 10) : C("#FFFFFF"));
+        Set("OverlayBrush", p.Dark ? Windows.UI.Color.FromArgb(0xF4, surf.R, surf.G, surf.B) : Windows.UI.Color.FromArgb(0xF8, 255, 255, 255));
 
         var ac = AccentColor(st);
         Set("AccentFillBrush", Windows.UI.Color.FromArgb(0xCC, ac.R, ac.G, ac.B));
@@ -91,7 +102,7 @@ public static class ThemeEngine
         Set("AccentBrush", ac);
         if (Application.Current.Resources.TryGetValue("AuraBrush", out var av) && av is RadialGradientBrush aura && aura.GradientStops.Count == 2)
         {
-            aura.GradientStops[0].Color = Windows.UI.Color.FromArgb(p.Key == "amoled" ? (byte)0x14 : p.Dark ? (byte)0x26 : (byte)0x1C, ac.R, ac.G, ac.B);
+            aura.GradientStops[0].Color = Windows.UI.Color.FromArgb(p.Key == "amoled" ? (byte)0x14 : p.Dark ? (byte)0x26 : (byte)0x0A, ac.R, ac.G, ac.B);
             aura.GradientStops[1].Color = Windows.UI.Color.FromArgb(0, ac.R, ac.G, ac.B);
         }
 

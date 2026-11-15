@@ -50,12 +50,16 @@ public sealed partial class ViewerPage : Page
     {
         InitializeComponent();
         DragHelper.Attach(StageHost, () => _item.Path, null);          // drag the picture, clip or track itself out of the viewer
-        DragHelper.Attach(TitleBox, () => _item.Path, () => _item.Path);
         var esc = new KeyboardAccelerator { Key = Windows.System.VirtualKey.Escape };
         esc.Invoked += (_, e) => { if (_full) SetFull(false); else GoBack(); e.Handled = true; };
         IsTabStop = true;
+        KeyboardAcceleratorPlacementMode = Microsoft.UI.Xaml.Input.KeyboardAcceleratorPlacementMode.Hidden;
+        // "Show in Explorer" sits in the shell's top bar; the title and Back/Forward are the shell's too.
+        RevealButton = new Button { Style = Ui.Style("BarButton"), Content = new LineIcon { Kind = "library", Size = 16 } };
+        ToolTipService.SetToolTip(RevealButton, "Show in Explorer");
+        RevealButton.Click += Reveal_Click;
         PreviewKeyDown += Keys_Down;
-        Loaded += (_, _) => { App.Window?.SetTitleParts(BackButton, RevealButton); Focus(FocusState.Programmatic); };
+        Loaded += (_, _) => { PushTitle(); App.Window?.SetActions(RevealButton); App.Window?.SyncNav(); Focus(FocusState.Programmatic); };
         KeyboardAccelerators.Add(esc);
         _tick.Tick += (_, _) => UpdateProgress();
     }
@@ -81,8 +85,11 @@ public sealed partial class ViewerPage : Page
         _cts.Cancel();
     }
 
+    private readonly Button RevealButton;
+
+    private void PushTitle() => App.Window?.SetTitle(_item.Name, $"{KindName(_item)} · {_item.SizeText}");
+
     private void GoBack() { if (Frame.CanGoBack) Frame.GoBack(); }
-    private void Back_Click(object sender, RoutedEventArgs e) => GoBack();
     private void Prev_Click(object sender, RoutedEventArgs e) { if (_index > 0) Show(_index - 1); }
     private void Next_Click(object sender, RoutedEventArgs e) { if (_index < _siblings.Count - 1) Show(_index + 1); }
 
@@ -284,8 +291,7 @@ public sealed partial class ViewerPage : Page
         _zoom = 1; ZoomText.Text = "100%"; ZoomTransform.ScaleX = ZoomTransform.ScaleY = 1;
         Scroll.ChangeView(null, 0, null, true);
 
-        TitleBox.Text = _item.Name;
-        SubtitleBox.Text = $"{KindName(_item)} · {_item.SizeText}";
+        if (IsLoaded) PushTitle();
         PrevButton.Visibility = index > 0 ? Visibility.Visible : Visibility.Collapsed;
         NextButton.Visibility = index < _siblings.Count - 1 ? Visibility.Visible : Visibility.Collapsed;
 

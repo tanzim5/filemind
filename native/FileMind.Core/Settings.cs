@@ -18,9 +18,9 @@ public sealed class AppSettings
     public bool WinMax { get; set; }
     public double Transparency { get; set; } = 0.6;   // 0 solid … 1 most glass
     /// <summary>Colour theme key (see ThemeEngine) and the accent colour as #RRGGBB.</summary>
-    public string Theme { get; set; } = "ink";
+    public string Theme { get; set; } = "paper";
     public string Accent { get; set; } = "#FF5A1F";
-    public double TileGap { get; set; } = 12;
+    public double TileGap { get; set; } = 10;
     /// <summary>Volume the viewer starts at (0 to 1).</summary>
     public double Volume { get; set; } = 0.8;
     /// <summary>System-wide shortcut that opens the quick-search launcher.</summary>

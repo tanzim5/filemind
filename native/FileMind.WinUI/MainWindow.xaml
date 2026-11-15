@@ -10,7 +10,7 @@
 
     <Grid x:Name="Shell" Visibility="Collapsed">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition x:Name="RailColumn" Width="276"/>
+        <ColumnDefinition x:Name="RailColumn" Width="248"/>
         <ColumnDefinition Width="*"/>
       </Grid.ColumnDefinitions>
 
@@ -18,22 +18,39 @@
       <Grid x:Name="PanelCard" Grid.Column="1" Background="#E617171B">
         <Rectangle IsHitTestVisible="False" Fill="{StaticResource AuraBrush}"/>
         <Frame x:Name="ContentFrame"/>
-        <!-- Frosted strip under the window buttons, so a page scrolling beneath them stays readable.
-             The Library draws its own taller toolbar and hides this one. -->
-        <Border x:Name="TopGlass" Height="48" VerticalAlignment="Top" IsHitTestVisible="False" Background="{StaticResource ToolbarGlassBrush}"/>
+        <!-- The permanent top bar: back and forward, the page title, the page's own actions, and room for the window buttons.
+             It is frosted, so a page scrolling beneath it stays readable. -->
+        <Border x:Name="TopBar" Height="48" VerticalAlignment="Top" Background="{StaticResource ToolbarGlassBrush}">
+          <Grid Padding="14,0,0,0" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="140"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel x:Name="NavButtons" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+              <Button x:Name="BackBtn" Style="{StaticResource BarButton}" IsEnabled="False" Click="NavBack_Click" AutomationProperties.Name="Back" ToolTipService.ToolTip="Back">
+                <p:LineIcon Kind="back" Size="16"/></Button>
+              <Button x:Name="FwdBtn" Style="{StaticResource BarButton}" IsEnabled="False" Click="NavFwd_Click" AutomationProperties.Name="Forward" ToolTipService.ToolTip="Forward">
+                <p:LineIcon Kind="fwd" Size="16"/></Button>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+              <TextBlock x:Name="TitleText" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="560" VerticalAlignment="Center"/>
+              <TextBlock x:Name="TitleNote" Style="{StaticResource SecondaryText}" FontSize="12" VerticalAlignment="Center"/>
+            </StackPanel>
+            <ContentControl x:Name="ActionsHost" Grid.Column="2" VerticalAlignment="Center" HorizontalContentAlignment="Right" IsTabStop="False"/>
+          </Grid>
+        </Border>
       </Grid>
 
       <!-- The sidebar is the window's own frosted glass, top to bottom: destinations, filters, settings. -->
-      <Grid x:Name="RailCard" Padding="10,10,10,8">
+      <Grid x:Name="RailCard" Padding="10,50,10,8">
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto"/>
           <RowDefinition Height="*"/>
           <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <StackPanel x:Name="NavStack" Spacing="1" Margin="0,0,0,14"/>
+        <StackPanel x:Name="NavStack" Spacing="1" Margin="0,0,0,12"/>
         <ContentControl x:Name="SidebarHost" Grid.Row="1" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
-        <ToggleButton x:Name="SettingsRail" Grid.Row="2" Style="{StaticResource RailItem}" MinHeight="32" Margin="0,6,0,0" Click="OpenSettings_Click"
+        <ToggleButton x:Name="SettingsRail" Grid.Row="2" Style="{StaticResource RailItem}" MinHeight="30" Margin="0,6,0,0" Click="OpenSettings_Click"
                       AutomationProperties.Name="Settings" ToolTipService.ToolTip="Settings (Ctrl+,)">
           <StackPanel Orientation="Horizontal" Spacing="10">
             <p:LineIcon Kind="f-settings" Size="16" Opacity="0.75" VerticalAlignment="Center"/>

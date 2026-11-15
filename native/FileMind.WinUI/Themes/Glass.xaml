@@ -4,6 +4,8 @@
   <!-- Geist (Vercel, SIL OFL) for all text; the folder form loads every weight bundled in Assets/Fonts. -->
   <FontFamily x:Key="ContentControlThemeFontFamily">ms-appx:///Assets/Fonts/#Geist</FontFamily>
   <FontFamily x:Key="AppFont">ms-appx:///Assets/Fonts/#Geist</FontFamily>
+  <!-- Instrument Serif (SIL OFL) for page titles and the search field. -->
+  <FontFamily x:Key="SerifFont">ms-appx:///Assets/Fonts/#Instrument Serif</FontFamily>
 
 
   <!-- File Mind's orange as the system accent. -->
@@ -48,10 +50,9 @@
   </Style>
 
   <Style x:Key="TitleText" TargetType="TextBlock">
-    <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
-    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="FontFamily" Value="{StaticResource SerifFont}"/>
+    <Setter Property="FontWeight" Value="Normal"/>
     <Setter Property="FontSize" Value="40"/>
-    <Setter Property="CharacterSpacing" Value="-20"/>
   </Style>
 
   <Style x:Key="SecondaryText" TargetType="TextBlock">
@@ -149,8 +150,35 @@
 
   <Style x:Key="SectionLabel" TargetType="TextBlock">
     <Setter Property="Foreground" Value="{StaticResource GlassTextSecondaryBrush}"/>
-    <Setter Property="FontSize" Value="12.5"/>
+    <Setter Property="FontSize" Value="11.5"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+
+  <!-- Small icon button for the top bar: no border until the pointer is over it. -->
+  <Style x:Key="BarButton" TargetType="Button">
+    <Setter Property="Width" Value="28"/>
+    <Setter Property="Height" Value="28"/>
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Grid Background="Transparent">
+            <Border x:Name="Hl" Background="{StaticResource GlassHighlightBrush}" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
+            <ContentPresenter x:Name="Cp" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Padding="{TemplateBinding Padding}"/>
+            <VisualStateManager.VisualStateGroups>
+              <VisualStateGroup x:Name="CommonStates">
+                <VisualState x:Name="Normal"/>
+                <VisualState x:Name="PointerOver"><VisualState.Setters><Setter Target="Hl.Opacity" Value="1"/></VisualState.Setters></VisualState>
+                <VisualState x:Name="Pressed"><VisualState.Setters><Setter Target="Hl.Opacity" Value="1"/><Setter Target="Cp.Opacity" Value="0.7"/></VisualState.Setters></VisualState>
+                <VisualState x:Name="Disabled"><VisualState.Setters><Setter Target="Cp.Opacity" Value="0.35"/></VisualState.Setters></VisualState>
+              </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
   </Style>
 
   <!-- Sidebar and page chrome become transparent so the acrylic window shows through. -->
@@ -165,8 +193,8 @@
     <Setter Property="HorizontalAlignment" Value="Stretch"/>
     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
     <Setter Property="Padding" Value="10,0"/>
-    <Setter Property="MinHeight" Value="38"/>
-    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="MinHeight" Value="30"/>
+    <Setter Property="CornerRadius" Value="6"/>
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ToggleButton">

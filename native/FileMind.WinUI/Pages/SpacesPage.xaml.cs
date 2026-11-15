@@ -13,12 +13,12 @@ public sealed partial class SpacesPage : Page
 {
     private readonly CancellationTokenSource _cts = new();
     private ApiClient Api => AppRuntime.Current.Api!;
-    private readonly SidePanel _side = new();
 
     public SpacesPage()
     {
         InitializeComponent();
-        Loaded += async (_, _) => { App.Window?.SetSidebar(_side.Root); await LoadAsync(); };
+        KeyboardAcceleratorPlacementMode = Microsoft.UI.Xaml.Input.KeyboardAcceleratorPlacementMode.Hidden;
+        Loaded += async (_, _) => { App.Window?.SetTitle("Spaces"); App.Window?.SetActions(null); await LoadAsync(); };
         Unloaded += (_, _) => _cts.Cancel();
     }
 
@@ -31,11 +31,7 @@ public sealed partial class SpacesPage : Page
             Grid.Children.Clear();
             foreach (var p in spaces) Grid.Children.Add(Card(p));
             Grid.Children.Add(NewTile());
-            _side.Clear();
-            _side.Header("Spaces");
-            foreach (var p in spaces) { var sp = p; _side.Row("folder", sp.Name, sp.Count.ToString("N0"), () => Open(sp)); }
-            if (spaces.Count == 0) _side.Note("No spaces yet.");
-            _side.Row("plus", "New space", null, () => NewSpace_Click(this, new RoutedEventArgs()));
+            App.Window?.SetTitle("Spaces", spaces.Count.ToString("N0"));
             Note.Text = spaces.Count == 0 ? "Spaces are collections. Select files in the Library and add them to a space, or create an empty one here." : "";
         }
         catch (OperationCanceledException) { }

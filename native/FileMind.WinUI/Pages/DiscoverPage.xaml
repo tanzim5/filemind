@@ -4,7 +4,7 @@
       xmlns:local="using:FileMind.Pages">
   <Grid>
     <ScrollViewer VerticalScrollBarVisibility="Hidden">
-      <StackPanel Padding="44,60,44,60" Spacing="40">
+      <StackPanel Padding="44,68,44,60" Spacing="40">
         <StackPanel Spacing="12">
           <TextBlock Text="See your library differently" Style="{StaticResource SectionLabel}" Foreground="#FFFF7A45"/>
           <TextBlock Text="Discover what’s already here." Style="{StaticResource TitleText}" FontSize="64"/>

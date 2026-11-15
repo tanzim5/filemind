@@ -66,17 +66,16 @@ public sealed partial class LibraryPage : Page
     public static LibraryPage? Current { get; private set; }
 
     /// <summary>Puts the sidebar sections in the order chosen in Settings and hides those switched off.</summary>
-    // One deliberate order, most useful first: what kind of file, your own tags, the hard facts (Refine), where it came
-    // from, how it looks, and finally the folders. Spaces have their own page, so they are not repeated here.
+    // One deliberate order, most useful first: what kind of file, your own tags, your spaces, the hard facts (Refine),
+    // where it came from, how it looks, and finally the folders.
     public void ApplySections()
     {
         SectionStack.Children.Clear();
-        foreach (var sec in new UIElement[] { SecTypes, SecTags, SecDetails, SecSources, SecColours, SecMoods, SecFolders })
+        foreach (var sec in new UIElement[] { SecTypes, SecTags, SecSpaces, SecDetails, SecSources, SecColours, SecMoods, SecFolders })
         {
             sec.Visibility = Visibility.Visible;
             SectionStack.Children.Add(sec);
         }
-        SecSpaces.Visibility = Visibility.Collapsed;
     }
 
     public LibraryPage()
@@ -102,15 +101,17 @@ public sealed partial class LibraryPage : Page
         AddAccelerator(VirtualKey.C, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, async () => await CopySelectedAsync(true), false);
         AddAccelerator(VirtualKey.Enter, VirtualKeyModifiers.None, () => { OpenSelected(); return Task.CompletedTask; }, false);
 
-        // The filters live in the app's left rail, always in the same spot, while this page is showing.
+        // The filters live in the app's left rail on every page; the buttons live in the shell's top bar while this page shows.
         BodyGrid.Children.Remove(FilterPanel);
+        ToolHolder.Children.Remove(ToolButtons);
         App.Window?.SetSidebar(FilterPanel);
 
         NavigationCacheMode = NavigationCacheMode.Required;
         Loaded += async (_, _) =>
         {
-            App.Window?.SetSidebar(FilterPanel);
-            App.Window?.SetTitleParts(NavButtons, SearchPill, ToolButtons);
+            App.Window?.SetActions(ToolButtons);
+            PushTitle();
+            App.Window?.SyncNav();
             if (_cts.IsCancellationRequested) _cts = new CancellationTokenSource();
             _timer.Start();
             if (_ready) return;          // coming back from the viewer: everything is exactly where it was
@@ -128,7 +129,7 @@ public sealed partial class LibraryPage : Page
     // (active filter chips can wrap onto more lines).
     private void TopBand_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        var h = Math.Ceiling(e.NewSize.Height);
+        var h = Math.Ceiling(e.NewSize.Height + TopBand.Margin.Top);
         TileRepeater.Margin = new Thickness(0, h + 4, 0, 24);
         Detail.Margin = new Thickness(0, h + 4, 0, 16);
         Toast.Margin = new Thickness(0, h + 8, 0, 0);
@@ -182,6 +183,9 @@ public sealed partial class LibraryPage : Page
         _similarTo = r.Similar; _similarName = r.SimilarName; _imagePath = null;
         SyncDetailFields();
     }
+
+    /// <summary>Fills the sidebar's filters without showing the page (the shell builds the Library first, even for another page).</summary>
+    public async Task PrimeAsync() { if (!_ready) await RefreshFacetsAsync(); }
 
     // ------------------------------------------------------------------ loading
     private async Task RefreshFacetsAsync()
@@ -278,11 +282,9 @@ public sealed partial class LibraryPage : Page
 
     private void UpdateTitle()
     {
-        BackBtn.IsEnabled = _back.Count > 0;
-        FwdBtn.IsEnabled = _fwd.Count > 0;
-        if (_imagePath is not null) { PageTitle.Text = "Looks (or sounds) like your file"; Summary.Text = $"{_tiles.Count:N0} closest matches"; return; }
-        if (_similarTo > 0) { PageTitle.Text = "Similar files"; Summary.Text = $"More like “{_similarName}”"; return; }
-        if (_tags.Count > 0) { PageTitle.Text = "Results"; Summary.Text = "Best matches for " + string.Join(" + ", _tags.Select(t => $"“{t.Label}”")); return; }
+        if (_imagePath is not null) { SetPageTitle("Looks (or sounds) like your file"); Summary.Text = $"{_tiles.Count:N0} closest matches"; return; }
+        if (_similarTo > 0) { SetPageTitle("Similar files"); Summary.Text = $"More like “{_similarName}”"; return; }
+        if (_tags.Count > 0) { SetPageTitle("Results"); Summary.Text = "Best matches for " + string.Join(" + ", _tags.Select(t => $"“{t.Label}”")); return; }
         string title = _title;
         if (title.Length == 0)
         {
@@ -292,7 +294,7 @@ public sealed partial class LibraryPage : Page
             else if (_q.Source is { } s) title = _sources.FirstOrDefault(x => x.Key == s)?.Label ?? "Source";
             else title = "Library";
         }
-        PageTitle.Text = title;
+        SetPageTitle(title);
         if (_q.IsNarrowed) Summary.Text = $"{_total:N0} files";
         else
         {
@@ -301,6 +303,18 @@ public sealed partial class LibraryPage : Page
             Add("image", "photos"); Add("video", "videos"); Add("audio", "sounds");
             Summary.Text = parts.Count > 0 ? string.Join(" · ", parts) : "Nothing here yet";
         }
+    }
+
+    private string _pageTitle = "Library";
+
+    private void SetPageTitle(string title) { _pageTitle = title; PushTitle(); }
+
+    /// <summary>The title lives in the shell's top bar; it is only written there while the Library is the page on screen.</summary>
+    private void PushTitle()
+    {
+        if (!IsLoaded || App.Window is not { } w) return;
+        w.SetTitle(_pageTitle, null);
+        w.SyncNav();
     }
 
     private void ShowEmptyIfNeeded()
@@ -399,9 +413,6 @@ public sealed partial class LibraryPage : Page
         await ReloadAsync();
     }
 
-    private async void NavBack_Click(object sender, RoutedEventArgs e) => await GoBackAsync();
-    private async void NavFwd_Click(object sender, RoutedEventArgs e) => await GoForwardAsync();
-
     // ------------------------------------------------------------------ search
     private async void SearchBox_KeyDown(object sender, KeyRoutedEventArgs e)
     {
@@ -423,6 +434,13 @@ public sealed partial class LibraryPage : Page
     }
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e) { }
+
+    private void SearchBox_Focus(object sender, RoutedEventArgs e)
+    {
+        var on = SearchBox.FocusState != FocusState.Unfocused;
+        SearchLine.Background = Ui.Brush(on ? "AccentBrush" : "DividerBrush");
+        SearchLine.Height = on ? 2 : 1;
+    }
 
     private void RebuildTags()
     {
@@ -485,7 +503,7 @@ public sealed partial class LibraryPage : Page
         _voiceStop.Stop();
         VoiceBtn.ClearValue(Control.BackgroundProperty);
         ToolTipService.SetToolTip(VoiceBtn, "Search by voice");
-        SearchBox.PlaceholderText = "Describe what you are looking for…";
+        SearchBox.PlaceholderText = "Search your files…";
         string? path = null;
         try { path = _voice is null ? null : await _voice.StopAsync(); } catch (Exception ex) { App.Log("voice-stop", ex, ex.Message); }
         _voice?.Dispose(); _voice = null;
@@ -589,13 +607,6 @@ public sealed partial class LibraryPage : Page
         Layout.Target = Settings.TileSize; Layout.Gap = Settings.TileGap;
     }
 
-    private void FilterToggle_Changed(object sender, RoutedEventArgs e)
-    {
-        var on = FilterToggle.IsChecked == true;
-        FilterPanel.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
-        FilterColumn.Width = new GridLength(on ? 310 : 0);
-    }
-
     private async void AddFolder_Click(object sender, RoutedEventArgs e)
     {
         var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.PicturesLibrary };
@@ -657,7 +668,7 @@ public sealed partial class LibraryPage : Page
         try
         {
             RebuildTags();
-            SortText.Text = SortNames.GetValueOrDefault(_q.Sort, "Newest");
+            ToolTipService.SetToolTip(SortBtn, "Sort · " + SortNames.GetValueOrDefault(_q.Sort, "Newest"));
             
             // types
             int Kind(string k) => _stats.Kinds.GetValueOrDefault(k);
@@ -704,10 +715,13 @@ public sealed partial class LibraryPage : Page
             srcChips.Add(byName);
             SourceChips.ItemsSource = srcChips;
 
-            var spaceChips = _projects.Select(p =>
-                Chip(p.Name, _q.Project == p.Id, () => GoAsync(() => { _q.Project = _q.Project == p.Id ? null : p.Id; _title = ""; }), null, p.Count, null, true)).ToList();
-            spaceChips.Add(Chip("Unsorted", _q.Unassigned, () => GoAsync(() => { _q.Unassigned = !_q.Unassigned; _title = ""; }), null, null, "Files that are not in any space", true));
-            SpaceChips.ItemsSource = spaceChips;
+            SpaceList.Children.Clear();
+            foreach (var p in _projects)
+            {
+                var sp = p;
+                SpaceList.Children.Add(SpaceRow(sp.Name, SpaceRing(sp.Id), sp.Count.ToString("N0"), _q.Project == sp.Id, () => GoAsync(() => { _q.Project = _q.Project == sp.Id ? null : sp.Id; _title = ""; })));
+            }
+            SpaceList.Children.Add(SpaceRow("Unsorted", null, null, _q.Unassigned, () => GoAsync(() => { _q.Unassigned = !_q.Unassigned; _title = ""; })));
 
             // spaces picker in the action bar
             var picked = (SpacePick.SelectedItem as ComboBoxItem)?.Tag;
@@ -750,6 +764,32 @@ public sealed partial class LibraryPage : Page
             RebuildActiveChips();
         }
         finally { _syncing = false; }
+    }
+
+    private static readonly string[] RingColours = ["#F2552C", "#3B82F6", "#22A559", "#8B5CF6", "#F59E0B", "#EC4899", "#14B8A6", "#64748B"];
+    private static string SpaceRing(int id) => RingColours[Math.Abs(id) % RingColours.Length];
+
+    /// <summary>One space in the sidebar: a small coloured ring, the name, a quiet count. Clicking opens it in the Library.</summary>
+    private ToggleButton SpaceRow(string name, string? ring, string? count, bool on, Func<Task> click)
+    {
+        var row = new Grid { ColumnSpacing = 10 };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var dot = new Border { Width = 12, Height = 12, CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(2), VerticalAlignment = VerticalAlignment.Center };
+        if (ring is null) { dot.BorderBrush = Ui.Brush("GlassTextTertiaryBrush"); dot.BorderThickness = new Thickness(1.5); }
+        else dot.BorderBrush = Brush(ring);
+        row.Children.Add(dot);
+        var label = new TextBlock { Text = name, FontSize = 13, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        Grid.SetColumn(label, 1); row.Children.Add(label);
+        if (count is not null)
+        {
+            var ct = new TextBlock { Text = count, FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Brush("GlassTextTertiaryBrush") };
+            Grid.SetColumn(ct, 2); row.Children.Add(ct);
+        }
+        var b = new ToggleButton { Style = Ui.Style("RailItem"), Content = row, IsChecked = on, MinHeight = 30 };
+        b.Click += async (_, _) => await click();
+        return b;
     }
 
     private void RebuildActiveChips()
