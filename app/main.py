@@ -27,6 +27,7 @@ from . import transcribe as transcribe_mod
 from . import duplicates as duplicates_mod
 from . import moments as moments_mod
 from . import export as export_mod
+from . import search_mix
 
 app = FastAPI(title="Local File Brain")
 STATIC = Path(__file__).parent / "static"
@@ -647,15 +648,19 @@ def search(body: dict = Body(...)):
     limit = int(body.get("limit", 100))
     offset = int(body.get("offset", 0))
     keep = _search_filter(body)
+    words = str(body.get("text") or "").strip()[:300]
+    weight = body.get("text_weight")
     if body.get("reference_id"):
         fid = int(body["reference_id"])
         row = db.conn().execute("SELECT path,kind FROM files WHERE id=? AND status='done'", (fid,)).fetchone()
         if row is None or not Path(row["path"]).is_file():
             raise HTTPException(404, "Reference file is no longer indexed")
         try:
-            q = embedder.embed_reference(Path(row["path"]), row["kind"], str(body.get("text") or "")[:300])
+            q = embedder.embed_reference(Path(row["path"]), row["kind"], "")
         except (OSError, ValueError) as exc:
             raise HTTPException(400, str(exc)) from exc
+        if words:
+            q = search_mix.combine(q, embedder.embed_query(words), weight)
         return {"files": _rank(q, root, kinds, limit + offset, exclude_id=fid, keep=keep)[offset:]}
     if body.get("similar_to"):
         fid = int(body["similar_to"])
@@ -663,6 +668,8 @@ def search(body: dict = Body(...)):
         if not r or r["vec"] is None:
             raise HTTPException(400, "File not indexed yet")
         q = np.frombuffer(r["vec"], dtype=np.float32)
+        if words:                                      # a reference plus words: "like this, but at night"
+            q = search_mix.combine(q, embedder.embed_query(words), weight)
         return {"files": _rank(q, root, kinds, limit + offset, exclude_id=fid, keep=keep)[offset:]}
     qs = [q.strip() for q in (body.get("qs") or [body.get("q") or ""]) if q and q.strip()]
     if not qs:
@@ -803,14 +810,16 @@ async def voice_text(file: UploadFile = File(...)):
 
 @app.post("/api/search/image")
 async def search_by_image(file: UploadFile = File(...), root: int | None = None, limit: int = 100,
-                          text: str = ""):
+                          text: str = "", text_weight: float = search_mix.DEFAULT_TEXT_WEIGHT):
     tmp = extract.TMP_DIR / f"query_{int(time.time()*1000)}{Path(file.filename).suffix}"
     tmp.write_bytes(await file.read())
     try:
         kind = extract.kind_of(Path(file.filename).suffix.lower())
         if kind not in ("image", "video", "audio"):
             raise HTTPException(400, "Drop a picture, a video clip or a sound to find things that look or sound like it")
-        q = embedder.embed_reference(tmp, kind, text[:300])
+        q = embedder.embed_reference(tmp, kind, "")
+        if text.strip():
+            q = search_mix.combine(q, embedder.embed_query(text.strip()[:300]), text_weight)
     finally:
         tmp.unlink(missing_ok=True)
     return {"files": _rank(q, root, None, limit)}

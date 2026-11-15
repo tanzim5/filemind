@@ -41,11 +41,14 @@ public sealed class ApiClient(Uri baseUri) : IDisposable
     public async Task<List<FileItem>> SearchAsync(IEnumerable<string> texts, FileQuery query, int limit, int offset, CancellationToken ct = default) =>
         (await PostAsync<SearchResult>("/api/search", query.ToSearchBody(texts, limit, offset), ct)).Files;
 
-    public async Task<List<FileItem>> SimilarAsync(int id, FileQuery query, int limit = 100, CancellationToken ct = default)
+    /// <summary>Files like this one. With <paramref name="words"/> the engine mixes the file's vector with the words
+    /// ("like this, but at night"); <paramref name="textWeight"/> (0 to 1, engine default 0.5) says how much the words count.</summary>
+    public async Task<List<FileItem>> SimilarAsync(int id, FileQuery query, int limit = 100, string? words = null, double? textWeight = null, CancellationToken ct = default)
     {
         var body = query.ToSearchBody([], limit, 0);
         body.Remove("qs");
         body["similar_to"] = id;
+        if (!string.IsNullOrWhiteSpace(words)) { body["text"] = words; if (textWeight is { } w) body["text_weight"] = w; }
         return (await PostAsync<SearchResult>("/api/search", body, ct)).Files;
     }
 
@@ -94,12 +97,13 @@ public sealed class ApiClient(Uri baseUri) : IDisposable
     }
 
     /// <summary>Find files that look or sound like a picture on disk.</summary>
-    public async Task<List<FileItem>> SearchByImageAsync(string path, FileQuery query, CancellationToken ct = default)
+    public async Task<List<FileItem>> SearchByImageAsync(string path, FileQuery query, string? words = null, double? textWeight = null, CancellationToken ct = default)
     {
         using var form = new MultipartFormDataContent();
         var bytes = new ByteArrayContent(await File.ReadAllBytesAsync(path, ct));
         form.Add(bytes, "file", Path.GetFileName(path));
-        using var response = await _http.PostAsync("/api/search/image?limit=200" + (query.Root is { } r ? $"&root={r}" : ""), form, ct);
+        using var response = await _http.PostAsync("/api/search/image?limit=200" + (query.Root is { } r ? $"&root={r}" : "")
+            + (string.IsNullOrWhiteSpace(words) ? "" : "&text=" + Uri.EscapeDataString(words) + (textWeight is { } w ? "&text_weight=" + w.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")), form, ct);
         return (await ReadAsync<SearchResult>(response, ct)).Files;
     }
 

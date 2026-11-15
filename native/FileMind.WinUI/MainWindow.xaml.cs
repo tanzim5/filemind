@@ -539,6 +539,14 @@ public sealed partial class MainWindow : Window
                 t.Tick += (_, _) => { t.Stop(); if (SidebarHost.Content is Border { Child: ScrollViewer sv }) sv.ChangeView(null, 500, null, true); };
                 t.Start();
             }
+            else if (!_devPageDone && dev == "library-ref")
+            {
+                // Screenshot helper: shows a reference-picture search with words added to it.
+                _devPageDone = true;
+                var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(9) };
+                t.Tick += (_, _) => { t.Stop(); _ = Pages.LibraryPage.Current?.DevReferenceAsync(); };
+                t.Start();
+            }
             else if (!_devPageDone && dev is "viewer" or "viewer-video")
             {
                 _devPageDone = true;

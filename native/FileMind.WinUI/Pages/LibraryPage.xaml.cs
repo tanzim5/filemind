@@ -3,6 +3,7 @@ using System.Diagnostics;
 using FileMind.Core;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -239,12 +240,12 @@ public sealed partial class LibraryPage : Page
             List<FileItem> items;
             if (_imagePath is not null)
             {
-                items = await Api.SearchByImageAsync(_imagePath, _q, ct);
+                items = await Api.SearchByImageAsync(_imagePath, _q, RefineWords(), null, ct);
                 _more = false;
             }
             else if (_similarTo > 0)
             {
-                items = await Api.SimilarAsync(_similarTo, _q, 200, ct);
+                items = await Api.SimilarAsync(_similarTo, _q, 200, RefineWords(), null, ct);
                 _more = false;
             }
             else if (_tags.Count > 0)
@@ -288,10 +289,15 @@ public sealed partial class LibraryPage : Page
             _ = LoadMoreAsync(_cts.Token);
     }
 
+    /// <summary>With a reference picture, file or sound active, the words typed are not a separate search: they refine it.</summary>
+    private string RefineWords() => _imagePath is null && _similarTo <= 0 ? "" : string.Join(" ", _tags.Select(t => t.Query).Where(q => !q.StartsWith("voice:")));
+
+    private string RefineSuffix() => RefineWords().Length > 0 ? " + " + string.Join(" + ", _tags.Select(t => $"“{t.Label}”")) : "";
+
     private void UpdateTitle()
     {
-        if (_imagePath is not null) { SetPageTitle("Looks (or sounds) like your file"); Summary.Text = $"{_tiles.Count:N0} closest matches"; return; }
-        if (_similarTo > 0) { SetPageTitle("Similar files"); Summary.Text = $"More like “{_similarName}”"; return; }
+        if (_imagePath is not null) { SetPageTitle("Looks (or sounds) like your file"); Summary.Text = $"{_tiles.Count:N0} closest matches" + RefineSuffix(); return; }
+        if (_similarTo > 0) { SetPageTitle("Similar files"); Summary.Text = $"More like “{_similarName}”" + RefineSuffix(); return; }
         if (_tags.Count > 0) { SetPageTitle("Results"); Summary.Text = "Best matches for " + string.Join(" + ", _tags.Select(t => $"“{t.Label}”")); return; }
         string title = _title;
         if (title.Length == 0)
@@ -450,9 +456,48 @@ public sealed partial class LibraryPage : Page
         SearchPill.BorderBrush = Ui.Brush(on ? "AccentBrush" : "FieldBorderBrush");
     }
 
+    /// <summary>Screenshot helper only: the first photo as a reference, with words added.</summary>
+    public async Task DevReferenceAsync()
+    {
+        var first = _tiles.FirstOrDefault(t => t.Item.Kind == "image") ?? _tiles.FirstOrDefault();
+        if (first is null) return;
+        await GoAsync(() => { _similarTo = first.Item.Id; _similarName = first.Name; _tags = [("at night", "at night")]; _title = ""; });
+    }
+
+    private bool _listening;
+
+    private void UpdateHint() => SearchHint.Text = _listening ? "Listening… say what you are looking for"
+        : _imagePath is not null || _similarTo > 0 ? "Add words to refine…" : "Search your files…";
+
+    /// <summary>The reference as a small chip at the left of the pill: its thumbnail, and × to drop it.</summary>
+    private FrameworkElement? ReferenceChip()
+    {
+        if (_imagePath is null && _similarTo <= 0) return null;
+        FrameworkElement thumb;
+        try
+        {
+            string[] pics = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff", ".heic", ".avif"];
+            if (_similarTo > 0) thumb = new Image { Source = new BitmapImage(Api.ThumbUri(_similarTo)) { DecodePixelHeight = 44 }, Stretch = Stretch.UniformToFill };
+            else if (pics.Contains(Path.GetExtension(_imagePath!).ToLowerInvariant())) thumb = new Image { Source = new BitmapImage(new Uri(_imagePath!)) { DecodePixelHeight = 44 }, Stretch = Stretch.UniformToFill };
+            else thumb = new LineIcon { Kind = "sound", Size = 13, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        }
+        catch (Exception) { thumb = new LineIcon { Kind = "search", Size = 12, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }; }
+        var box = new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(4), Child = thumb, Background = Ui.Brush("GlassFillStrongBrush"), VerticalAlignment = VerticalAlignment.Center };
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        row.Children.Add(box);
+        row.Children.Add(new LineIcon { Kind = "close", Size = 10, VerticalAlignment = VerticalAlignment.Center });
+        var b = new Button { Content = row, Style = Ui.Style("GlassButton"), Padding = new Thickness(3, 2, 8, 2), CornerRadius = new CornerRadius(7), Background = Ui.Brush("AccentTintBrush"), Height = 28 };
+        ToolTipService.SetToolTip(b, "Remove the reference picture");
+        AutomationProperties.SetName(b, "Remove the reference picture");
+        b.Click += async (_, _) => await GoAsync(() => { _similarTo = 0; _imagePath = null; });
+        return b;
+    }
+
     private void RebuildTags()
     {
         QueryTags.Children.Clear();
+        if (ReferenceChip() is { } refChip) QueryTags.Children.Add(refChip);
+        UpdateHint();
         for (var i = 0; i < _tags.Count; i++)
         {
             var index = i;
@@ -493,7 +538,7 @@ public sealed partial class LibraryPage : Page
             await _voice.StartAsync();
             VoiceBtn.Background = Ui.Brush("AccentFillBrush");
             ToolTipService.SetToolTip(VoiceBtn, "Listening… tap to search");
-            SearchHint.Text = "Listening… say what you are looking for";
+            _listening = true; UpdateHint();
             _voiceStop.Tick -= VoiceStop_Tick; _voiceStop.Tick += VoiceStop_Tick; _voiceStop.Start();
         }
         catch (Exception ex)
@@ -511,7 +556,7 @@ public sealed partial class LibraryPage : Page
         _voiceStop.Stop();
         VoiceBtn.ClearValue(Control.BackgroundProperty);
         ToolTipService.SetToolTip(VoiceBtn, "Search by voice");
-        SearchHint.Text = "Search your files…";
+        _listening = false; UpdateHint();
         string? path = null;
         try { path = _voice is null ? null : await _voice.StopAsync(); } catch (Exception ex) { App.Log("voice-stop", ex, ex.Message); }
         _voice?.Dispose(); _voice = null;
@@ -1204,7 +1249,8 @@ public sealed partial class LibraryPage : Page
             if (s.MinSize is not null) _q.MinSize = s.MinSize;
             if (s.MaxSize is not null) _q.MaxSize = s.MaxSize;
             if (r.Kind is not null) _q.Kind = r.Kind;
-            if (r.Text.Length > 0) { _tags.Add((r.Text, r.Text)); _similarTo = 0; _imagePath = null; }
+            // With a reference picture on the pill the words refine it, so the reference stays; otherwise they start a text search.
+            if (r.Text.Length > 0) _tags.Add((r.Text, r.Text));
             _title = "";
             SyncDetailFields();
         });

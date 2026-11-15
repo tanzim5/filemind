@@ -1248,7 +1248,7 @@ public sealed partial class ViewerPage : Page
         MoreNote.Text = SideNote.Text = "";
         try
         {
-            var list = await Api.SimilarAsync(_item.Id, new FileQuery(), 240, ct);
+            var list = await Api.SimilarAsync(_item.Id, new FileQuery(), 240, ct: ct);
             if (ct.IsCancellationRequested) return;
             _similar = list.Where(f => f.Id != _item.Id).ToList();
             MoreNote.Text = SideNote.Text = _similar.Count == 0 ? "Nothing similar has been indexed yet." : "Closest first, by what is in them. Click any to follow it.";
