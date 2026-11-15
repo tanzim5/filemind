@@ -547,6 +547,25 @@ public sealed partial class MainWindow : Window
                 t.Tick += (_, _) => { t.Stop(); _ = Pages.LibraryPage.Current?.DevReferenceAsync(); };
                 t.Start();
             }
+            else if (!_devPageDone && dev == "space-open")
+            {
+                // Screenshot helper: opens the first space in the Library so its suggestions strip can be captured.
+                _devPageDone = true;
+                var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(8) };
+                t.Tick += async (_, _) =>
+                {
+                    t.Stop();
+                    try
+                    {
+                        var first = (await AppRuntime.Current.Api!.GetProjectsAsync()).FirstOrDefault(p => !p.Smart);
+                        if (first is null) return;
+                        Pages.LibraryPage.Request = new Pages.LibraryRequest(new Core.FileQuery { Project = first.Id }, first.Name);
+                        ShowLibrary();
+                    }
+                    catch (Exception ex) { App.Log("dev-space", ex, ex.Message); }
+                };
+                t.Start();
+            }
             else if (!_devPageDone && dev is "viewer" or "viewer-video")
             {
                 _devPageDone = true;

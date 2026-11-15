@@ -140,6 +140,12 @@ public sealed class ApiClient(Uri baseUri) : IDisposable
         PostAsync<ClusterResponse>("/api/cluster", new { unassigned = unassignedOnly }, ct);
     public Task AddToProjectAsync(int project, IEnumerable<int> fileIds, CancellationToken ct = default) =>
         PostAsync<JsonElement>($"/api/projects/{project}/add", new { file_ids = fileIds.ToArray() }, ct);
+    /// <summary>Files that probably belong in a space (nearest to what it holds, not members, not dismissed). Nothing is added.</summary>
+    public async Task<List<FileItem>> GetSpaceSuggestionsAsync(int project, int limit = 12, CancellationToken ct = default) =>
+        (await GetAsync<SearchResult>($"/api/projects/{project}/suggestions?limit={limit}", ct)).Files;
+    /// <summary>"Not this one": the files are not offered for this space again.</summary>
+    public Task DismissSuggestionsAsync(int project, IEnumerable<int> fileIds, CancellationToken ct = default) =>
+        PostAsync<JsonElement>($"/api/projects/{project}/suggestions/dismiss", new { file_ids = fileIds.ToArray() }, ct);
     public Task RemoveFromProjectAsync(int project, IEnumerable<int> fileIds, CancellationToken ct = default) =>
         PostAsync<JsonElement>($"/api/projects/{project}/remove", new { file_ids = fileIds.ToArray() }, ct);
 

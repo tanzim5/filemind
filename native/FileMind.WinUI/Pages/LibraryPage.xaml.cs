@@ -136,10 +136,23 @@ public sealed partial class LibraryPage : Page
 
     // The toolbar band floats over the tiles, so everything beneath starts just below it, however tall it gets
     // (active filter chips can wrap onto more lines).
+    private double _bandH = 82;
+
+    /// <summary>Tiles start below the toolbar band and, when it shows, the suggestions strip.</summary>
+    private void UpdateInsets()
+    {
+        var strip = SuggestStrip.Visibility == Visibility.Visible ? SuggestStrip.ActualHeight + 8 : 0;
+        SuggestStrip.Margin = new Thickness(0, _bandH + 4, 0, 0);
+        TileRepeater.Margin = new Thickness(0, _bandH + 4 + strip, 0, 24);
+    }
+
+    private void SuggestStrip_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateInsets();
+
     private void TopBand_SizeChanged(object sender, SizeChangedEventArgs e)
     {
         var h = Math.Ceiling(e.NewSize.Height + TopBand.Margin.Top);
-        TileRepeater.Margin = new Thickness(0, h + 4, 0, 24);
+        _bandH = h;
+        UpdateInsets();
         Detail.Margin = new Thickness(0, h + 4, 0, 16);
         Toast.Margin = new Thickness(0, h + 8, 0, 0);
     }
@@ -227,8 +240,101 @@ public sealed partial class LibraryPage : Page
         SetFocus(null);
         EmptyCard.Visibility = Visibility.Collapsed;
         RebuildPanels();
+        _ = RefreshSuggestionsAsync(_cts.Token);
         await LoadMoreAsync(_cts.Token);
     }
+
+    // ------------------------------------------------------------------ suggestions for an open space
+    private List<FileItem> _suggested = [];
+    private static bool _suggestCollapsed;
+
+    private void HideSuggest()
+    {
+        _suggested = [];
+        SuggestRow.Children.Clear();
+        SuggestStrip.Visibility = Visibility.Collapsed;
+        UpdateInsets();
+    }
+
+    private async Task RefreshSuggestionsAsync(CancellationToken ct)
+    {
+        var pid = _q.Project;
+        if (pid is null || !IsPlainBrowse || _projects.FirstOrDefault(p => p.Id == pid)?.Smart == true) { HideSuggest(); return; }
+        try
+        {
+            var list = await Api.GetSpaceSuggestionsAsync(pid.Value, 12, ct);
+            if (ct.IsCancellationRequested || _q.Project != pid) return;
+            _suggested = list;
+            BuildSuggest();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { App.Log("suggest", ex, ex.Message); if (!ct.IsCancellationRequested) HideSuggest(); }
+    }
+
+    private void BuildSuggest()
+    {
+        SuggestRow.Children.Clear();
+        if (_suggested.Count == 0) { HideSuggest(); return; }
+        SuggestCount.Text = _suggested.Count.ToString("N0");
+        foreach (var f in _suggested) SuggestRow.Children.Add(SuggestTile(f));
+        SuggestScroll.Visibility = SuggestAllBtn.Visibility = _suggestCollapsed ? Visibility.Collapsed : Visibility.Visible;
+        SuggestChevron.Kind = _suggestCollapsed ? "chevdown" : "chevup";
+        SuggestStrip.Visibility = Visibility.Visible;
+        UpdateInsets();
+    }
+
+    private FrameworkElement SuggestTile(FileItem f)
+    {
+        const double S = 78;
+        var g = new Grid { Width = S, Height = S, CornerRadius = new CornerRadius(6), Background = Ui.Brush("GlassFillStrongBrush") };
+        if (f.HasThumb) g.Children.Add(new Image { Source = new BitmapImage(Api.ThumbUri(f.Id)) { DecodePixelHeight = 160 }, Stretch = Stretch.UniformToFill });
+        else g.Children.Add(new LineIcon { Kind = f.Kind switch { "audio" => "music", "video" => "video", _ => "file" }, Size = 24, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Opacity = 0.6 });
+        g.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 34, VerticalAlignment = VerticalAlignment.Bottom, Fill = Ui.Brush("TileScrimBrush"), IsHitTestVisible = false });
+        Button Round(string icon, Brush? bg, string tip, HorizontalAlignment h)
+        {
+            var b = new Button { Width = 24, Height = 24, Padding = new Thickness(0), CornerRadius = new CornerRadius(12), Background = bg ?? new SolidColorBrush(Color.FromArgb(0x99, 0, 0, 0)),
+                BorderThickness = new Thickness(0), HorizontalAlignment = h, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(5),
+                Content = new LineIcon { Kind = icon, Size = 12, Foreground = new SolidColorBrush(Microsoft.UI.Colors.White) } };
+            ToolTipService.SetToolTip(b, tip);
+            AutomationProperties.SetName(b, tip);
+            return b;
+        }
+        var yes = Round("check", Ui.Brush("AccentBrush"), "Add to this space", HorizontalAlignment.Left);
+        var no = Round("close", null, "Not this one", HorizontalAlignment.Right);
+        yes.Click += async (_, _) => await AcceptSuggestionsAsync([f.Id]);
+        no.Click += async (_, _) => await DismissSuggestionAsync(f.Id);
+        g.Children.Add(yes); g.Children.Add(no);
+        ToolTipService.SetToolTip(g, f.Name);
+        return g;
+    }
+
+    private async Task AcceptSuggestionsAsync(IReadOnlyList<int> ids)
+    {
+        if (_q.Project is not { } pid || ids.Count == 0) return;
+        try
+        {
+            await Api.AddToProjectAsync(pid, ids);
+            ShowToast(ids.Count == 1 ? "Added to this space." : $"Added {ids.Count:N0} files to this space.");
+            await RefreshFacetsAsync();
+            await ReloadAsync();          // the tiles and the suggestions both refresh
+        }
+        catch (Exception ex) { App.Log("suggest-add", ex, ex.Message); ShowToast("Couldn't add that."); }
+    }
+
+    private async Task DismissSuggestionAsync(int id)
+    {
+        if (_q.Project is not { } pid) return;
+        try
+        {
+            await Api.DismissSuggestionsAsync(pid, [id]);
+            await RefreshSuggestionsAsync(_cts.Token);      // a new one takes its place if there is another good match
+        }
+        catch (Exception ex) { App.Log("suggest-dismiss", ex, ex.Message); ShowToast("Couldn't do that."); }
+    }
+
+    private async void SuggestAll_Click(object sender, RoutedEventArgs e) => await AcceptSuggestionsAsync(_suggested.Select(f => f.Id).ToList());
+
+    private void SuggestToggle_Click(object sender, RoutedEventArgs e) { _suggestCollapsed = !_suggestCollapsed; BuildSuggest(); }
 
     private async Task LoadMoreAsync(CancellationToken ct)
     {

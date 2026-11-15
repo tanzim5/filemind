@@ -137,6 +137,28 @@
         </ScrollViewer>
 
 
+        <!-- A space that is open offers files that probably belong in it. Nothing is added until you press the tick. -->
+        <Border x:Name="SuggestStrip" Visibility="Collapsed" VerticalAlignment="Top" Margin="0,82,0,0" Padding="12,8,12,10"
+                Style="{StaticResource GlassCard}" SizeChanged="SuggestStrip_SizeChanged">
+          <StackPanel Spacing="8">
+            <Grid ColumnSpacing="10">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <TextBlock Text="Suggested for this space" Style="{StaticResource SectionLabel}"/>
+                <TextBlock x:Name="SuggestCount" FontSize="11.5" Foreground="{StaticResource GlassTextTertiaryBrush}"/>
+              </StackPanel>
+              <Button x:Name="SuggestAllBtn" Grid.Column="1" Content="Add all shown" FontSize="12" Height="26" Padding="10,0" CornerRadius="6"
+                      Style="{StaticResource GlassButton}" Click="SuggestAll_Click"/>
+              <Button x:Name="SuggestToggle" Grid.Column="2" Style="{StaticResource BarButton}" Width="26" Height="26" Click="SuggestToggle_Click"
+                      AutomationProperties.Name="Show or hide suggestions" ToolTipService.ToolTip="Show or hide suggestions">
+                <local:LineIcon x:Name="SuggestChevron" Kind="chevup" Size="14"/></Button>
+            </Grid>
+            <ScrollViewer x:Name="SuggestScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled">
+              <StackPanel x:Name="SuggestRow" Orientation="Horizontal" Spacing="8" Padding="0,0,0,6"/>
+            </ScrollViewer>
+          </StackPanel>
+        </Border>
+
         <Border x:Name="EmptyCard" Visibility="Collapsed" Style="{StaticResource GlassCard}" MaxWidth="460"
                 HorizontalAlignment="Center" VerticalAlignment="Center" Padding="32">
           <StackPanel Spacing="12">

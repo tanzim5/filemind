@@ -28,6 +28,7 @@ from . import duplicates as duplicates_mod
 from . import moments as moments_mod
 from . import export as export_mod
 from . import search_mix
+from . import space_suggest
 
 app = FastAPI(title="Local File Brain")
 STATIC = Path(__file__).parent / "static"
@@ -1123,6 +1124,8 @@ def delete_project(pid: int):
     c = db.conn()
     c.execute("DELETE FROM project_files WHERE project_id=?", (pid,))
     c.execute("DELETE FROM smart_spaces WHERE project_id=?", (pid,))
+    _dismissals_table(c)
+    c.execute("DELETE FROM space_dismissals WHERE project_id=?", (pid,))
     c.execute("DELETE FROM projects WHERE id=?", (pid,))
     c.commit()
     return {"ok": True}
@@ -1135,6 +1138,43 @@ def project_add(pid: int, body: dict = Body(...)):
         raise HTTPException(400, "A live space updates from its search; add files to a regular space instead")
     for fid in body["file_ids"]:
         c.execute("INSERT OR IGNORE INTO project_files VALUES(?,?)", (pid, fid))
+    c.commit()
+    return {"ok": True}
+
+
+def _dismissals_table(c):
+    c.execute("CREATE TABLE IF NOT EXISTS space_dismissals (project_id INTEGER NOT NULL, file_id INTEGER NOT NULL, PRIMARY KEY(project_id, file_id))")
+
+
+@app.get("/api/projects/{pid}/suggestions")
+def project_suggestions(pid: int, limit: int = 40):
+    """Files that probably belong in this space: nearest to the average of its members, not yet members, not
+    dismissed for this space, and similar enough (space_suggest.MIN_SIMILARITY). Nothing is added here."""
+    c = db.conn()
+    if c.execute("SELECT 1 FROM projects WHERE id=?", (pid,)).fetchone() is None:
+        raise HTTPException(404, "No such space")
+    _dismissals_table(c)
+    if c.execute("SELECT 1 FROM smart_spaces WHERE project_id=?", (pid,)).fetchone():
+        return {"files": []}                                   # a live space fills itself from its search
+    members = [r[0] for r in c.execute("SELECT file_id FROM project_files WHERE project_id=?", (pid,))]
+    dismissed = [r[0] for r in c.execute("SELECT file_id FROM space_dismissals WHERE project_id=?", (pid,))]
+    ids, mat = indexer.matrix()
+    found = space_suggest.suggest(ids, mat, members, dismissed, max(1, min(int(limit), 200)))
+    if not found:
+        return {"files": []}
+    rows = {r["id"]: r for r in c.execute(
+        f"SELECT * FROM files WHERE status='done' AND id IN ({','.join('?' for _ in found)})", [fid for fid, _ in found])}
+    return {"files": [_file_dict(rows[fid], score) for fid, score in found if fid in rows]}
+
+
+@app.post("/api/projects/{pid}/suggestions/dismiss")
+def project_suggestions_dismiss(pid: int, body: dict = Body(...)):
+    c = db.conn()
+    if c.execute("SELECT 1 FROM projects WHERE id=?", (pid,)).fetchone() is None:
+        raise HTTPException(404, "No such space")
+    _dismissals_table(c)
+    for fid in body.get("file_ids", []):
+        c.execute("INSERT OR IGNORE INTO space_dismissals VALUES(?,?)", (pid, int(fid)))
     c.commit()
     return {"ok": True}
 
