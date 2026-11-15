@@ -510,8 +510,9 @@ public sealed partial class MainWindow : Window
             if (!_devPageDone && dev is "discover" or "spaces" or "duplicates")
             {
                 _devPageDone = true;
-                ContentFrame.Navigate(dev switch { "discover" => typeof(Pages.DiscoverPage), "spaces" => typeof(Pages.SpacesPage), _ => typeof(Pages.DuplicatesPage) });
+                var page = dev switch { "discover" => typeof(Pages.DiscoverPage), "spaces" => typeof(Pages.SpacesPage), _ => typeof(Pages.DuplicatesPage) };
                 _ = Pages.LibraryPage.Current?.PrimeAsync();
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () => ContentFrame.Navigate(page));
             }
         }
     }

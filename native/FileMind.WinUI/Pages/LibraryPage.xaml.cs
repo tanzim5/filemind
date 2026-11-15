@@ -1147,20 +1147,24 @@ public sealed partial class LibraryPage : Page
     {
         static double? N(NumberBox b) => double.IsNaN(b.Value) ? null : b.Value;
         static string? Tag(ComboBox c) => (c.SelectedItem as ComboBoxItem)?.Tag as string is { Length: > 0 } t ? t : null;
-        await GoAsync(() =>
+        void Fill(FileQuery q)
         {
-            _q.After = FFrom.Date is { } f ? f.LocalDateTime.Date.Subtract(DateTime.UnixEpoch.ToLocalTime()).TotalSeconds : null;
-            _q.Before = FThrough.Date is { } t ? t.LocalDateTime.Date.AddDays(1).Subtract(DateTime.UnixEpoch.ToLocalTime()).TotalSeconds : null;
-            _q.MinSize = N(FMinMb) is { } a ? (long)(a * 1e6) : null;
-            _q.MaxSize = N(FMaxMb) is { } b ? (long)(b * 1e6) : null;
-            _q.MinWidth = N(FMinW) is { } w ? (int)w : null;
-            _q.MinHeight = N(FMinH) is { } h ? (int)h : null;
-            _q.MinDuration = N(FMinLen);
-            _q.MaxDuration = N(FMaxLen);
-            _q.MinFps = N(FMinFps);
-            _q.Aspect = Tag(FAspect);
-            _q.Codec = Tag(FCodec);
-        });
+            q.After = FFrom.Date is { } f ? f.LocalDateTime.Date.Subtract(DateTime.UnixEpoch.ToLocalTime()).TotalSeconds : null;
+            q.Before = FThrough.Date is { } t ? t.LocalDateTime.Date.AddDays(1).Subtract(DateTime.UnixEpoch.ToLocalTime()).TotalSeconds : null;
+            q.MinSize = N(FMinMb) is { } a ? (long)(a * 1e6) : null;
+            q.MaxSize = N(FMaxMb) is { } b ? (long)(b * 1e6) : null;
+            q.MinWidth = N(FMinW) is { } w ? (int)w : null;
+            q.MinHeight = N(FMinH) is { } h ? (int)h : null;
+            q.MinDuration = N(FMinLen);
+            q.MaxDuration = N(FMaxLen);
+            q.MinFps = N(FMinFps);
+            q.Aspect = Tag(FAspect);
+            q.Codec = Tag(FCodec);
+        }
+        // Controls announce themselves when the sidebar first shows them; nothing changed, so nothing to reload.
+        var probe = _q.Clone(); Fill(probe);
+        if (probe.DetailFilters().Count == _q.DetailFilters().Count && probe.DetailFilters().All(kv => _q.DetailFilters().TryGetValue(kv.Key, out var v) && Equals(v, kv.Value))) return;
+        await GoAsync(() => Fill(_q));
     }
 
     // ------------------------------------------------------------------ tiles: click, check, hover, open, drag
