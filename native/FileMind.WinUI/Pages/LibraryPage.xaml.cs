@@ -104,12 +104,14 @@ public sealed partial class LibraryPage : Page
         // The filters live in the app's left rail on every page; the buttons live in the shell's top bar while this page shows.
         BodyGrid.Children.Remove(FilterPanel);
         ToolHolder.Children.Remove(ToolButtons);
+        Host.Children.Remove(SearchPill);
         App.Window?.SetSidebar(FilterPanel);
 
         NavigationCacheMode = NavigationCacheMode.Required;
         Loaded += async (_, _) =>
         {
             App.Window?.SetActions(ToolButtons);
+            App.Window?.SetCenter(SearchPill);
             PushTitle();
             App.Window?.SyncNav();
             if (_cts.IsCancellationRequested) _cts = new CancellationTokenSource();
@@ -433,13 +435,12 @@ public sealed partial class LibraryPage : Page
         }
     }
 
-    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e) { }
+    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e) => SearchHint.Visibility = SearchBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
 
     private void SearchBox_Focus(object sender, RoutedEventArgs e)
     {
         var on = SearchBox.FocusState != FocusState.Unfocused;
-        SearchLine.Background = Ui.Brush(on ? "AccentBrush" : "DividerBrush");
-        SearchLine.Height = on ? 2 : 1;
+        SearchPill.BorderBrush = Ui.Brush(on ? "AccentBrush" : "FieldBorderBrush");
     }
 
     private void RebuildTags()
@@ -485,7 +486,7 @@ public sealed partial class LibraryPage : Page
             await _voice.StartAsync();
             VoiceBtn.Background = Ui.Brush("AccentFillBrush");
             ToolTipService.SetToolTip(VoiceBtn, "Listening… tap to search");
-            SearchBox.PlaceholderText = "Listening… say what you are looking for";
+            SearchHint.Text = "Listening… say what you are looking for";
             _voiceStop.Tick -= VoiceStop_Tick; _voiceStop.Tick += VoiceStop_Tick; _voiceStop.Start();
         }
         catch (Exception ex)
@@ -503,7 +504,7 @@ public sealed partial class LibraryPage : Page
         _voiceStop.Stop();
         VoiceBtn.ClearValue(Control.BackgroundProperty);
         ToolTipService.SetToolTip(VoiceBtn, "Search by voice");
-        SearchBox.PlaceholderText = "Search your files…";
+        SearchHint.Text = "Search your files…";
         string? path = null;
         try { path = _voice is null ? null : await _voice.StopAsync(); } catch (Exception ex) { App.Log("voice-stop", ex, ex.Message); }
         _voice?.Dispose(); _voice = null;
@@ -628,15 +629,15 @@ public sealed partial class LibraryPage : Page
     // ------------------------------------------------------------------ filter panel
     private FrameworkElement Chip(string text, bool on, Func<Task> click, string? dot = null, int? count = null, string? tooltip = null, bool compact = false)
     {
-        var row = new Grid { ColumnSpacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
+        var row = new Grid { ColumnSpacing = 5, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        if (dot is not null) row.Children.Add(new Border { Width = 9, Height = 9, CornerRadius = new CornerRadius(4), Background = Brush(dot), VerticalAlignment = VerticalAlignment.Center });
-        var label = new TextBlock { Text = text, FontSize = 12.5, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        if (dot is not null) row.Children.Add(new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = Brush(dot), VerticalAlignment = VerticalAlignment.Center });
+        var label = new TextBlock { Text = text, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         Grid.SetColumn(label, 1); row.Children.Add(label);
-        if (count is { } n) { var ct = new TextBlock { Text = n.ToString("N0"), FontSize = 11.5, Foreground = Ui.Brush("GlassTextTertiaryBrush"), VerticalAlignment = VerticalAlignment.Center }; Grid.SetColumn(ct, 2); row.Children.Add(ct); }
-        var b = new ToggleButton { Content = row, IsChecked = on, Style = Ui.Style("GlassChip"), HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(10, 6, 10, 6), MinHeight = 30, CornerRadius = new CornerRadius(6) };
+        if (count is { } n) { var ct = new TextBlock { Text = n.ToString("N0"), FontSize = 11, Foreground = Ui.Brush("GlassTextTertiaryBrush"), VerticalAlignment = VerticalAlignment.Center }; Grid.SetColumn(ct, 2); row.Children.Add(ct); }
+        var b = new ToggleButton { Content = row, IsChecked = on, Style = Ui.Style("GlassChip"), HorizontalAlignment = HorizontalAlignment.Left, HorizontalContentAlignment = HorizontalAlignment.Left, Padding = new Thickness(8, 0, 8, 0), MinHeight = 24, Height = 24, CornerRadius = new CornerRadius(6) };
         b.Click += async (_, _) => await click();
         if (tooltip is not null) ToolTipService.SetToolTip(b, tooltip);
         return b;
@@ -645,11 +646,13 @@ public sealed partial class LibraryPage : Page
     /// <summary>A file-type filter as an icon tile: icon above, name and count below.</summary>
     private FrameworkElement TypeTile(string label, string icon, bool on, string kind, int count)
     {
-        var col = new StackPanel { Spacing = 3, HorizontalAlignment = HorizontalAlignment.Center };
-        col.Children.Add(new LineIcon { Kind = icon, Size = 18, HorizontalAlignment = HorizontalAlignment.Center });
-        col.Children.Add(new TextBlock { Text = label, FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center });
-        col.Children.Add(new TextBlock { Text = count.ToString("N0"), FontSize = 10.5, Opacity = 0.55, HorizontalAlignment = HorizontalAlignment.Center });
-        var b = new ToggleButton { Content = col, IsChecked = on, Style = Ui.Style("GlassChip"), HorizontalAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(4, 8, 4, 7), CornerRadius = new CornerRadius(5) };
+        var col = new StackPanel { Spacing = 1, HorizontalAlignment = HorizontalAlignment.Center };
+        var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, HorizontalAlignment = HorizontalAlignment.Center };
+        line.Children.Add(new LineIcon { Kind = icon, Size = 14, VerticalAlignment = VerticalAlignment.Center });
+        line.Children.Add(new TextBlock { Text = label, FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+        col.Children.Add(line);
+        col.Children.Add(new TextBlock { Text = count.ToString("N0"), FontSize = 11, Foreground = Ui.Brush("GlassTextTertiaryBrush"), HorizontalAlignment = HorizontalAlignment.Center });
+        var b = new ToggleButton { Content = col, IsChecked = on, Style = Ui.Style("GlassChip"), HorizontalAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(2, 5, 2, 5), CornerRadius = new CornerRadius(6) };
         b.Click += async (_, _) => await SetKind(kind);
         return b;
     }
@@ -798,9 +801,9 @@ public sealed partial class LibraryPage : Page
         void Active(string text, Action remove)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7 };
-            row.Children.Add(new TextBlock { Text = text, FontSize = 12 });
+            row.Children.Add(new TextBlock { Text = text, FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center });
             row.Children.Add(new LineIcon { Kind = "close", Size = 9, VerticalAlignment = VerticalAlignment.Center  });
-            var b = new Button { Content = row, Style = Ui.Style("GlassButton"), Padding = new Thickness(11, 4, 11, 4), CornerRadius = new CornerRadius(5), Background = Ui.Brush("AccentTintBrush") };
+            var b = new Button { Content = row, Style = Ui.Style("GlassButton"), Padding = new Thickness(8, 0, 8, 0), Height = 22, CornerRadius = new CornerRadius(5), Background = Ui.Brush("AccentTintBrush") };
             b.Click += async (_, _) => await GoAsync(remove);
             chips.Add(b);
         }
@@ -865,6 +868,8 @@ public sealed partial class LibraryPage : Page
     });
 
     private async void ClearFilters_Click(object sender, RoutedEventArgs e) => await ClearAllAsync();
+
+    private void Exact_Click(object sender, RoutedEventArgs e) => ExactPanel.Visibility = ExactToggle.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
 
     private async Task ClearAllAsync() => await GoAsync(() =>
     {
@@ -979,12 +984,9 @@ public sealed partial class LibraryPage : Page
         {
             var shown = group.Where(f => FacetOn(f.Key) || (f.Count > 0 && f.Count < r.Total)).ToList();
             if (shown.Count == 0) continue;
-            var box = new StackPanel { Spacing = 5 };
-            var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-            head.Children.Add(new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = Brush(group.Key switch { "Quality" => "#3B82F6", "Shape" => "#8B5CF6", "Length" => "#22A559", "Motion" => "#EC4899", "File size" => "#F59E0B", _ => "#14B8A6" }), VerticalAlignment = VerticalAlignment.Center });
-            head.Children.Add(new TextBlock { Text = group.Key, FontSize = 12, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
-            box.Children.Add(head);
-            var wrap = new WrapPanel { Spacing = 5 };   // natural widths, left to right, wrapping: no stretched rows
+            // The small group label starts the chip flow, so a group is one or two lines, not a heading plus a block.
+            var wrap = new WrapPanel { Spacing = 4 };   // natural widths, left to right, wrapping: no stretched rows
+            wrap.Children.Add(new TextBlock { Text = group.Key, FontSize = 11.5, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Height = 24, Margin = new Thickness(0, 0, 2, 0), VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
             var hint = group.Key switch { "Quality" => "#3B82F6", "Shape" => "#8B5CF6", "Length" => "#22A559", "Motion" => "#EC4899", "File size" => "#F59E0B", _ => "#14B8A6" };
             foreach (var f in shown)
             {
@@ -992,8 +994,7 @@ public sealed partial class LibraryPage : Page
                 wrap.Children.Add(Chip(f.Label, FacetOn(key), () => GoAsync(() => { ToggleFacet(key); _title = ""; SyncDetailFields(); }),
                     hint, f.Count, $"{f.Hint} · {f.Count:N0} of {r.Total:N0}"));
             }
-            box.Children.Add(wrap);
-            RefineGroups.Children.Add(box);
+            RefineGroups.Children.Add(wrap);
         }
         RefineEmpty.Visibility = RefineGroups.Children.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }

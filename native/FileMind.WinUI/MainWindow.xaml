@@ -31,7 +31,9 @@
               <Button x:Name="FwdBtn" Style="{StaticResource BarButton}" IsEnabled="False" Click="NavFwd_Click" AutomationProperties.Name="Forward" ToolTipService.ToolTip="Forward">
                 <p:LineIcon Kind="fwd" Size="16"/></Button>
             </StackPanel>
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <!-- A page may put its own centrepiece here (the Library's search pill); it then takes the title's place. -->
+            <ContentControl x:Name="CenterHost" Grid.Column="1" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center" IsTabStop="False" Visibility="Collapsed"/>
+            <StackPanel x:Name="TitleStack" Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
               <TextBlock x:Name="TitleText" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="560" VerticalAlignment="Center"/>
               <TextBlock x:Name="TitleNote" Style="{StaticResource SecondaryText}" FontSize="12" VerticalAlignment="Center"/>
             </StackPanel>
@@ -49,7 +51,11 @@
         </Grid.RowDefinitions>
 
         <StackPanel x:Name="NavStack" Spacing="1" Margin="0,0,0,12"/>
-        <ContentControl x:Name="SidebarHost" Grid.Row="1" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
+        <!-- Clipped, so the scrolling filters never paint over the fixed destinations above. -->
+        <Grid x:Name="SidebarClip" Grid.Row="1" SizeChanged="SidebarClip_SizeChanged">
+          <ContentControl x:Name="SidebarHost" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
+          <Border Height="1" VerticalAlignment="Top" Margin="4,0" Background="{StaticResource DividerBrush}" IsHitTestVisible="False"/>
+        </Grid>
         <ToggleButton x:Name="SettingsRail" Grid.Row="2" Style="{StaticResource RailItem}" MinHeight="30" Margin="0,6,0,0" Click="OpenSettings_Click"
                       AutomationProperties.Name="Settings" ToolTipService.ToolTip="Settings (Ctrl+,)">
           <StackPanel Orientation="Horizontal" Spacing="10">

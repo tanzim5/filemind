@@ -24,6 +24,11 @@
   <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#1FFFFFFF"/>
   <SolidColorBrush x:Key="GlassTextSecondaryBrush" Color="#B3FFFFFF"/>
   <SolidColorBrush x:Key="GlassTextTertiaryBrush" Color="#80FFFFFF"/>
+  <!-- Full-strength text, for icons and values that must always read (recoloured by ThemeEngine). -->
+  <SolidColorBrush x:Key="GlassTextPrimaryBrush" Color="#FFFFFFFF"/>
+  <!-- The search field: a solid fill with a clear edge (recoloured by ThemeEngine). -->
+  <SolidColorBrush x:Key="FieldFillBrush" Color="#22FFFFFF"/>
+  <SolidColorBrush x:Key="FieldBorderBrush" Color="#44FFFFFF"/>
 
   <LinearGradientBrush x:Key="GlassStrokeBrush" StartPoint="0,0" EndPoint="1,1">
     <GradientStop Color="#40FFFFFF" Offset="0"/>
@@ -166,7 +171,7 @@
         <ControlTemplate TargetType="Button">
           <Grid Background="Transparent">
             <Border x:Name="Hl" Background="{StaticResource GlassHighlightBrush}" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
-            <ContentPresenter x:Name="Cp" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Padding="{TemplateBinding Padding}"/>
+            <ContentPresenter x:Name="Cp" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Padding="{TemplateBinding Padding}" Foreground="{StaticResource GlassTextPrimaryBrush}"/>
             <VisualStateManager.VisualStateGroups>
               <VisualStateGroup x:Name="CommonStates">
                 <VisualState x:Name="Normal"/>

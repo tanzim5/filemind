@@ -72,6 +72,8 @@ public static class ThemeEngine
             Set("GlassHighlightBrush", A(0x26)); Set("GlassHoverSoftBrush", A(0x14));
             Set("GlassTextSecondaryBrush", Windows.UI.Color.FromArgb(0xD1, 255, 255, 255));
             Set("GlassTextTertiaryBrush", Windows.UI.Color.FromArgb(0xA3, 255, 255, 255));
+            Set("GlassTextPrimaryBrush", Windows.UI.Color.FromArgb(255, 255, 255, 255));
+            Set("FieldFillBrush", A(0x22)); Set("FieldBorderBrush", A(0x47));
         }
         else
         {
@@ -80,6 +82,8 @@ public static class ThemeEngine
             Set("GlassHighlightBrush", A(0x10)); Set("GlassHoverSoftBrush", A(0x0A));
             Set("GlassTextSecondaryBrush", C("#6B6B73"));
             Set("GlassTextTertiaryBrush", C("#85858D"));
+            Set("GlassTextPrimaryBrush", C("#1B1B1F"));
+            Set("FieldFillBrush", C("#FFFFFF")); Set("FieldBorderBrush", C("#C4C2BC"));
         }
 
         if (Application.Current.Resources.TryGetValue("GlassStrokeBrush", out var sv) && sv is LinearGradientBrush sg && sg.GradientStops.Count == 3)
@@ -110,9 +114,9 @@ public static class ThemeEngine
         // True black stays solid, since blur over black only adds grey.
         if (Application.Current.Resources.TryGetValue("ToolbarGlassBrush", out var tv) && tv is AcrylicBrush glass)
         {
-            glass.TintColor = p.Panel; glass.FallbackColor = Windows.UI.Color.FromArgb(0xF2, p.Panel.R, p.Panel.G, p.Panel.B);
-            glass.TintOpacity = p.Key == "amoled" ? 1 : p.Dark ? 0.62 : 0.7;
-            glass.TintLuminosityOpacity = p.Key == "amoled" ? 1 : p.Dark ? 0.72 : 0.8;
+            glass.TintColor = p.Panel; glass.FallbackColor = Windows.UI.Color.FromArgb(0xF8, p.Panel.R, p.Panel.G, p.Panel.B);
+            glass.TintOpacity = p.Key == "amoled" ? 1 : p.Dark ? 0.62 : 0.88;
+            glass.TintLuminosityOpacity = p.Key == "amoled" ? 1 : p.Dark ? 0.72 : 0.9;
         }
     }
 }

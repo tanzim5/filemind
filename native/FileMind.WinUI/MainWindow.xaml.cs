@@ -51,6 +51,7 @@ public sealed partial class MainWindow : Window
         {
             SyncRail(e.SourcePageType);
             SetActions(null);              // the new page puts its own buttons in the bar once it has loaded
+            SetCenter(null);
             SyncNav();
         };
         Closed += (_, e) =>
@@ -89,6 +90,18 @@ public sealed partial class MainWindow : Window
         QueueTitleRegions();
     }
 
+    /// <summary>The middle of the bar: a page hands over a centrepiece (the search pill) that replaces the title; null brings the title back.</summary>
+    public void SetCenter(UIElement? center)
+    {
+        if (!ReferenceEquals(CenterHost.Content, center)) CenterHost.Content = center;
+        CenterHost.Visibility = center is null ? Visibility.Collapsed : Visibility.Visible;
+        TitleStack.Visibility = center is null ? Visibility.Visible : Visibility.Collapsed;
+        QueueTitleRegions();
+    }
+
+    private void SidebarClip_SizeChanged(object sender, SizeChangedEventArgs e) =>
+        SidebarClip.Clip = new RectangleGeometry { Rect = new Windows.Foundation.Rect(0, 0, e.NewSize.Width, e.NewSize.Height) };
+
     /// <summary>Keeps the back and forward buttons in step with what Back would do right now.</summary>
     public void SyncNav()
     {
@@ -126,6 +139,7 @@ public sealed partial class MainWindow : Window
                 Add(NavButtons);
                 // The actions host is as wide as its column; only what the page put in it takes clicks.
                 if (ActionsHost.Content is FrameworkElement a) Add(a);
+                if (CenterHost.Content is FrameworkElement c) Add(c);
             }
             Microsoft.UI.Input.InputNonClientPointerSource.GetForWindowId(AppWindow.Id)
                 .SetRegionRects(Microsoft.UI.Input.NonClientRegionKind.Passthrough, [.. rects]);
@@ -513,6 +527,14 @@ public sealed partial class MainWindow : Window
                 var page = dev switch { "discover" => typeof(Pages.DiscoverPage), "spaces" => typeof(Pages.SpacesPage), _ => typeof(Pages.DuplicatesPage) };
                 _ = Pages.LibraryPage.Current?.PrimeAsync();
                 DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () => ContentFrame.Navigate(page));
+            }
+            else if (!_devPageDone && dev == "library-scroll")
+            {
+                // Screenshot helper: scrolls the sidebar so the overlap between filters and destinations can be checked.
+                _devPageDone = true;
+                var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(9) };
+                t.Tick += (_, _) => { t.Stop(); if (SidebarHost.Content is Border { Child: ScrollViewer sv }) sv.ChangeView(null, 500, null, true); };
+                t.Start();
             }
             else if (!_devPageDone && dev is "viewer" or "viewer-video")
             {
