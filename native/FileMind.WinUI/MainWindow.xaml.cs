@@ -139,7 +139,8 @@ public sealed partial class MainWindow : Window
                 Add(NavButtons);
                 // The actions host is as wide as its column; only what the page put in it takes clicks.
                 if (ActionsHost.Content is FrameworkElement a) Add(a);
-                if (CenterHost.Content is FrameworkElement c) Add(c);
+                if (CenterHost.Content is Panel cp) { foreach (var child in cp.Children) if (child is FrameworkElement ce) Add(ce); }
+                else if (CenterHost.Content is FrameworkElement c) Add(c);
             }
             Microsoft.UI.Input.InputNonClientPointerSource.GetForWindowId(AppWindow.Id)
                 .SetRegionRects(Microsoft.UI.Input.NonClientRegionKind.Passthrough, [.. rects]);
@@ -425,7 +426,7 @@ public sealed partial class MainWindow : Window
         {
             AppWindow.SetPresenter(on ? AppWindowPresenterKind.FullScreen : AppWindowPresenterKind.Overlapped);
             TitleBar.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
-            RailColumn.Width = new GridLength(on ? 0 : 248);
+            RailColumn.Width = new GridLength(on ? 0 : 268);
             RailCard.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
             TopBar.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
             QueueTitleRegions();
@@ -480,7 +481,7 @@ public sealed partial class MainWindow : Window
             var count = new TextBlock { FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center, Foreground = (Brush)Application.Current.Resources["GlassTextTertiaryBrush"] };
             Grid.SetColumn(count, 2); row.Children.Add(count);
             _counts[key] = count;
-            var b = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton { Style = (Style)Application.Current.Resources["RailItem"], Tag = key, Content = row, IsChecked = key == _current, MinHeight = 30, CornerRadius = new CornerRadius(6) };
+            var b = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton { Style = (Style)Application.Current.Resources["RailItem"], Tag = key, Content = row, IsChecked = key == _current, MinHeight = 30, Height = 30, CornerRadius = new CornerRadius(6) };
             b.Click += Rail_Click;
             _rail.Add(b); NavStack.Children.Add(b);
         }

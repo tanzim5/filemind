@@ -103,15 +103,14 @@ public sealed partial class LibraryPage : Page
 
         // The filters live in the app's left rail on every page; the buttons live in the shell's top bar while this page shows.
         BodyGrid.Children.Remove(FilterPanel);
-        ToolHolder.Children.Remove(ToolButtons);
-        Host.Children.Remove(SearchPill);
+        Host.Children.Remove(ToolbarRow);
         App.Window?.SetSidebar(FilterPanel);
 
         NavigationCacheMode = NavigationCacheMode.Required;
         Loaded += async (_, _) =>
         {
-            App.Window?.SetActions(ToolButtons);
-            App.Window?.SetCenter(SearchPill);
+            App.Window?.SetActions(null);
+            App.Window?.SetCenter(ToolbarRow);
             PushTitle();
             App.Window?.SyncNav();
             if (_cts.IsCancellationRequested) _cts = new CancellationTokenSource();
@@ -314,8 +313,9 @@ public sealed partial class LibraryPage : Page
     /// <summary>The title lives in the shell's top bar; it is only written there while the Library is the page on screen.</summary>
     private void PushTitle()
     {
+        PageTitle.Text = _pageTitle;
         if (!IsLoaded || App.Window is not { } w) return;
-        w.SetTitle(_pageTitle, null);
+        PageTitle.Text = _pageTitle;
         w.SyncNav();
     }
 
@@ -578,8 +578,6 @@ public sealed partial class LibraryPage : Page
     }
 
     private bool _allSources;
-    private void Colors_Enter(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e) { ColorBox.MaxHeight = double.PositiveInfinity; }
-    private void Colors_Exit(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e) { ColorBox.MaxHeight = 51; }
 
     private void Layout_Click(object sender, RoutedEventArgs e)
     {
@@ -629,30 +627,82 @@ public sealed partial class LibraryPage : Page
     // ------------------------------------------------------------------ filter panel
     private FrameworkElement Chip(string text, bool on, Func<Task> click, string? dot = null, int? count = null, string? tooltip = null, bool compact = false)
     {
-        var row = new Grid { ColumnSpacing = 5, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        // A cell of a two-column grid: dot and name on the left, the count on the right, all inside one equal-width chip.
+        tooltip ??= text;
+        text = Short(text);
+        var row = new Grid { ColumnSpacing = 5, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = dot is null ? new GridLength(0) : GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         if (dot is not null) row.Children.Add(new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = Brush(dot), VerticalAlignment = VerticalAlignment.Center });
-        var label = new TextBlock { Text = text, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        var label = new TextBlock { Text = text, FontSize = 12.5, TextTrimming = TextTrimming.CharacterEllipsis, MaxLines = 1, TextWrapping = TextWrapping.NoWrap, VerticalAlignment = VerticalAlignment.Center };
         Grid.SetColumn(label, 1); row.Children.Add(label);
-        if (count is { } n) { var ct = new TextBlock { Text = n.ToString("N0"), FontSize = 11, Foreground = Ui.Brush("GlassTextTertiaryBrush"), VerticalAlignment = VerticalAlignment.Center }; Grid.SetColumn(ct, 2); row.Children.Add(ct); }
-        var b = new ToggleButton { Content = row, IsChecked = on, Style = Ui.Style("GlassChip"), HorizontalAlignment = HorizontalAlignment.Left, HorizontalContentAlignment = HorizontalAlignment.Left, Padding = new Thickness(8, 0, 8, 0), MinHeight = 24, Height = 24, CornerRadius = new CornerRadius(6) };
+        if (count is { } n) { var ct = new TextBlock { Text = n.ToString("N0"), FontSize = 11, Foreground = Ui.Brush("GlassTextTertiaryBrush"), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right }; Grid.SetColumn(ct, 2); row.Children.Add(ct); }
+        var b = new ToggleButton { Content = row, IsChecked = on, Style = Ui.Style("GlassChip"), HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(8, 0, 8, 0), MinHeight = 28, Height = 28, CornerRadius = new CornerRadius(6) };
         b.Click += async (_, _) => await click();
-        if (tooltip is not null) ToolTipService.SetToolTip(b, tooltip);
+        ToolTipService.SetToolTip(b, tooltip);
+        return b;
+    }
+
+    // Long names get a shorter form so a chip in the two-column grid never has to cut a word; the tooltip keeps the full name.
+    private static readonly Dictionary<string, string> ShortNames = new()
+    {
+        ["HD or better"] = "HD+", ["Widescreen"] = "Wide", ["Under 30 s"] = "< 30 s", ["Over 1 min"] = "> 1 min", ["Over 20 MB"] = "> 20 MB", ["Over 500 MB"] = "> 500 MB",
+        ["This week"] = "Week", ["This month"] = "Month", ["This year"] = "Year", ["Nano Banana / Gemini"] = "Nano Banana", ["Google Flow / Veo"] = "Flow / Veo",
+        ["Hailuo / MiniMax"] = "Hailuo", ["Camera & phone"] = "Camera", ["creation_… exports"] = "creation_…", ["Midjourney"] = "Midjourney",
+    };
+    private static string Short(string t) => ShortNames.GetValueOrDefault(t, t);
+
+    private static Windows.UI.Color Hex(string h)
+    {
+        h = h.TrimStart('#');
+        return Color.FromArgb(255, Convert.ToByte(h[..2], 16), Convert.ToByte(h[2..4], 16), Convert.ToByte(h[4..6], 16));
+    }
+
+    private static LinearGradientBrush Gradient(double angle, params string[] stops)
+    {
+        var g = new LinearGradientBrush { StartPoint = new Windows.Foundation.Point(0, 0.2), EndPoint = new Windows.Foundation.Point(1, 0.8) };
+        for (var i = 0; i < stops.Length; i++) g.GradientStops.Add(new GradientStop { Color = Hex(stops[i]), Offset = stops.Length == 1 ? 0 : i / (double)(stops.Length - 1) });
+        return g;
+    }
+
+    /// <summary>A look or mood as a chip tinted with the look itself; the text is dark or light so it stays readable.</summary>
+    private FrameworkElement MoodChip(MoodEntry m, bool on)
+    {
+        var (brush, text) = m.Key switch
+        {
+            "pastel" => (Gradient(0, "#FFD6E8", "#D6E6FF", "#D9F5E4"), "#2A2A33"),
+            "neon" => (Gradient(0, "#FF2BD6", "#7A3CFF", "#19E6FF"), "#FFFFFF"),
+            "golden" => (Gradient(0, "#FFE29A", "#FFB347", "#F27D2B"), "#3A2108"),
+            "moody" => (Gradient(0, "#1B2A44", "#10131C", "#262A33"), "#F2F3F7"),
+            "bw" => (Gradient(0, "#8E8E8E", "#5A5A5A", "#2B2B2B"), "#FFFFFF"),
+            "vivid" => (Gradient(0, "#FF3B6B", "#FFB000", "#2CD36F", "#2D7BFF"), "#FFFFFF"),
+            "minimal" => (Gradient(0, "#FFFFFF", "#F1F1EE"), "#2A2A2E"),
+            "earthy" => (Gradient(0, "#8A8F4B", "#B88A5A", "#B5573A"), "#FFFFFF"),
+            "teal_orange" => (Gradient(0, "#0E7C86", "#2B8E92", "#F08A3C"), "#FFFFFF"),
+            "dreamy" => (Gradient(0, "#CDB8F5", "#F3C4E4", "#FBE3F1"), "#2E2540"),
+            _ => (Gradient(0, "#DDDDDD", "#BBBBBB"), "#222222"),
+        };
+        var label = new TextBlock { Text = m.Label, FontSize = 12.5, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = new SolidColorBrush(Hex(text)), TextTrimming = TextTrimming.CharacterEllipsis, MaxLines = 1, VerticalAlignment = VerticalAlignment.Center };
+        var b = new ToggleButton
+        {
+            Content = label, IsChecked = on, Style = Ui.Style("GlassChip"), Background = brush, BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x33, 0x80, 0x80, 0x80)), HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Left, Padding = new Thickness(10, 0, 10, 0), MinHeight = 30, Height = 30, CornerRadius = new CornerRadius(7),
+        };
+        b.Click += async (_, _) => await ToggleMood(m);
+        ToolTipService.SetToolTip(b, m.Label);
         return b;
     }
 
     /// <summary>A file-type filter as an icon tile: icon above, name and count below.</summary>
     private FrameworkElement TypeTile(string label, string icon, bool on, string kind, int count)
     {
-        var col = new StackPanel { Spacing = 1, HorizontalAlignment = HorizontalAlignment.Center };
-        var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, HorizontalAlignment = HorizontalAlignment.Center };
-        line.Children.Add(new LineIcon { Kind = icon, Size = 14, VerticalAlignment = VerticalAlignment.Center });
-        line.Children.Add(new TextBlock { Text = label, FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
-        col.Children.Add(line);
-        col.Children.Add(new TextBlock { Text = count.ToString("N0"), FontSize = 11, Foreground = Ui.Brush("GlassTextTertiaryBrush"), HorizontalAlignment = HorizontalAlignment.Center });
-        var b = new ToggleButton { Content = col, IsChecked = on, Style = Ui.Style("GlassChip"), HorizontalAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(2, 5, 2, 5), CornerRadius = new CornerRadius(6) };
+        var col = new StackPanel { Spacing = 3, HorizontalAlignment = HorizontalAlignment.Center };
+        col.Children.Add(new LineIcon { Kind = icon, Size = 18, HorizontalAlignment = HorizontalAlignment.Center });
+        col.Children.Add(new TextBlock { Text = label, FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center });
+        col.Children.Add(new TextBlock { Text = count.ToString("N0"), FontSize = 10.5, Opacity = 0.55, HorizontalAlignment = HorizontalAlignment.Center });
+        var b = new ToggleButton { Content = col, IsChecked = on, Style = Ui.Style("GlassChip"), HorizontalAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(4, 8, 4, 7), CornerRadius = new CornerRadius(7) };
         b.Click += async (_, _) => await SetKind(kind);
         return b;
     }
@@ -671,7 +721,7 @@ public sealed partial class LibraryPage : Page
         try
         {
             RebuildTags();
-            ToolTipService.SetToolTip(SortBtn, "Sort · " + SortNames.GetValueOrDefault(_q.Sort, "Newest"));
+            SortText.Text = SortNames.GetValueOrDefault(_q.Sort, "Newest");
             
             // types
             int Kind(string k) => _stats.Kinds.GetValueOrDefault(k);
@@ -686,22 +736,26 @@ public sealed partial class LibraryPage : Page
                 if (Kind(key) > 0 || _q.Kind == key) types.Add(TypeTile(label, icon, _q.Kind == key, key, Kind(key)));
             TypeChips.ItemsSource = types;
 
-            // colours: two tidy rows, the rest on request
+            // colours: three rows of swatches (the last is a free colour picker). Hover changes nothing in size or layout.
             var shown = _colors.Where(c => c.Count > 0 || _q.Color == c.Key).ToList();
-            ColorDots.ItemsSource = shown.Select(c =>
+            var swatches = shown.Select(c =>
             {
                 var selected = _q.Color == c.Key;
                 var dot = new Border
                 {
-                    Width = 22, Height = 22, CornerRadius = new CornerRadius(4), Background = Brush(c.Swatch),
-                    BorderThickness = new Thickness(selected ? 3 : 1), BorderBrush = selected ? Ui.Brush("AccentOnStrokeBrush") : Ui.Brush("GlassStrokeBrush"),
+                    Width = 20, Height = 20, CornerRadius = new CornerRadius(5), Background = Brush(c.Swatch), HorizontalAlignment = HorizontalAlignment.Center,
+                    BorderThickness = new Thickness(2), BorderBrush = selected ? Ui.Brush("AccentBrush") : Ui.Brush("GlassStrokeBrush"),
                 };
                 ToolTipService.SetToolTip(dot, $"{c.Label} · {c.Count:N0}");
-                dot.Tapped += async (_, _) => await GoAsync(() => _q.Color = _q.Color == c.Key ? null : c.Key);
+                dot.PointerEntered += (_, _) => { if (_q.Color != c.Key) dot.BorderBrush = Ui.Brush("GlassTextSecondaryBrush"); };
+                dot.PointerExited += (_, _) => { if (_q.Color != c.Key) dot.BorderBrush = Ui.Brush("GlassStrokeBrush"); };
+                dot.Tapped += async (_, _) => await GoAsync(() => { _q.Color = _q.Color == c.Key ? null : c.Key; _q.Near = null; });
                 return (FrameworkElement)dot;
             }).ToList();
+            swatches.Add(CustomColourSwatch());
+            ColorDots.ItemsSource = swatches;
 
-            MoodChips.ItemsSource = _moods.Select(m => Chip(m.Label, _tags.Any(t => t.Query == m.Query), () => ToggleMood(m), null, null, null, true)).ToList();
+            MoodChips.ItemsSource = _moods.Select(m => MoodChip(m, _tags.Any(t => t.Query == m.Query))).ToList();
 
             var srcAll = _sources.Where(x => x.Count > 0 || _q.Source == x.Key).OrderByDescending(x => x.Key == _q.Source).ThenByDescending(x => x.Count).ToList();
             var srcShown = _allSources ? srcAll : srcAll.Take(6).ToList();
@@ -755,7 +809,6 @@ public sealed partial class LibraryPage : Page
                 line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 chip.HorizontalAlignment = HorizontalAlignment.Stretch;
-                ((ToggleButton)chip).HorizontalContentAlignment = HorizontalAlignment.Left;
                 Grid.SetColumn(reindex, 1); Grid.SetColumn(forget, 2);
                 line.Children.Add(chip); line.Children.Add(reindex); line.Children.Add(forget);
                 FolderList.Children.Add(line);
@@ -767,6 +820,33 @@ public sealed partial class LibraryPage : Page
             RebuildActiveChips();
         }
         finally { _syncing = false; }
+    }
+
+    /// <summary>The last swatch: a rainbow that opens a colour picker; the pick searches by "near this colour" like clicking the strip in the viewer.</summary>
+    private FrameworkElement CustomColourSwatch()
+    {
+        var rainbow = new LinearGradientBrush { StartPoint = new Windows.Foundation.Point(0, 0), EndPoint = new Windows.Foundation.Point(1, 1) };
+        var cols = new[] { "#FF3B30", "#FFB000", "#34C759", "#00C7BE", "#2D7BFF", "#AF52DE" };
+        for (var i = 0; i < cols.Length; i++) rainbow.GradientStops.Add(new GradientStop { Color = Hex(cols[i]), Offset = i / (double)(cols.Length - 1) });
+        var picker = new ColorPicker { IsAlphaEnabled = false, IsMoreButtonVisible = false, IsColorSliderVisible = true, IsHexInputVisible = true, ColorSpectrumShape = ColorSpectrumShape.Ring };
+        var apply = new Button { Content = "Find this colour", Style = Ui.Style("GlassAccentButton"), HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 8, 0, 0) };
+        var panel = new StackPanel { Children = { picker, apply } };
+        var flyout = new Flyout { Content = panel, Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Right };
+        apply.Click += async (_, _) =>
+        {
+            flyout.Hide();
+            var c = picker.Color;
+            await GoAsync(() => { _q.Near = $"#{c.R:X2}{c.G:X2}{c.B:X2}"; _q.Color = null; });
+        };
+        var dot = new Border
+        {
+            Width = 20, Height = 20, CornerRadius = new CornerRadius(5), Background = rainbow, HorizontalAlignment = HorizontalAlignment.Center,
+            BorderThickness = new Thickness(2), BorderBrush = _q.Near is not null ? Ui.Brush("AccentBrush") : Ui.Brush("GlassStrokeBrush"),
+            Child = new LineIcon { Kind = "plus", Size = 10, Foreground = new SolidColorBrush(Microsoft.UI.Colors.White), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+        };
+        ToolTipService.SetToolTip(dot, "Pick any colour");
+        dot.Tapped += (_, _) => flyout.ShowAt(dot);
+        return dot;
     }
 
     private static readonly string[] RingColours = ["#F2552C", "#3B82F6", "#22A559", "#8B5CF6", "#F59E0B", "#EC4899", "#14B8A6", "#64748B"];
@@ -790,7 +870,7 @@ public sealed partial class LibraryPage : Page
             var ct = new TextBlock { Text = count, FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Brush("GlassTextTertiaryBrush") };
             Grid.SetColumn(ct, 2); row.Children.Add(ct);
         }
-        var b = new ToggleButton { Style = Ui.Style("RailItem"), Content = row, IsChecked = on, MinHeight = 30 };
+        var b = new ToggleButton { Style = Ui.Style("RailItem"), Content = row, IsChecked = on, MinHeight = 30, Height = 30 };
         b.Click += async (_, _) => await click();
         return b;
     }
@@ -984,17 +1064,21 @@ public sealed partial class LibraryPage : Page
         {
             var shown = group.Where(f => FacetOn(f.Key) || (f.Count > 0 && f.Count < r.Total)).ToList();
             if (shown.Count == 0) continue;
-            // The small group label starts the chip flow, so a group is one or two lines, not a heading plus a block.
-            var wrap = new WrapPanel { Spacing = 4 };   // natural widths, left to right, wrapping: no stretched rows
-            wrap.Children.Add(new TextBlock { Text = group.Key, FontSize = 11.5, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Height = 24, Margin = new Thickness(0, 0, 2, 0), VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
+            // Each group: a label line (coloured dot and name) above its chips in two equal columns.
             var hint = group.Key switch { "Quality" => "#3B82F6", "Shape" => "#8B5CF6", "Length" => "#22A559", "Motion" => "#EC4899", "File size" => "#F59E0B", _ => "#14B8A6" };
+            var wrap = new WrapPanel { Spacing = 6, Columns = 2 };
             foreach (var f in shown)
             {
                 var key = f.Key;
                 wrap.Children.Add(Chip(f.Label, FacetOn(key), () => GoAsync(() => { ToggleFacet(key); _title = ""; SyncDetailFields(); }),
                     hint, f.Count, $"{f.Hint} · {f.Count:N0} of {r.Total:N0}"));
             }
-            RefineGroups.Children.Add(wrap);
+            var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, Margin = new Thickness(2, 0, 0, 0) };
+            head.Children.Add(new Border { Width = 7, Height = 7, CornerRadius = new CornerRadius(4), Background = Brush(hint), VerticalAlignment = VerticalAlignment.Center });
+            head.Children.Add(new TextBlock { Text = group.Key, FontSize = 11.5, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Ui.Brush("GlassTextSecondaryBrush"), VerticalAlignment = VerticalAlignment.Center });
+            var block = new StackPanel { Spacing = 8 };
+            block.Children.Add(head); block.Children.Add(wrap);
+            RefineGroups.Children.Add(block);
         }
         RefineEmpty.Visibility = RefineGroups.Children.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }

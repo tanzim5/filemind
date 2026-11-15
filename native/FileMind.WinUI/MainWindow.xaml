@@ -10,7 +10,7 @@
 
     <Grid x:Name="Shell" Visibility="Collapsed">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition x:Name="RailColumn" Width="248"/>
+        <ColumnDefinition x:Name="RailColumn" Width="268"/>
         <ColumnDefinition Width="*"/>
       </Grid.ColumnDefinitions>
 
@@ -21,15 +21,15 @@
         <!-- The permanent top bar: back and forward, the page title, the page's own actions, and room for the window buttons.
              It is frosted, so a page scrolling beneath it stays readable. -->
         <Border x:Name="TopBar" Height="48" VerticalAlignment="Top" Background="{StaticResource ToolbarGlassBrush}">
-          <Grid Padding="14,0,0,0" ColumnSpacing="8">
+          <Grid Padding="14,0,0,0" ColumnSpacing="10">
             <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="140"/>
+              <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="136"/>
             </Grid.ColumnDefinitions>
-            <StackPanel x:Name="NavButtons" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-              <Button x:Name="BackBtn" Style="{StaticResource BarButton}" IsEnabled="False" Click="NavBack_Click" AutomationProperties.Name="Back" ToolTipService.ToolTip="Back">
-                <p:LineIcon Kind="back" Size="16"/></Button>
-              <Button x:Name="FwdBtn" Style="{StaticResource BarButton}" IsEnabled="False" Click="NavFwd_Click" AutomationProperties.Name="Forward" ToolTipService.ToolTip="Forward">
-                <p:LineIcon Kind="fwd" Size="16"/></Button>
+            <StackPanel x:Name="NavButtons" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <Button x:Name="BackBtn" Style="{StaticResource BoxButton}" Padding="0" IsEnabled="False" Click="NavBack_Click" AutomationProperties.Name="Back" ToolTipService.ToolTip="Back">
+                <p:LineIcon Kind="back" Size="15"/></Button>
+              <Button x:Name="FwdBtn" Style="{StaticResource BoxButton}" Padding="0" IsEnabled="False" Click="NavFwd_Click" AutomationProperties.Name="Forward" ToolTipService.ToolTip="Forward">
+                <p:LineIcon Kind="fwd" Size="15"/></Button>
             </StackPanel>
             <!-- A page may put its own centrepiece here (the Library's search pill); it then takes the title's place. -->
             <ContentControl x:Name="CenterHost" Grid.Column="1" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center" IsTabStop="False" Visibility="Collapsed"/>
@@ -43,14 +43,14 @@
       </Grid>
 
       <!-- The sidebar is the window's own frosted glass, top to bottom: destinations, filters, settings. -->
-      <Grid x:Name="RailCard" Padding="10,50,10,8">
+      <Grid x:Name="RailCard" Padding="10,12,10,8">
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto"/>
           <RowDefinition Height="*"/>
           <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <StackPanel x:Name="NavStack" Spacing="1" Margin="0,0,0,12"/>
+        <StackPanel x:Name="NavStack" Spacing="2" Margin="0,0,0,18"/>
         <!-- Clipped, so the scrolling filters never paint over the fixed destinations above. -->
         <Grid x:Name="SidebarClip" Grid.Row="1" SizeChanged="SidebarClip_SizeChanged">
           <ContentControl x:Name="SidebarHost" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>

@@ -153,6 +153,24 @@
     </Setter>
   </Style>
 
+  <!-- Boxed 30 px button for the top bars (back, forward, sort, layout, size): hairline border, radius 7. -->
+  <Style x:Key="BoxButton" TargetType="Button" BasedOn="{StaticResource GlassButton}">
+    <Setter Property="Background" Value="{StaticResource FieldFillBrush}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource FieldBorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="7"/>
+    <Setter Property="Height" Value="30"/>
+    <Setter Property="MinWidth" Value="30"/>
+    <Setter Property="Padding" Value="8,0"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+  </Style>
+  <Style x:Key="BoxAccentButton" TargetType="Button" BasedOn="{StaticResource BoxButton}">
+    <Setter Property="Background" Value="{StaticResource AccentFillBrush}"/>
+    <Setter Property="BorderBrush" Value="Transparent"/>
+    <Setter Property="Foreground" Value="White"/>
+  </Style>
+
   <Style x:Key="SectionLabel" TargetType="TextBlock">
     <Setter Property="Foreground" Value="{StaticResource GlassTextSecondaryBrush}"/>
     <Setter Property="FontSize" Value="11.5"/>
