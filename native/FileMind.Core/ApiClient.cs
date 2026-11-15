@@ -131,6 +131,9 @@ public sealed class ApiClient(Uri baseUri) : IDisposable
 
     public Task CreateProjectAsync(string name, IEnumerable<int> fileIds, CancellationToken ct = default) =>
         PostAsync<JsonElement>("/api/projects", new { name, file_ids = fileIds.ToArray() }, ct);
+    /// <summary>The engine's proposals for new spaces ("Auto-group"). Nothing is created until the caller keeps one.</summary>
+    public Task<ClusterResponse> ProposeSpacesAsync(bool unassignedOnly = true, CancellationToken ct = default) =>
+        PostAsync<ClusterResponse>("/api/cluster", new { unassigned = unassignedOnly }, ct);
     public Task AddToProjectAsync(int project, IEnumerable<int> fileIds, CancellationToken ct = default) =>
         PostAsync<JsonElement>($"/api/projects/{project}/add", new { file_ids = fileIds.ToArray() }, ct);
     public Task RemoveFromProjectAsync(int project, IEnumerable<int> fileIds, CancellationToken ct = default) =>

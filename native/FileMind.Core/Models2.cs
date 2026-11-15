@@ -46,6 +46,21 @@ public sealed class ProjectEntry
     [JsonPropertyName("cover")] public List<CoverRef> Cover { get; set; } = [];
 }
 
+/// <summary>One group the engine proposes for a new space (from /api/cluster): a name, how many files and a few to show.</summary>
+public sealed class ClusterProposal
+{
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+    [JsonPropertyName("count")] public int Count { get; set; }
+    [JsonPropertyName("file_ids")] public List<int> FileIds { get; set; } = [];
+    [JsonPropertyName("sample")] public List<FileItem> Sample { get; set; } = [];
+}
+
+public sealed class ClusterResponse
+{
+    [JsonPropertyName("clusters")] public List<ClusterProposal> Clusters { get; set; } = [];
+    [JsonPropertyName("leftover")] public int Leftover { get; set; }
+}
+
 public sealed class DiscoverGroup
 {
     [JsonPropertyName("key")] public string Key { get; set; } = "";
