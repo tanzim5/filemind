@@ -37,6 +37,10 @@ public sealed class LineIcon : UserControl
     private static readonly Dictionary<string, string> Paths = new()
     {
         ["back"] = "M15,18 L9,12 L15,6",
+        ["copy"] = Box(9, 9, 12, 12, 2) + " M5,15 H4 A2,2 0 0 1 2,13 V4 A2,2 0 0 1 4,2 H13 A2,2 0 0 1 15,4 V5",
+        ["download"] = "M12,3 V15 M7,10 L12,15 L17,10 M5,20 H19",
+        ["dragframe"] = "M5,8 H5.01 M5,12 H5.01 M5,16 H5.01 " + Box(10, 5, 11, 14, 2.5) + " " + Circle(14, 10, 1.4) + " M21,16 L18.5,13.5 L12,19",
+        ["dragfile"] = "M5,8 H5.01 M5,12 H5.01 M5,16 H5.01 " + Box(10, 5, 11, 14, 2.5) + " M13,10 H18 M13,14 H18",
         ["fwd"] = "M9,18 L15,12 L9,6",
         ["filter"] = "M21,4 H14 M10,4 H3 M21,12 H12 M8,12 H3 M21,20 H16 M12,20 H3 M14,2 V6 M8,10 V14 M16,18 V22",
         ["search"] = Circle(11, 11, 8) + " M21,21 L16.65,16.65",

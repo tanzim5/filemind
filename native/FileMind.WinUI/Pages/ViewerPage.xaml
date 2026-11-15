@@ -40,8 +40,10 @@
                 <TextBlock x:Name="ToastText" FontSize="12.5"/>
               </Border>
 
+              <Grid x:Name="PillRow" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="24,0,24,22" ColumnSpacing="8">
+                <Grid.ColumnDefinitions><ColumnDefinition x:Name="PillMainCol" Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
               <!-- Pictures: zoom out, level, zoom in, full screen. -->
-              <Border x:Name="ZoomPill" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,22" Padding="6,4" CornerRadius="8" Translation="0,0,24"
+              <Border x:Name="ZoomPill" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Center" Padding="6,4" CornerRadius="8" Translation="0,0,24"
                       Background="{StaticResource ToolbarGlassBrush}" BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1">
                 <Border.Shadow><ThemeShadow/></Border.Shadow>
                 <StackPanel Orientation="Horizontal" Spacing="2">
@@ -53,7 +55,7 @@
               </Border>
 
               <!-- Video and sound: one transport bar, always there. -->
-              <Border x:Name="TransportPill" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="24,0,24,22" Padding="8,4" CornerRadius="8" Translation="0,0,24" MaxWidth="760"
+              <Border x:Name="TransportPill" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Center" Padding="8,4" CornerRadius="8" Translation="0,0,24"
                       Background="{StaticResource ToolbarGlassBrush}" BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1">
                 <Border.Shadow><ThemeShadow/></Border.Shadow>
                 <Grid ColumnSpacing="6">
@@ -82,6 +84,20 @@
                   <Button Grid.Column="7" Style="{StaticResource BarButton}" Click="Full_Click" ToolTipService.ToolTip="Full screen" AutomationProperties.Name="Full screen"><local:LineIcon Kind="full" Size="15"/></Button>
                 </Grid>
               </Border>
+
+              <!-- Tools: copy and save the frame, drag the frame or the file out, export. Same height and style as the transport pill. -->
+              <Border x:Name="ToolsPill" Grid.Column="1" Visibility="Collapsed" VerticalAlignment="Center" Padding="8,4" CornerRadius="8" Translation="0,0,24"
+                      Background="{StaticResource ToolbarGlassBrush}" BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1">
+                <Border.Shadow><ThemeShadow/></Border.Shadow>
+                <StackPanel Orientation="Horizontal" Spacing="2">
+                  <Button x:Name="CopyFrameBtn" Style="{StaticResource BarButton}" Click="CopyFrame_Click" ToolTipService.ToolTip="Copy frame" AutomationProperties.Name="Copy frame"><local:LineIcon Kind="copy" Size="15"/></Button>
+                  <Button x:Name="SaveFrameBtn" Style="{StaticResource BarButton}" Click="SaveFrame_Click" ToolTipService.ToolTip="Save frame as a picture" AutomationProperties.Name="Save frame"><local:LineIcon Kind="download" Size="15"/></Button>
+                  <Button x:Name="DragFrameBtn" Style="{StaticResource BarButton}" CanDrag="True" DragStarting="DragFrame_Starting" ToolTipService.ToolTip="Drag this frame into another app or folder" AutomationProperties.Name="Drag frame"><local:LineIcon Kind="dragframe" Size="16"/></Button>
+                  <Button x:Name="DragFileBtn" Style="{StaticResource BarButton}" CanDrag="True" DragStarting="DragFile_Starting" ToolTipService.ToolTip="Drag the file into another app or folder" AutomationProperties.Name="Drag file"><local:LineIcon Kind="dragfile" Size="16"/></Button>
+                  <Button x:Name="ExportToolBtn" Style="{StaticResource BarButton}" Click="Export_Click" ToolTipService.ToolTip="Export: convert, shrink or resize into a new file" AutomationProperties.Name="Export"><local:LineIcon Kind="export" Size="15"/></Button>
+                </StackPanel>
+              </Border>
+              </Grid>
             </Grid>
           </Border>
 

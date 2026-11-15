@@ -22,7 +22,7 @@ namespace FileMind.Pages;
 /// <summary>One file at full size: a stage for the picture, clip or sound with a floating control pill, and an Info | Similar panel beside it.</summary>
 public sealed partial class ViewerPage : Page
 {
-    private static double _volume = AppRuntime.Current.Settings.Volume;   // remembered between files, starts at the Settings default
+    private static double _volume = 0.5;   // remembered between files, starts at the Settings default
     public static void SetDefaultVolume(double v) => _volume = v;
     private static readonly Color Orange = Color.FromArgb(255, 255, 90, 31);
 
@@ -49,8 +49,8 @@ public sealed partial class ViewerPage : Page
     private readonly StackPanel _actions;
     private readonly MenuFlyoutItem _copyFrameItem;
     // The volume slider lives in a flyout built here, because XAML names inside a flyout are not reachable from code.
-    private readonly Slider VolumeSlider = new() { Minimum = 0, Maximum = 100, Value = 60, Width = 150, VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock VolumeText = new() { Text = "60%", FontSize = 12, Width = 36, VerticalAlignment = VerticalAlignment.Center };
+    private readonly Slider VolumeSlider = new() { Minimum = 0, Maximum = 100, Value = 50, Width = 150, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock VolumeText = new() { Text = "50%", FontSize = 12, Width = 36, VerticalAlignment = VerticalAlignment.Center };
 
     public ViewerPage()
     {
@@ -88,6 +88,7 @@ public sealed partial class ViewerPage : Page
         PrevButton.OpacityTransition = new ScalarTransition(); NextButton.OpacityTransition = new ScalarTransition();
         SetTab(false);
         SizeChanged += (_, _) => FitStage();
+        StageArea.SizeChanged += (_, _) => FitPillRow();
 
         PreviewKeyDown += Keys_Down;
         Loaded += (_, _) => { PushTitle(); App.Window?.SetActions(_actions); App.Window?.SyncNav(); Focus(FocusState.Programmatic); };
@@ -358,6 +359,13 @@ public sealed partial class ViewerPage : Page
         TransportPill.Visibility = timed ? Visibility.Visible : Visibility.Collapsed;
         StageHost.Margin = new Thickness(24, 24, 24, visual || timed ? 88 : 24);
         _copyFrameItem.Visibility = visual ? Visibility.Visible : Visibility.Collapsed;
+        ToolsPill.Visibility = visual || timed ? Visibility.Visible : Visibility.Collapsed;
+        var isVideo = _item.Kind == "video";
+        CopyFrameBtn.Visibility = visual ? Visibility.Visible : Visibility.Collapsed;
+        SaveFrameBtn.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
+        DragFrameBtn.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
+        ToolTipService.SetToolTip(CopyFrameBtn, isVideo ? "Copy frame" : "Copy image");
+        FitPillRow();
         _copyFrameItem.Text = _item.Kind == "video" ? "Copy frame" : "Copy image";
         ExportBar.Visibility = ExportSpec.CanExport(_item.Kind) ? Visibility.Visible : Visibility.Collapsed;
         _in = _out = null; PaintTrim();
@@ -520,6 +528,7 @@ public sealed partial class ViewerPage : Page
 
     private void BuildVideo()
     {
+        _volume = 0.5;      // a video always opens at half volume
         var player = new MediaPlayer { Volume = _volume, AutoPlay = true, IsLoopingEnabled = true, Source = MediaSource.CreateFromUri(Api.FileUri(_item.Id)) };
         _player = player;
         var element = new MediaPlayerElement { AreTransportControlsEnabled = false, Stretch = Stretch.Uniform, AutoPlay = true, Background = new SolidColorBrush(Colors.Transparent), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -576,6 +585,7 @@ public sealed partial class ViewerPage : Page
 
     private async void BuildAudio()
     {
+        _volume = 0.5;      // so does a sound
         var player = new MediaPlayer { Volume = _volume, AutoPlay = false, Source = MediaSource.CreateFromUri(Api.FileUri(_item.Id)) };
         _player = player;
         VolumeSlider.Value = _volume * 100;
@@ -716,36 +726,95 @@ public sealed partial class ViewerPage : Page
         try { if (_player is not null) _player.Volume = _volume; } catch { }
     }
 
+    /// <summary>Makes the current frame a picture file: a video frame is cut with ffmpeg at the playhead; a picture is the file itself.</summary>
+    private async Task<StorageFile?> GetFrameFileAsync()
+    {
+        if (_item.Kind != "video") return await StorageFile.GetFileFromPathAsync(_item.Path);
+        var ffmpeg = FindFfmpeg();
+        if (ffmpeg is null) { await Toast("ffmpeg isn't available, so the frame can't be read."); return null; }
+        var png = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"{System.IO.Path.GetFileNameWithoutExtension(_item.Name)}-frame-{Guid.NewGuid():N}.png");
+        var at = _player?.PlaybackSession.Position.TotalSeconds ?? 0;
+        var psi = new ProcessStartInfo(ffmpeg) { CreateNoWindow = true, UseShellExecute = false, RedirectStandardError = true };
+        foreach (var a in new[] { "-v", "error", "-ss", at.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture), "-i", _item.Path, "-frames:v", "1", "-y", png }) psi.ArgumentList.Add(a);
+        using var proc = Process.Start(psi)!;
+        await proc.WaitForExitAsync(_cts.Token);
+        if (!File.Exists(png)) { await Toast("Couldn't read a frame at this moment."); return null; }
+        return await StorageFile.GetFileFromPathAsync(png);
+    }
+
     private async void CopyFrame_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            StorageFile file;
-            if (_item.Kind == "video")
-            {
-                var ffmpeg = FindFfmpeg();
-                var png = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"filemind-frame-{Guid.NewGuid():N}.png");
-                var at = _player?.PlaybackSession.Position.TotalSeconds ?? 0;
-                if (ffmpeg is null) { await Toast("ffmpeg isn't available, so the frame can't be copied."); return; }
-                var psi = new ProcessStartInfo(ffmpeg) { CreateNoWindow = true, UseShellExecute = false, RedirectStandardError = true };
-                foreach (var a in new[] { "-v", "error", "-ss", at.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture), "-i", _item.Path, "-frames:v", "1", "-y", png }) psi.ArgumentList.Add(a);
-                using var proc = Process.Start(psi)!;
-                await proc.WaitForExitAsync(_cts.Token);
-                if (!File.Exists(png)) { await Toast("Couldn't read a frame at this moment."); return; }
-                file = await StorageFile.GetFileFromPathAsync(png);
-            }
-            else file = await StorageFile.GetFileFromPathAsync(_item.Path);
-
+            var file = await GetFrameFileAsync();
+            if (file is null) return;
             var data = new DataPackage { RequestedOperation = DataPackageOperation.Copy };
             data.SetBitmap(RandomAccessStreamReference.CreateFromFile(file));
             data.SetStorageItems([file]);
             Clipboard.SetContent(data);
-            try { Clipboard.Flush(); } catch (Exception fx) { App.Log("viewer-copyframe", fx, "flush: " + fx.Message); }   // keeps it on the clipboard after the app moves on
-            App.Log("viewer-copyframe", null, $"copied {file.Path}");
+            try { Clipboard.Flush(); } catch (Exception fx) { App.Log("viewer-copyframe", fx, "flush: " + fx.Message); }
             await Toast(_item.Kind == "video" ? "Frame copied" : "Image copied");
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { App.Log("viewer-copyframe", ex, ex.Message); await Toast("Couldn't copy that."); }
+    }
+
+    private async void SaveFrame_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var file = await GetFrameFileAsync();
+            if (file is null) return;
+            var picker = new Windows.Storage.Pickers.FileSavePicker { SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary };
+            var at = _player?.PlaybackSession.Position ?? TimeSpan.Zero;
+            picker.SuggestedFileName = $"{System.IO.Path.GetFileNameWithoutExtension(_item.Name)}-{(int)at.TotalMinutes}m{at.Seconds:00}s";
+            picker.FileTypeChoices.Add("PNG picture", [".png"]);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(App.Window));
+            var target = await picker.PickSaveFileAsync();
+            if (target is null) return;
+            await file.CopyAndReplaceAsync(target);
+            await Toast("Frame saved");
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { App.Log("viewer-saveframe", ex, ex.Message); await Toast("Couldn't save that."); }
+    }
+
+    private async void DragFrame_Starting(UIElement sender, DragStartingEventArgs e)
+    {
+        var deferral = e.GetDeferral();
+        try
+        {
+            var file = await GetFrameFileAsync();
+            if (file is null) { e.Cancel = true; return; }
+            e.Data.SetStorageItems([file]);
+            e.Data.SetBitmap(RandomAccessStreamReference.CreateFromFile(file));
+            e.Data.RequestedOperation = DataPackageOperation.Copy;
+        }
+        catch (Exception ex) { App.Log("viewer-dragframe", ex, ex.Message); e.Cancel = true; }
+        finally { deferral.Complete(); }
+    }
+
+    private async void DragFile_Starting(UIElement sender, DragStartingEventArgs e)
+    {
+        var deferral = e.GetDeferral();
+        try
+        {
+            e.Data.SetStorageItems([await StorageFile.GetFileFromPathAsync(_item.Path)]);
+            e.Data.RequestedOperation = DataPackageOperation.Copy;
+        }
+        catch (Exception ex) { App.Log("viewer-dragfile", ex, ex.Message); e.Cancel = true; }
+        finally { deferral.Complete(); }
+    }
+
+    /// <summary>Video and sound: the transport pill takes the row's width (up to 900) with the tools pill after it; a picture's pills are their own size.</summary>
+    private void FitPillRow()
+    {
+        if (TransportPill.Visibility == Visibility.Visible)
+        {
+            PillRow.Width = Math.Max(320, Math.Min(900, StageArea.ActualWidth - 48));
+            PillMainCol.Width = new GridLength(1, GridUnitType.Star);
+        }
+        else { PillRow.Width = double.NaN; PillMainCol.Width = GridLength.Auto; }
     }
 
     private static string? FindFfmpeg()
@@ -839,10 +908,10 @@ public sealed partial class ViewerPage : Page
         Details.Children.Clear();
         Details.Children.Add(DetailGrid(null));
 
+        var show = Pill("folder", "Show in Explorer", Reveal_Click);
+        show.HorizontalAlignment = HorizontalAlignment.Stretch; show.HorizontalContentAlignment = HorizontalAlignment.Center;
+        Details.Children.Add(show);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-        var reveal = IconButton("library", "Show in Explorer", Reveal_Click);
-        reveal.Style = Ui.Style("GlassAccentButton");
-        actions.Children.Add(reveal);
         actions.Children.Add(IconButton("fwd", "Open with the default app", async (_, _) =>
         {
             try { await Windows.System.Launcher.LaunchFileAsync(await StorageFile.GetFileFromPathAsync(_item.Path)); } catch (Exception ex) { App.Log("viewer-open", ex, ex.Message); }
@@ -893,7 +962,12 @@ public sealed partial class ViewerPage : Page
             var wrap = new WrapPanel { Spacing = 6 };
             foreach (var t in tags)
             {
-                var chip = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton { Style = Ui.Style("GlassChip"), Content = new TextBlock { Text = t, FontSize = 11.5 }, Padding = new Thickness(10, 4, 10, 4), CornerRadius = new CornerRadius(5) };
+                var chip = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton
+                {
+                    Style = Ui.Style("GlassChip"), Content = new TextBlock { Text = t, FontSize = 12, Foreground = Ui.Brush("GlassTextPrimaryBrush") },
+                    Padding = new Thickness(10, 4, 10, 4), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1),
+                    Background = new SolidColorBrush(Color.FromArgb(0x38, 0x80, 0x80, 0x88)), BorderBrush = new SolidColorBrush(Color.FromArgb(0x70, 0x80, 0x80, 0x88)),
+                };
                 chip.Click += (_, _) => { LibraryPage.Request = new LibraryRequest(new FileQuery(), "", [(t, t)]); App.Window?.ShowLibrary(); };
                 wrap.Children.Add(chip);
             }
@@ -906,46 +980,22 @@ public sealed partial class ViewerPage : Page
             _slot.Children.Add(Header("palette", "Colors", "tap to search"));
             if (info.Colors.Count > 0)
             {
-                var strip = new Grid { Height = 36, CornerRadius = new CornerRadius(4), ColumnSpacing = 3 };
-                var caption = new TextBlock { FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Margin = new Thickness(2, 6, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
-                var cols = new List<ColumnDefinition>();
-                var mostly = string.Join(" · ", info.Swatches.Take(3).Select(sw => $"{Title(sw.Key)} {Math.Round(sw.Share * 100)}%"));
-                void Rest() { caption.Text = mostly.Length > 0 ? "Mostly " + mostly : "Tap a colour to find similar"; caption.Foreground = Ui.Brush("GlassTextSecondaryBrush"); foreach (var c in cols) c.Width = new GridLength(1, GridUnitType.Star); }
+                // Only the strip: equal cells that never move. Hover is a soft brighten and a hairline ring; a tap searches by that colour.
+                var strip = new Grid { Height = 36, ColumnSpacing = 3 };
                 for (var i = 0; i < info.Colors.Count; i++)
                 {
-                    var cd = new ColumnDefinition(); cols.Add(cd); strip.ColumnDefinitions.Add(cd);
+                    strip.ColumnDefinitions.Add(new ColumnDefinition());
                     var hex = info.Colors[i].StartsWith('#') ? info.Colors[i] : "#" + info.Colors[i];
-                    var r = new Rectangle { Fill = Ui.Hex(hex), RadiusX = 6, RadiusY = 6 };
-                    var idx = i;
-                    r.PointerEntered += (_, _) =>
-                    {
-                        for (var k = 0; k < cols.Count; k++) cols[k].Width = new GridLength(k == idx ? 4 : 1, GridUnitType.Star);
-                        var (name, share) = NearestSwatch(info, hex);
-                        caption.Text = share > 0 ? $"{Title(name)} · {Math.Round(share * 100)}% · {hex.ToUpperInvariant()}" : hex.ToUpperInvariant();
-                        caption.Foreground = Ui.Brush("GlassTextPrimaryBrush");
-                    };
-                    r.PointerExited += (_, _) => Rest();
-                    r.Tapped += (_, _) => { LibraryPage.Request = new LibraryRequest(new FileQuery { Near = hex }, ""); App.Window?.ShowLibrary(); };
-                    Grid.SetColumn(r, i); strip.Children.Add(r);
+                    var cell = new Grid { Background = new SolidColorBrush(Colors.Transparent) };
+                    var fill = new Rectangle { Fill = Ui.Hex(hex), RadiusX = 6, RadiusY = 6, Opacity = 0.9, OpacityTransition = new ScalarTransition { Duration = TimeSpan.FromMilliseconds(150) } };
+                    var ring = new Border { CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1.5), BorderBrush = new SolidColorBrush(Color.FromArgb(0xB0, 255, 255, 255)), Opacity = 0, IsHitTestVisible = false, OpacityTransition = new ScalarTransition { Duration = TimeSpan.FromMilliseconds(150) } };
+                    cell.Children.Add(fill); cell.Children.Add(ring);
+                    cell.PointerEntered += (_, _) => { fill.Opacity = 1; ring.Opacity = 1; };
+                    cell.PointerExited += (_, _) => { fill.Opacity = 0.9; ring.Opacity = 0; };
+                    cell.Tapped += (_, _) => { LibraryPage.Request = new LibraryRequest(new FileQuery { Near = hex }, ""); App.Window?.ShowLibrary(); };
+                    Grid.SetColumn(cell, i); strip.Children.Add(cell);
                 }
-                Rest();
                 _slot.Children.Add(strip);
-                _slot.Children.Add(caption);
-            }
-            if (info.Swatches.Count > 0)
-            {
-                var wrap = new WrapPanel { Spacing = 6 };
-                foreach (var s in info.Swatches.Take(6))
-                {
-                    var key = s.Key;
-                    var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-                    row.Children.Add(new Ellipse { Width = 10, Height = 10, Fill = Ui.Hex(s.Swatch), VerticalAlignment = VerticalAlignment.Center });
-                    row.Children.Add(new TextBlock { Text = $"{Title(key)} {Math.Round(s.Share * 100)}%", FontSize = 11.5 });
-                    var chip = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton { Style = Ui.Style("GlassChip"), Content = row, Padding = new Thickness(10, 4, 10, 4), CornerRadius = new CornerRadius(5) };
-                    chip.Click += (_, _) => { LibraryPage.Request = new LibraryRequest(new FileQuery { Color = key }, ""); App.Window?.ShowLibrary(); };
-                    wrap.Children.Add(chip);
-                }
-                _slot.Children.Add(wrap);
             }
         }
 
