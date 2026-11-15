@@ -9,6 +9,8 @@
           <TextBlock Text="Appearance" FontSize="18" FontWeight="SemiBold"/>
           <TextBlock Text="Theme" Style="{StaticResource SecondaryText}"/>
           <local:WrapPanel x:Name="ThemeChips" Spacing="8"/>
+          <TextBlock Text="Surface" Style="{StaticResource SecondaryText}"/>
+          <StackPanel x:Name="SurfaceRow" Orientation="Horizontal" Spacing="8"/>
           <TextBlock Text="Accent colour" Style="{StaticResource SecondaryText}"/>
           <StackPanel x:Name="AccentRow" Orientation="Horizontal" Spacing="10"/>
           <Grid>

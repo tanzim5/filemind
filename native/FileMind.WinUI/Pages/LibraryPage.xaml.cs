@@ -78,12 +78,19 @@ public sealed partial class LibraryPage : Page
         }
     }
 
+    /// <summary>Frosted or liquid look for the floating pieces: the search pill, the selection bar and the toast.</summary>
+    public void ApplySurface()
+    {
+        Ui.Surface(SearchPill, 16); Ui.Surface(ActionBar, 22); Ui.Surface(Toast, 18);
+    }
+
     public LibraryPage()
     {
         InitializeComponent();
         Current = this;
         KeyboardAcceleratorPlacementMode = Microsoft.UI.Xaml.Input.KeyboardAcceleratorPlacementMode.Hidden;
         ApplySections();
+        ApplySurface();
         TileRepeater.ItemsSource = _tiles;
         Layout.Target = Settings.TileSize; Layout.Gap = Settings.TileGap;
         Layout.Mode = ParseMode(Settings.Layout);

@@ -48,7 +48,7 @@ public sealed partial class SettingsPage : Page
         Save();
     }
 
-    private void BuildAll() { BuildThemes(); BuildAccents(); BuildLayouts(); }
+    private void BuildAll() { BuildThemes(); BuildSurfaces(); BuildAccents(); BuildLayouts(); }
 
     // ---- Quick search shortcut: click, then press the new combination ----
     private bool _recording;
@@ -131,8 +131,45 @@ public sealed partial class SettingsPage : Page
                 Foreground = selected ? null : Ui.Brush("GlassTextSecondaryBrush") });
             var btn = new Button { Content = col, Padding = new Thickness(0), Background = new SolidColorBrush(Colors.Transparent), BorderThickness = new Thickness(0) };
             AutomationProperties.SetName(btn, p.Name + " theme");
-            btn.Click += (_, _) => { St.Theme = p.Key; Save(); App.Window?.ApplyGlass(); BuildThemes(); BuildAccents(); };
+            btn.Click += (_, _) => { St.Theme = p.Key; Save(); App.Window?.ApplyGlass(); BuildThemes(); BuildSurfaces(); BuildAccents(); };
             ThemeChips.Children.Add(btn);
+        }
+    }
+
+    // Two tiles: a small picture of a floating bar in each style, so the choice is visible before it is made.
+    private void BuildSurfaces()
+    {
+        SurfaceRow.Children.Clear();
+        var accent = (SolidColorBrush)Ui.Brush("AccentBrush");
+        foreach (var (key, name) in new[] { ("frosted", "Frosted glass"), ("liquid", "Liquid glass") })
+        {
+            var selected = St.Surface == key;
+            var liquid = key == "liquid";
+            var back = new LinearGradientBrush { StartPoint = new Windows.Foundation.Point(0, 0), EndPoint = new Windows.Foundation.Point(1, 1) };
+            back.GradientStops.Add(new GradientStop { Color = Windows.UI.Color.FromArgb(255, 0x3B, 0x5B, 0xDB), Offset = 0 });
+            back.GradientStops.Add(new GradientStop { Color = Windows.UI.Color.FromArgb(255, 0xFF, 0x7A, 0x45), Offset = 1 });
+            var stroke = new LinearGradientBrush { StartPoint = new Windows.Foundation.Point(0, 0), EndPoint = liquid ? new Windows.Foundation.Point(0, 1) : new Windows.Foundation.Point(1, 1) };
+            stroke.GradientStops.Add(new GradientStop { Color = Windows.UI.Color.FromArgb(liquid ? (byte)0xF0 : (byte)0x70, 255, 255, 255), Offset = 0 });
+            stroke.GradientStops.Add(new GradientStop { Color = Windows.UI.Color.FromArgb(liquid ? (byte)0x30 : (byte)0x20, 255, 255, 255), Offset = 1 });
+            var bar = new Border { Height = 26, Width = 76, CornerRadius = new CornerRadius(liquid ? 13 : 7), BorderThickness = new Thickness(1), BorderBrush = stroke,
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(liquid ? (byte)0x30 : (byte)0x55, 255, 255, 255)),
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var dots = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            for (var i = 0; i < 3; i++) dots.Children.Add(new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0xE0, 255, 255, 255)) });
+            bar.Child = dots;
+            var pic = new Grid { Width = 128, Height = 64, Background = back };
+            pic.Children.Add(bar);
+            var frame = new Border { CornerRadius = new CornerRadius(6), Child = pic, BorderThickness = new Thickness(selected ? 2 : 1),
+                BorderBrush = selected ? accent : Ui.Brush("GlassStrokeBrush") };
+            var col = new StackPanel { Spacing = 6 };
+            col.Children.Add(frame);
+            col.Children.Add(new TextBlock { Text = name, FontSize = 12.5, HorizontalAlignment = HorizontalAlignment.Center,
+                FontWeight = selected ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
+                Foreground = selected ? null : Ui.Brush("GlassTextSecondaryBrush") });
+            var btn = new Button { Content = col, Padding = new Thickness(0), Background = new SolidColorBrush(Colors.Transparent), BorderThickness = new Thickness(0) };
+            AutomationProperties.SetName(btn, name);
+            btn.Click += (_, _) => { St.Surface = key; Save(); App.Window?.ApplyGlass(); BuildSurfaces(); };
+            SurfaceRow.Children.Add(btn);
         }
     }
 
@@ -199,7 +236,7 @@ public sealed partial class SettingsPage : Page
     private void Reset_Click(object sender, RoutedEventArgs e)
     {
         var d = new AppSettings();
-        St.Theme = d.Theme; St.Accent = d.Accent; St.Transparency = d.Transparency;
+        St.Theme = d.Theme; St.Surface = d.Surface; St.Accent = d.Accent; St.Transparency = d.Transparency;
         St.Layout = d.Layout; St.TileSize = d.TileSize; St.TileGap = d.TileGap; St.ShowNames = d.ShowNames; St.Volume = d.Volume; St.SimilarFiles = d.SimilarFiles;
         Save();
         _ready = false;

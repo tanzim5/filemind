@@ -174,6 +174,8 @@ public sealed partial class MainWindow : Window
             byte a(double v) => (byte)(Math.Clamp(v, 0.05, 1) * 255);
             var p = ThemeEngine.Find(st.Theme);
             ThemeEngine.Apply(st, Root);
+            Pages.LibraryPage.Current?.ApplySurface();
+            (ContentFrame.Content as Pages.ViewerPage)?.ApplySurface();
             var bar = AppWindow.TitleBar;
             var fg = p.Dark ? Colors.White : Windows.UI.Color.FromArgb(255, 24, 24, 28);
             bar.ButtonForegroundColor = fg; bar.ButtonHoverForegroundColor = fg; bar.ButtonPressedForegroundColor = fg;

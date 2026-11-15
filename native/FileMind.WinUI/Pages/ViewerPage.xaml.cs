@@ -52,9 +52,16 @@ public sealed partial class ViewerPage : Page
     private readonly Slider VolumeSlider = new() { Minimum = 0, Maximum = 100, Value = 50, Width = 150, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock VolumeText = new() { Text = "50%", FontSize = 12, Width = 36, VerticalAlignment = VerticalAlignment.Center };
 
+    /// <summary>Frosted or liquid look for the pills drawn over the stage.</summary>
+    public void ApplySurface()
+    {
+        Ui.Surface(ZoomPill, 20); Ui.Surface(TransportPill, 20); Ui.Surface(ToolsPill, 20); Ui.Surface(ToastBox, 18);
+    }
+
     public ViewerPage()
     {
         InitializeComponent();
+        ApplySurface();
         DragHelper.Attach(StageHost, () => _item.Path, null);          // drag the picture, clip or track itself out of the viewer
         var esc = new KeyboardAccelerator { Key = Windows.System.VirtualKey.Escape };
         esc.Invoked += (_, e) => { if (_full) SetFull(false); else GoBack(); e.Handled = true; };

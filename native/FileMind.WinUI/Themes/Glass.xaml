@@ -36,6 +36,19 @@
     <GradientStop Color="#22FFFFFF" Offset="1"/>
   </LinearGradientBrush>
 
+  <!-- Liquid glass only: a faint highlight along the inside of the top edge (transparent in frosted mode; recoloured by ThemeEngine). -->
+  <LinearGradientBrush x:Key="LiquidSheenBrush" StartPoint="0,0" EndPoint="0,1">
+    <GradientStop Color="#00FFFFFF" Offset="0"/>
+    <GradientStop Color="#00FFFFFF" Offset="0.55"/>
+  </LinearGradientBrush>
+
+  <!-- Liquid glass only: a 1 px bright-on-top edge drawn over buttons and chips (transparent in frosted mode). -->
+  <LinearGradientBrush x:Key="LiquidEdgeBrush" StartPoint="0,0" EndPoint="0,1">
+    <GradientStop Color="#00FFFFFF" Offset="0"/>
+    <GradientStop Color="#00FFFFFF" Offset="0.5"/>
+    <GradientStop Color="#00FFFFFF" Offset="1"/>
+  </LinearGradientBrush>
+
   <LinearGradientBrush x:Key="TileScrimBrush" StartPoint="0,0" EndPoint="0,1">
     <GradientStop Color="#00000000" Offset="0"/>
     <GradientStop Color="#99000000" Offset="1"/>
@@ -99,6 +112,7 @@
             <Border x:Name="Bg" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
                     BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}"/>
             <Border x:Name="Hl" Background="{StaticResource GlassHighlightBrush}" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
+            <Border BorderBrush="{StaticResource LiquidEdgeBrush}" BorderThickness="1" CornerRadius="{TemplateBinding CornerRadius}" IsHitTestVisible="False"/>
             <ContentPresenter Padding="{TemplateBinding Padding}" HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
                               VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" Foreground="{TemplateBinding Foreground}"/>
             <VisualStateManager.VisualStateGroups>
@@ -135,6 +149,7 @@
                     BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}"/>
             <Border x:Name="On" Background="{StaticResource AccentOnFillBrush}" BorderBrush="{StaticResource AccentOnStrokeBrush}" BorderThickness="1" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
             <Border x:Name="Hl" Background="{StaticResource GlassHighlightBrush}" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
+            <Border BorderBrush="{StaticResource LiquidEdgeBrush}" BorderThickness="1" CornerRadius="{TemplateBinding CornerRadius}" IsHitTestVisible="False"/>
             <ContentPresenter Padding="{TemplateBinding Padding}" HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
                               VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" Foreground="{TemplateBinding Foreground}"/>
             <VisualStateManager.VisualStateGroups>

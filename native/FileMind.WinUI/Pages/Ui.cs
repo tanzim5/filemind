@@ -28,4 +28,24 @@ internal static class Ui
             return new SolidColorBrush(Microsoft.UI.Colors.Gray);
         return new SolidColorBrush(Windows.UI.Color.FromArgb(Convert.ToByte(hex[..2], 16), Convert.ToByte(hex[2..4], 16), Convert.ToByte(hex[4..6], 16), Convert.ToByte(hex[6..8], 16)));
     }
+
+    /// <summary>Applies the surface style to a floating pill: fully rounded and with an inner top highlight in liquid glass,
+    /// the usual radius 8 in frosted glass. The first call wraps the pill's content so the highlight can sit behind it.</summary>
+    public static void Surface(Microsoft.UI.Xaml.Controls.Border b, double pillRadius)
+    {
+        var liquid = FileMind.ThemeEngine.Liquid;
+        b.CornerRadius = new CornerRadius(liquid ? pillRadius : 8);
+        if (b.Child is not Microsoft.UI.Xaml.Controls.Grid { Tag: "sheen" } g)
+        {
+            var child = b.Child; b.Child = null;
+            g = new Microsoft.UI.Xaml.Controls.Grid { Tag = "sheen" };
+            g.Children.Add(new Microsoft.UI.Xaml.Controls.Border { IsHitTestVisible = false, Margin = new Thickness(1), Background = Brush("LiquidSheenBrush") });
+            g.Children.Add(new Microsoft.UI.Xaml.Controls.Border { IsHitTestVisible = false, Margin = new Thickness(-1), BorderThickness = new Thickness(1), BorderBrush = Brush("LiquidEdgeBrush") });
+            if (child is not null) g.Children.Add(child);
+            b.Child = g;
+        }
+        ((Microsoft.UI.Xaml.Controls.Border)g.Children[0]).CornerRadius = new CornerRadius(Math.Max(0, b.CornerRadius.TopLeft - 1));
+        ((Microsoft.UI.Xaml.Controls.Border)g.Children[1]).CornerRadius = b.CornerRadius;
+        if (b.Shadow is ThemeShadow) b.Translation = new System.Numerics.Vector3(0, 0, liquid ? 32 : 24);
+    }
 }

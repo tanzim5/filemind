@@ -20,6 +20,8 @@ public sealed class AppSettings
     /// <summary>Colour theme key (see ThemeEngine) and the accent colour as #RRGGBB.</summary>
     public string Theme { get; set; } = "paper";
     public string Accent { get; set; } = "#FF5A1F";
+    /// <summary>Surface style: "frosted" (frosted glass, the default) or "liquid" (clearer, brighter glass with bright edges).</summary>
+    public string Surface { get; set; } = "frosted";
     public double TileGap { get; set; } = 10;
     /// <summary>Volume the viewer starts at (0 to 1).</summary>
     public double Volume { get; set; } = 0.8;

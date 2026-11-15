@@ -57,12 +57,17 @@ public static class ThemeEngine
 
     // One transparency setting (0 = solid, 1 = most glass). The floors keep text readable over any wallpaper:
     // the page never drops below 78 % opacity, the sidebar below 40 %.
-    public static double RailOpacity(AppSettings st) => 1 - 0.60 * Math.Clamp(st.Transparency, 0, 1);
-    public static double PanelOpacity(AppSettings st) => 1 - 0.22 * Math.Clamp(st.Transparency, 0, 1);
+    public static double RailOpacity(AppSettings st) => 1 - (IsLiquid(st) ? 0.66 : 0.60) * Math.Clamp(st.Transparency, 0, 1);
+    public static double PanelOpacity(AppSettings st) => 1 - (IsLiquid(st) ? 0.30 : 0.22) * Math.Clamp(st.Transparency, 0, 1);
+
+    public static bool IsLiquid(AppSettings st) => st.Surface == "liquid";
+    /// <summary>True while the liquid-glass surface style is applied (set by <see cref="Apply"/>).</summary>
+    public static bool Liquid { get; private set; }
 
     public static void Apply(AppSettings st, FrameworkElement root)
     {
         var p = Find(st.Theme);
+        Liquid = IsLiquid(st);
         root.RequestedTheme = p.Dark ? ElementTheme.Dark : ElementTheme.Light;
         byte W = p.Dark ? (byte)255 : (byte)0;           // glass veils are white on dark, black on light
         Color A(byte a) => Windows.UI.Color.FromArgb(a, W, W, W);
@@ -86,17 +91,82 @@ public static class ThemeEngine
             Set("FieldFillBrush", C("#FFFFFF")); Set("FieldBorderBrush", C("#C4C2BC"));
         }
 
+        if (Liquid)
+        {
+            // Clearer glass: the fills let more through, and the fields get a brighter, lighter body.
+            if (p.Dark)
+            {
+                Set("GlassFillBrush", A(0x22)); Set("GlassFillStrongBrush", A(0x36)); Set("GlassFillHoverBrush", A(0x2E));
+                Set("FieldFillBrush", A(0x2A)); Set("FieldBorderBrush", A(0x5A));
+            }
+            else
+            {
+                Set("GlassFillBrush", Windows.UI.Color.FromArgb(0xCC, 255, 255, 255)); Set("GlassFillStrongBrush", Windows.UI.Color.FromArgb(0xE0, 0xE9, 0xE7, 0xE3));
+                Set("GlassFillHoverBrush", Windows.UI.Color.FromArgb(0xE6, 255, 255, 255));
+                Set("FieldFillBrush", Windows.UI.Color.FromArgb(0xD8, 255, 255, 255)); Set("FieldBorderBrush", Windows.UI.Color.FromArgb(0x50, 0, 0, 0));
+            }
+        }
         if (Application.Current.Resources.TryGetValue("GlassStrokeBrush", out var sv) && sv is LinearGradientBrush sg && sg.GradientStops.Count == 3)
         {
-            sg.GradientStops[0].Color = A((byte)(p.Dark ? 0x40 : 0x14));
-            sg.GradientStops[1].Color = A((byte)(p.Dark ? 0x10 : 0x14));
-            sg.GradientStops[2].Color = A((byte)(p.Dark ? 0x22 : 0x14));
+            if (Liquid)
+            {
+                // A vertical edge: bright where light would catch the top, fading to a faint line at the bottom.
+                sg.StartPoint = new Windows.Foundation.Point(0, 0); sg.EndPoint = new Windows.Foundation.Point(0, 1);
+                if (p.Dark)
+                {
+                    sg.GradientStops[0].Color = Windows.UI.Color.FromArgb(0xB4, 255, 255, 255);
+                    sg.GradientStops[1].Color = Windows.UI.Color.FromArgb(0x30, 255, 255, 255);
+                    sg.GradientStops[2].Color = Windows.UI.Color.FromArgb(0x16, 255, 255, 255);
+                }
+                else
+                {
+                    sg.GradientStops[0].Color = Windows.UI.Color.FromArgb(0xFF, 255, 255, 255);
+                    sg.GradientStops[1].Color = Windows.UI.Color.FromArgb(0x1C, 0, 0, 0);
+                    sg.GradientStops[2].Color = Windows.UI.Color.FromArgb(0x2C, 0, 0, 0);
+                }
+            }
+            else
+            {
+                sg.StartPoint = new Windows.Foundation.Point(0, 0); sg.EndPoint = new Windows.Foundation.Point(1, 1);
+                sg.GradientStops[0].Color = A((byte)(p.Dark ? 0x40 : 0x14));
+                sg.GradientStops[1].Color = A((byte)(p.Dark ? 0x10 : 0x14));
+                sg.GradientStops[2].Color = A((byte)(p.Dark ? 0x22 : 0x14));
+            }
+        }
+        if (Application.Current.Resources.TryGetValue("LiquidEdgeBrush", out var ev) && ev is LinearGradientBrush eg && eg.GradientStops.Count == 3)
+        {
+            if (!Liquid) foreach (var gs in eg.GradientStops) gs.Color = Windows.UI.Color.FromArgb(0, 255, 255, 255);
+            else if (p.Dark)
+            {
+                eg.GradientStops[0].Color = Windows.UI.Color.FromArgb(0x90, 255, 255, 255);
+                eg.GradientStops[1].Color = Windows.UI.Color.FromArgb(0x28, 255, 255, 255);
+                eg.GradientStops[2].Color = Windows.UI.Color.FromArgb(0x14, 255, 255, 255);
+            }
+            else
+            {
+                eg.GradientStops[0].Color = Windows.UI.Color.FromArgb(0xFF, 255, 255, 255);
+                eg.GradientStops[1].Color = Windows.UI.Color.FromArgb(0x16, 0, 0, 0);
+                eg.GradientStops[2].Color = Windows.UI.Color.FromArgb(0x26, 0, 0, 0);
+            }
+        }
+        // The faint inner highlight along the top of floating pills (liquid only; transparent otherwise).
+        if (Application.Current.Resources.TryGetValue("LiquidSheenBrush", out var shv) && shv is LinearGradientBrush sh && sh.GradientStops.Count == 2)
+        {
+            sh.GradientStops[0].Color = Windows.UI.Color.FromArgb(Liquid ? (p.Dark ? (byte)0x34 : (byte)0xA0) : (byte)0, 255, 255, 255);
+            sh.GradientStops[1].Color = Windows.UI.Color.FromArgb(0, 255, 255, 255);
         }
         Set("DividerBrush", A((byte)(p.Dark ? 0x1F : 0x14)));
         Set("ScrimBrush", Windows.UI.Color.FromArgb(p.Dark ? (byte)0x66 : (byte)0x40, 0, 0, 0));
         var surf = Windows.UI.Color.FromArgb(255, p.Panel.R, p.Panel.G, p.Panel.B);
         Set("SurfaceBrush", p.Dark ? Lift(surf, 10) : C("#FFFFFF"));
         Set("OverlayBrush", p.Dark ? Windows.UI.Color.FromArgb(0xF4, surf.R, surf.G, surf.B) : Windows.UI.Color.FromArgb(0xF8, 255, 255, 255));
+
+        if (Liquid)
+        {
+            // Floating panels (viewer details, settings, toasts) stay readable but let the backdrop glow through a little.
+            Set("SurfaceBrush", p.Dark ? Windows.UI.Color.FromArgb(0xB8, Lift(surf, 14).R, Lift(surf, 14).G, Lift(surf, 14).B) : Windows.UI.Color.FromArgb(0xD8, 255, 255, 255));
+            Set("OverlayBrush", p.Dark ? Windows.UI.Color.FromArgb(0xD8, Lift(surf, 8).R, Lift(surf, 8).G, Lift(surf, 8).B) : Windows.UI.Color.FromArgb(0xE6, 255, 255, 255));
+        }
 
         var ac = AccentColor(st);
         Set("AccentFillBrush", Windows.UI.Color.FromArgb(0xCC, ac.R, ac.G, ac.B));
@@ -117,6 +187,13 @@ public static class ThemeEngine
             glass.TintColor = p.Panel; glass.FallbackColor = Windows.UI.Color.FromArgb(0xF8, p.Panel.R, p.Panel.G, p.Panel.B);
             glass.TintOpacity = p.Key == "amoled" ? 1 : p.Dark ? 0.62 : 0.88;
             glass.TintLuminosityOpacity = p.Key == "amoled" ? 1 : p.Dark ? 0.72 : 0.9;
+            if (Liquid && p.Key != "amoled")
+            {
+                // Much more of the blurred scene shows through (low tint) while the luminosity layer keeps text legible.
+                glass.TintColor = p.Dark ? Lift(surf, 22) : C("#FFFFFF");
+                glass.TintOpacity = p.Dark ? 0.40 : 0.46;
+                glass.TintLuminosityOpacity = p.Dark ? 0.86 : 0.94;
+            }
         }
     }
 }
