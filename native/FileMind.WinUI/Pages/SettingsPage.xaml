@@ -62,6 +62,10 @@
           <TextBlock Text="Playback" FontSize="18" FontWeight="SemiBold"/>
           <TextBlock x:Name="VolumeLabel" Style="{StaticResource SecondaryText}"/>
           <Slider x:Name="VolumeSlider" Minimum="0" Maximum="100" ValueChanged="Volume_Changed"/>
+          <RadioButtons x:Name="SimilarChoice" Header="Similar files" SelectionChanged="Similar_Changed">
+            <RadioButton Tag="below" Content="Below the file"/>
+            <RadioButton Tag="side" Content="In the side panel"/>
+          </RadioButtons>
         </StackPanel>
       </Border>
 

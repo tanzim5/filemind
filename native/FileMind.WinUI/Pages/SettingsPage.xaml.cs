@@ -24,6 +24,7 @@ public sealed partial class SettingsPage : Page
         GlassSlider.Value = St.Transparency * 100;
         ShowHotkey(); KeepSwitch.IsOn = St.KeepRunning;
         VoiceChoice.SelectedIndex = St.VoiceEngine == "windows" ? 1 : 0;
+        SimilarChoice.SelectedIndex = St.SimilarFiles == "side" ? 1 : 0;
         SizeSlider.Value = St.TileSize;
         GapSlider.Value = St.TileGap;
         NamesSwitch.IsOn = St.ShowNames;
@@ -31,6 +32,13 @@ public sealed partial class SettingsPage : Page
         BuildAll();
         _ready = true;
         Labels();
+    }
+
+    private void Similar_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_ready) return;
+        St.SimilarFiles = SimilarChoice.SelectedIndex == 1 ? "side" : "below";
+        Save();
     }
 
     private void Voice_Changed(object sender, SelectionChangedEventArgs e)
@@ -192,11 +200,12 @@ public sealed partial class SettingsPage : Page
     {
         var d = new AppSettings();
         St.Theme = d.Theme; St.Accent = d.Accent; St.Transparency = d.Transparency;
-        St.Layout = d.Layout; St.TileSize = d.TileSize; St.TileGap = d.TileGap; St.ShowNames = d.ShowNames; St.Volume = d.Volume;
+        St.Layout = d.Layout; St.TileSize = d.TileSize; St.TileGap = d.TileGap; St.ShowNames = d.ShowNames; St.Volume = d.Volume; St.SimilarFiles = d.SimilarFiles;
         Save();
         _ready = false;
         GlassSlider.Value = St.Transparency * 100;
         SizeSlider.Value = St.TileSize; GapSlider.Value = St.TileGap; NamesSwitch.IsOn = St.ShowNames; VolumeSlider.Value = St.Volume * 100;
+        SimilarChoice.SelectedIndex = St.SimilarFiles == "side" ? 1 : 0;
         BuildAll(); _ready = true; Labels();
         App.Window?.ApplyGlass(); LibraryPage.Current?.ApplyLook(); LibraryPage.Current?.ApplySections(); ViewerPage.SetDefaultVolume(St.Volume);
     }

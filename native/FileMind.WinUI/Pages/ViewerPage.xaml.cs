@@ -87,6 +87,7 @@ public sealed partial class ViewerPage : Page
         VolumeBtn.Flyout = vol;
         PrevButton.OpacityTransition = new ScalarTransition(); NextButton.OpacityTransition = new ScalarTransition();
         SetTab(false);
+        SizeChanged += (_, _) => FitStage();
 
         PreviewKeyDown += Keys_Down;
         Loaded += (_, _) => { PushTitle(); App.Window?.SetActions(_actions); App.Window?.SyncNav(); Focus(FocusState.Programmatic); };
@@ -97,6 +98,7 @@ public sealed partial class ViewerPage : Page
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+        SetSimilarPlacement(AppRuntime.Current.Settings.SimilarFiles == "side");
         if (e.Parameter is ViewerRequest r)
         {
             _siblings = r.Siblings.Count > 0 ? r.Siblings : [r.Item];
@@ -303,11 +305,23 @@ public sealed partial class ViewerPage : Page
         try
         {
             App.Window?.SetImmersive(on);
-            StageArea.Margin = new Thickness(0, on ? 0 : 48, 0, 0);
-            PanelColumn.Width = new GridLength(on ? 0 : 320);
-            Panel.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+            PageStack.Padding = on ? new Thickness(0) : new Thickness(20, 60, 20, 40);
+            StageCard.CornerRadius = new CornerRadius(on ? 0 : 8); StageCard.BorderThickness = new Thickness(on ? 0 : 1);
+            DetailsCard.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+            MoreSection.Visibility = on || _side ? Visibility.Collapsed : Visibility.Visible;
+            Scroll.ChangeView(null, 0, null, true);
+            FitStage();
         }
         catch (Exception ex) { App.Log("viewer-full", ex, ex.Message); }
+    }
+
+    /// <summary>The stage and the panel beside it fill the window under the bar, leaving the heading of More like this in view below.</summary>
+    private void FitStage()
+    {
+        var h = Scroll.ActualHeight;
+        if (h < 100) return;
+        var v = _full ? h : Math.Clamp(h - 150, 520, 760);
+        StageCard.Height = DetailsCard.Height = v;
     }
 
     private void CopyPath()
@@ -332,6 +346,7 @@ public sealed partial class ViewerPage : Page
         _info = null;
         _zoom = 1; ZoomText.Text = "100%"; ZoomTransform.ScaleX = ZoomTransform.ScaleY = 1;
         SimilarScroll.ChangeView(null, 0, null, true);
+        Scroll.ChangeView(null, 0, null, true);
 
         if (IsLoaded) PushTitle();
         PrevZone.Visibility = index > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -757,13 +772,20 @@ public sealed partial class ViewerPage : Page
         try { await Api.RevealAsync(_item.Id); } catch (Exception ex) { App.Log("viewer-reveal", ex, ex.Message); }
     }
 
-    // ------------------------------------------------------------------ info panel
-    private static TextBlock Small(string text) => new() { Text = text, FontSize = 11, Foreground = Ui.Brush("GlassTextTertiaryBrush") };
-    private static TextBlock Value(string text) => new() { Text = text, FontSize = 12.5, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
+    // ------------------------------------------------------------------ details panel
+    private static TextBlock Small(string text) => new() { Text = text, FontSize = 12, Foreground = Ui.Brush("GlassTextSecondaryBrush") };
+    private static TextBlock Value(string text) => new() { Text = text, FontSize = 12.5, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true, Foreground = Ui.Brush("GlassTextPrimaryBrush") };
 
-    /// <summary>A quiet section label (the icon argument is kept for the callers that pass one).</summary>
-    private static UIElement Header(string icon, string text, string? hint = null) =>
-        new TextBlock { Text = text, FontSize = 11.5, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Ui.Brush("GlassTextSecondaryBrush") };
+    private static UIElement Header(string icon, string text, string? hint = null)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        if (icon.Length > 0) row.Children.Add(new LineIcon { Kind = icon, Size = 14, VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
+        row.Children.Add(new TextBlock { Text = text.ToUpperInvariant(), FontSize = 10.5, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, CharacterSpacing = 70, VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
+        if (hint is not null) row.Children.Add(new TextBlock { Text = "· " + hint, FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
+        return row;
+    }
+
+    private static Border Divider() => new() { Height = 1, Background = Ui.Brush("DividerBrush") };
 
     private static string Ago(double mtime)
     {
@@ -788,7 +810,7 @@ public sealed partial class ViewerPage : Page
         if (_item.Fps is > 0) two.Add($"{_item.Fps:0.#} fps");
         if (!string.IsNullOrEmpty(_item.Codec)) two.Add(_item.Codec!.ToUpperInvariant());
         var p = new StackPanel { Spacing = 2 };
-        p.Children.Add(new TextBlock { Text = string.Join(" · ", one.Where(s => s.Length > 0)), FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+        p.Children.Add(new TextBlock { Text = string.Join(" · ", one.Where(s => s.Length > 0)), FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Foreground = Ui.Brush("GlassTextPrimaryBrush") });
         if (two.Count > 0) p.Children.Add(new TextBlock { Text = string.Join(" · ", two), FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
         return p;
     }
@@ -798,7 +820,15 @@ public sealed partial class ViewerPage : Page
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7 };
         row.Children.Add(new LineIcon { Kind = icon, Size = 14 });
         row.Children.Add(new TextBlock { Text = text, FontSize = 12 });
-        var b = new Button { Style = Ui.Style(accent ? "GlassAccentButton" : "GlassButton"), Padding = new Thickness(11, 6, 11, 6), CornerRadius = new CornerRadius(6), Content = row };
+        var b = new Button { Style = Ui.Style(accent ? "GlassAccentButton" : "GlassButton"), Padding = new Thickness(13, 7, 13, 7), CornerRadius = new CornerRadius(6), Content = row };
+        b.Click += click;
+        return b;
+    }
+
+    private Button IconButton(string icon, string tip, RoutedEventHandler click)
+    {
+        var b = new Button { Style = Ui.Style("GlassButton"), Width = 34, Height = 34, Padding = new Thickness(0), CornerRadius = new CornerRadius(6), Content = new LineIcon { Kind = icon, Size = 14 } };
+        ToolTipService.SetToolTip(b, tip);
         b.Click += click;
         return b;
     }
@@ -808,28 +838,32 @@ public sealed partial class ViewerPage : Page
     {
         Details.Children.Clear();
         Details.Children.Add(DetailGrid(null));
-        _slot = new StackPanel { Spacing = 16 };      // the engine-provided sections land here
-        Details.Children.Add(_slot);
 
-        var actions = new WrapPanel { Spacing = 6 };
-        actions.Children.Add(Pill("fwd", "Open", async (_, _) =>
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        var reveal = IconButton("library", "Show in Explorer", Reveal_Click);
+        reveal.Style = Ui.Style("GlassAccentButton");
+        actions.Children.Add(reveal);
+        actions.Children.Add(IconButton("fwd", "Open with the default app", async (_, _) =>
         {
             try { await Windows.System.Launcher.LaunchFileAsync(await StorageFile.GetFileFromPathAsync(_item.Path)); } catch (Exception ex) { App.Log("viewer-open", ex, ex.Message); }
         }));
-        actions.Children.Add(Pill("search", "Search with this", (_, _) =>
+        actions.Children.Add(IconButton("text", "Copy the file path (Ctrl+Shift+C)", (_, _) => CopyPath()));
+        actions.Children.Add(IconButton("file", "Copy the file (Ctrl+C)", async (_, _) => await CopyFileAsync()));
+        actions.Children.Add(IconButton("search", "Search with this file", (_, _) =>
         {
             LibraryPage.Request = new LibraryRequest(new FileQuery(), "", null, _item.Id, _item.Name);
             App.Window?.ShowLibrary();
         }));
-        if (_item.Kind is "video" or "audio") actions.Children.Add(Pill("rows", "Find moments", async (_, _) => await ToggleMomentsAsync()));
+        if (_item.Kind is "video" or "audio") actions.Children.Add(IconButton("rows", "Find moments", async (_, _) => await ToggleMomentsAsync()));
         Details.Children.Add(actions);
         _momentsBox = new StackPanel { Spacing = 8, Visibility = Visibility.Collapsed };
         Details.Children.Add(_momentsBox);
-        _tail = new StackPanel { Spacing = 16 };
-        Details.Children.Add(_tail);
+
+        _slot = new StackPanel { Spacing = 16 };      // the engine-provided sections land here
+        Details.Children.Add(_slot);
     }
 
-    private StackPanel? _slot, _momentsBox, _tail;
+    private StackPanel? _slot, _momentsBox;
 
     private async Task LoadInfoAsync(CancellationToken ct)
     {
@@ -846,63 +880,16 @@ public sealed partial class ViewerPage : Page
 
     private void DrawInfo(FileDetails info)
     {
-        if (_slot is null || _tail is null) return;
-        _slot.Children.Clear(); _tail.Children.Clear();
+        if (_slot is null) return;
+        _slot.Children.Clear();
 
-        // refresh the facts line now that the real dimensions are known
+        // refresh the grid now that the real dimensions are known
         if (Details.Children.Count > 0 && Details.Children[0] is StackPanel) Details.Children[0] = DetailGrid(info);
 
-        // Colours as dots; a tap searches by that colour, like the Library's colour filter.
-        if (info.Colors.Count > 0)
-        {
-            var dots = new WrapPanel { Spacing = 8 };
-            foreach (var c in info.Colors.Take(8))
-            {
-                var hex = c.StartsWith('#') ? c : "#" + c;
-                var dot = new Ellipse { Width = 18, Height = 18, Fill = Ui.Hex(hex), Stroke = Ui.Brush("GlassStrokeBrush"), StrokeThickness = 1 };
-                var (name, _) = NearestSwatch(info, hex);
-                ToolTipService.SetToolTip(dot, name.Length > 0 ? $"{Title(name)} · {hex.ToUpperInvariant()} · search by this colour" : hex.ToUpperInvariant() + " · search by this colour");
-                dot.Tapped += (_, _) => { LibraryPage.Request = new LibraryRequest(new FileQuery { Near = hex }, ""); App.Window?.ShowLibrary(); };
-                dots.Children.Add(dot);
-            }
-            _slot.Children.Add(dots);
-        }
-
-        // Name: applied only when you commit it
-        var nameBox = new StackPanel { Spacing = 6 };
-        nameBox.Children.Add(Header("", "Name"));
-        var name2 = new TextBox { Text = info.Proposed ?? _item.Name, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center };
-        var go = new Button { Style = Ui.Style("GlassAccentButton"), Width = 32, Height = 32, Padding = new Thickness(0), CornerRadius = new CornerRadius(6), Content = new LineIcon { Kind = "check", Size = 14 } };
-        ToolTipService.SetToolTip(go, "Save this as the proposed name");
-        async void Save()
-        {
-            var text = name2.Text.Trim();
-            if (text.Length == 0 || text == _item.Name) return;
-            try { await Api.SetProposedNameAsync(_item.Id, text); ToolTipService.SetToolTip(go, "Saved"); }
-            catch (Exception ex) { App.Log("viewer-name", ex, ex.Message); }
-        }
-        go.Click += (_, _) => Save();
-        name2.KeyDown += (_, a) => { if (a.Key == Windows.System.VirtualKey.Enter) { Save(); a.Handled = true; } };
-        var nameRow = new Grid { ColumnSpacing = 8 };
-        nameRow.ColumnDefinitions.Add(new ColumnDefinition()); nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        nameRow.Children.Add(name2); Grid.SetColumn(go, 1); nameRow.Children.Add(go);
-        nameBox.Children.Add(nameRow);
-        _slot.Children.Add(nameBox);
-
-        // Space
-        var spaceBox = new StackPanel { Spacing = 8 };
-        spaceBox.Children.Add(Header("", "Space"));
-        _spaceRow = new WrapPanel { Spacing = 6 };
-        spaceBox.Children.Add(_spaceRow);
-        _slot.Children.Add(spaceBox);
-        DrawSpaces(info);
-
-        // Tags
         var tags = info.Tags.Select(TagText).Where(t => t.Length > 0).Distinct().Take(14).ToList();
         if (tags.Count > 0 && _item.Kind != "audio")
         {
-            var tagBox = new StackPanel { Spacing = 8 };
-            tagBox.Children.Add(Header("", "Tags"));
+            _slot.Children.Add(Header("photo", "Tags", "What's in it?"));
             var wrap = new WrapPanel { Spacing = 6 };
             foreach (var t in tags)
             {
@@ -910,31 +897,97 @@ public sealed partial class ViewerPage : Page
                 chip.Click += (_, _) => { LibraryPage.Request = new LibraryRequest(new FileQuery(), "", [(t, t)]); App.Window?.ShowLibrary(); };
                 wrap.Children.Add(chip);
             }
-            tagBox.Children.Add(wrap);
-            _slot.Children.Add(tagBox);
+            _slot.Children.Add(wrap);
         }
 
-        // Where it came from
-        var meta = info.Meta;
+        // Colours sit right under the tags; a tap searches by that colour, like the Library's colour filter.
+        if (info.Colors.Count > 0 || info.Swatches.Count > 0)
+        {
+            _slot.Children.Add(Header("palette", "Colors", "tap to search"));
+            if (info.Colors.Count > 0)
+            {
+                var strip = new Grid { Height = 36, CornerRadius = new CornerRadius(4), ColumnSpacing = 3 };
+                var caption = new TextBlock { FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Margin = new Thickness(2, 6, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
+                var cols = new List<ColumnDefinition>();
+                var mostly = string.Join(" · ", info.Swatches.Take(3).Select(sw => $"{Title(sw.Key)} {Math.Round(sw.Share * 100)}%"));
+                void Rest() { caption.Text = mostly.Length > 0 ? "Mostly " + mostly : "Tap a colour to find similar"; caption.Foreground = Ui.Brush("GlassTextSecondaryBrush"); foreach (var c in cols) c.Width = new GridLength(1, GridUnitType.Star); }
+                for (var i = 0; i < info.Colors.Count; i++)
+                {
+                    var cd = new ColumnDefinition(); cols.Add(cd); strip.ColumnDefinitions.Add(cd);
+                    var hex = info.Colors[i].StartsWith('#') ? info.Colors[i] : "#" + info.Colors[i];
+                    var r = new Rectangle { Fill = Ui.Hex(hex), RadiusX = 6, RadiusY = 6 };
+                    var idx = i;
+                    r.PointerEntered += (_, _) =>
+                    {
+                        for (var k = 0; k < cols.Count; k++) cols[k].Width = new GridLength(k == idx ? 4 : 1, GridUnitType.Star);
+                        var (name, share) = NearestSwatch(info, hex);
+                        caption.Text = share > 0 ? $"{Title(name)} · {Math.Round(share * 100)}% · {hex.ToUpperInvariant()}" : hex.ToUpperInvariant();
+                        caption.Foreground = Ui.Brush("GlassTextPrimaryBrush");
+                    };
+                    r.PointerExited += (_, _) => Rest();
+                    r.Tapped += (_, _) => { LibraryPage.Request = new LibraryRequest(new FileQuery { Near = hex }, ""); App.Window?.ShowLibrary(); };
+                    Grid.SetColumn(r, i); strip.Children.Add(r);
+                }
+                Rest();
+                _slot.Children.Add(strip);
+                _slot.Children.Add(caption);
+            }
+            if (info.Swatches.Count > 0)
+            {
+                var wrap = new WrapPanel { Spacing = 6 };
+                foreach (var s in info.Swatches.Take(6))
+                {
+                    var key = s.Key;
+                    var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+                    row.Children.Add(new Ellipse { Width = 10, Height = 10, Fill = Ui.Hex(s.Swatch), VerticalAlignment = VerticalAlignment.Center });
+                    row.Children.Add(new TextBlock { Text = $"{Title(key)} {Math.Round(s.Share * 100)}%", FontSize = 11.5 });
+                    var chip = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton { Style = Ui.Style("GlassChip"), Content = row, Padding = new Thickness(10, 4, 10, 4), CornerRadius = new CornerRadius(5) };
+                    chip.Click += (_, _) => { LibraryPage.Request = new LibraryRequest(new FileQuery { Color = key }, ""); App.Window?.ShowLibrary(); };
+                    wrap.Children.Add(chip);
+                }
+                _slot.Children.Add(wrap);
+            }
+        }
+
+        if (_item.Kind == "audio") _slot.Children.Add(TranscriptSection());
+
+        _slot.Children.Add(Divider());
         var facts = new Grid { ColumnSpacing = 12, RowSpacing = 8 };
-        facts.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(56) });
+        facts.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
         facts.ColumnDefinitions.Add(new ColumnDefinition());
-        void Fact(string k, UIElement v) { var r = facts.RowDefinitions.Count; facts.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); var l = Small(k); Grid.SetRow(l, r); Grid.SetRow((FrameworkElement)v, r); Grid.SetColumn((FrameworkElement)v, 1); facts.Children.Add(l); facts.Children.Add(v); }
+        void Fact(string k, UIElement v) { var r = facts.RowDefinitions.Count; facts.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); var l = Small(k); l.VerticalAlignment = VerticalAlignment.Center; Grid.SetRow(l, r); Grid.SetRow((FrameworkElement)v, r); Grid.SetColumn((FrameworkElement)v, 1); facts.Children.Add(l); facts.Children.Add(v); }
+        var meta = info.Meta;
         if (!string.IsNullOrEmpty(meta?.Source) || !string.IsNullOrEmpty(_item.Source)) Fact("Source", Value(Title(meta?.Source ?? _item.Source!)));
         if (!string.IsNullOrEmpty(meta?.Date)) Fact("Made", Value(meta!.Date!));
         if (!string.IsNullOrEmpty(meta?.Author)) Fact("By", Value(meta!.Author!));
         if (!string.IsNullOrEmpty(meta?.Prompt)) Fact("Prompt", Value(meta!.Prompt!));
-        if (facts.RowDefinitions.Count > 0) _slot.Children.Add(facts);
+        Fact("Folder", Value(info.Folder));
+        _slot.Children.Add(facts);
 
-        // Folder, with a way to open it
-        var folder = new StackPanel { Spacing = 6 };
-        folder.Children.Add(Header("", "Folder"));
-        folder.Children.Add(Value(info.Folder));
-        var show = Pill("folder", "Show in Explorer", Reveal_Click); show.HorizontalAlignment = HorizontalAlignment.Left;
-        folder.Children.Add(show);
-        _slot.Children.Add(folder);
+        _slot.Children.Add(Divider());
+        _slot.Children.Add(Header("spaces", "Space"));
+        _spaceRow = new WrapPanel { Spacing = 6 };
+        _slot.Children.Add(_spaceRow);
+        DrawSpaces(info);
 
-        if (_item.Kind == "audio") _tail.Children.Add(TranscriptSection());
+        _slot.Children.Add(Divider());
+        _slot.Children.Add(Header("text", "New name", "applied only when you commit"));
+        var name = new TextBox { Text = info.Proposed ?? _item.Name, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center };
+        var go = new Button { Style = Ui.Style("GlassAccentButton"), Width = 32, Height = 32, Padding = new Thickness(0), CornerRadius = new CornerRadius(6), Content = new LineIcon { Kind = "check", Size = 14 } };
+        ToolTipService.SetToolTip(go, "Save this as the proposed name");
+        async void Save()
+        {
+            var text = name.Text.Trim();
+            if (text.Length == 0 || text == _item.Name) return;
+            try { await Api.SetProposedNameAsync(_item.Id, text); ToolTipService.SetToolTip(go, "Saved"); }
+            catch (Exception ex) { App.Log("viewer-name", ex, ex.Message); }
+        }
+        go.Click += (_, _) => Save();
+        name.KeyDown += (_, a) => { if (a.Key == Windows.System.VirtualKey.Enter) { Save(); a.Handled = true; } };
+        var nameRow = new Grid { ColumnSpacing = 8 };
+        nameRow.ColumnDefinitions.Add(new ColumnDefinition()); nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        nameRow.Children.Add(name); Grid.SetColumn(go, 1); nameRow.Children.Add(go);
+        _slot.Children.Add(nameRow);
     }
 
     private static (string Name, double Share) NearestSwatch(FileDetails info, string hex)
@@ -1093,54 +1146,104 @@ public sealed partial class ViewerPage : Page
         catch (Exception ex) { App.Log("viewer-moments", ex, ex.Message); }
     }
 
-    // ------------------------------------------------------------------ similar (infinite, in the panel)
+    // ------------------------------------------------------------------ similar: below the file (default) or in the side panel
+    private bool _side;
+
+    /// <summary>Puts the one grid of similar files where Settings says: under the stage, or in the panel's Similar tab.</summary>
+    private void SetSimilarPlacement(bool side)
+    {
+        _side = side;
+        if (side)
+        {
+            MoreBelowHost.Children.Remove(More);
+            SimilarScroll.Content = More;
+            More.Columns = 2; More.Margin = new Thickness(14, 0, 14, 18);
+            MoreSection.Visibility = Visibility.Collapsed;
+            TabBar.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            SimilarScroll.Content = null;
+            if (!MoreBelowHost.Children.Contains(More)) MoreBelowHost.Children.Add(More);
+            More.Margin = new Thickness(0);
+            MoreSection.Visibility = Visibility.Visible;
+            TabBar.Visibility = Visibility.Collapsed;
+            FitMoreColumns();
+        }
+        SetTab(false);
+    }
+
+    private void More_SizeChanged(object sender, SizeChangedEventArgs e) { if (!_side) FitMoreColumns(); }
+
+    /// <summary>Equal columns about 230 px wide, so the tiles always fill the row edge to edge.</summary>
+    private void FitMoreColumns()
+    {
+        var w = MoreBelowHost.ActualWidth;
+        if (w < 100) return;
+        var cols = Math.Max(2, (int)((w + 8) / 238));
+        if (More.Columns != cols) { More.Columns = cols; More.InvalidateMeasure(); }
+    }
+
     private async Task LoadSimilarAsync(CancellationToken ct)
     {
         More.Children.Clear();
         _similar = []; _shown = 0;
-        MoreNote.Text = "";
+        MoreNote.Text = SideNote.Text = "";
         try
         {
             var list = await Api.SimilarAsync(_item.Id, new FileQuery(), 240, ct);
             if (ct.IsCancellationRequested) return;
             _similar = list.Where(f => f.Id != _item.Id).ToList();
-            MoreNote.Text = _similar.Count == 0 ? "Nothing similar has been indexed yet." : "Closest first. Scroll for more; click one to follow it.";
+            MoreNote.Text = SideNote.Text = _similar.Count == 0 ? "Nothing similar has been indexed yet." : "Closest first, by what is in them. Click any to follow it.";
             AddMore();
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) { App.Log("viewer-similar", ex, ex.Message); MoreNote.Text = "Couldn't find similar files just now."; }
+        catch (Exception ex) { App.Log("viewer-similar", ex, ex.Message); MoreNote.Text = SideNote.Text = "Couldn't find similar files just now."; }
+    }
+
+    private void Scroll_ViewChanged(object sender, ScrollViewerViewChangedEventArgs e)
+    {
+        if (!_side && _shown < _similar.Count && Scroll.ScrollableHeight - Scroll.VerticalOffset < 900) AddMore();
     }
 
     private void Similar_ViewChanged(object sender, ScrollViewerViewChangedEventArgs e)
     {
-        if (_shown < _similar.Count && SimilarScroll.ScrollableHeight - SimilarScroll.VerticalOffset < 600) AddMore();
+        if (_side && _shown < _similar.Count && SimilarScroll.ScrollableHeight - SimilarScroll.VerticalOffset < 600) AddMore();
     }
 
     private void AddMore()
     {
-        var end = Math.Min(_shown + Batch, _similar.Count);
+        // whole rows at a time, so the grid never has a ragged end while more is still coming
+        var end = Math.Min(_shown + Math.Max(1, More.Columns) * 4, _similar.Count);
         for (var i = _shown; i < end; i++) More.Children.Add(MoreTile(_similar[i]));
         _shown = end;
     }
 
     private UIElement MoreTile(FileItem f)
     {
-        var tile = new Grid { Height = 108, CornerRadius = new CornerRadius(6), Background = Ui.Brush("GlassFillStrongBrush") };
+        var tile = new Grid { Height = _side ? 108 : 150, CornerRadius = new CornerRadius(6), Background = Ui.Brush("GlassFillBrush") };
         DragHelper.Attach(tile, () => f.Path);
-        if (f.HasThumb && f.Kind != "audio")
+        if (f.Kind == "audio")
         {
-            tile.Children.Add(new Image { Source = new BitmapImage(Api.ThumbUri(f.Id)) { DecodePixelWidth = 320 }, Stretch = Stretch.UniformToFill });
+            tile.Children.Add(new AudioCard { Vm = new TileVm(f, Api) });         // same inline player as the Library
+        }
+        else if (f.HasThumb)
+        {
+            tile.Children.Add(new Image { Source = new BitmapImage(Api.ThumbUri(f.Id)) { DecodePixelWidth = 480 }, Stretch = Stretch.UniformToFill });
             if (f.Kind == "video")
-                tile.Children.Add(new Border { Width = 30, Height = 30, CornerRadius = new CornerRadius(6), Background = new SolidColorBrush(Color.FromArgb(150, 0, 0, 0)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Child = new LineIcon { Kind = "play", Size = 12, Foreground = new SolidColorBrush(Colors.White), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } });
+                tile.Children.Add(new Border { Width = 34, Height = 34, CornerRadius = new CornerRadius(6), Background = new SolidColorBrush(Color.FromArgb(150, 0, 0, 0)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Child = new LineIcon { Kind = "play", Size = 13, Foreground = new SolidColorBrush(Colors.White), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } });
         }
         else
         {
-            tile.Children.Add(new LineIcon { Kind = f.Kind == "audio" ? "music" : "file", Size = 26, Margin = new Thickness(0, 0, 0, 14), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+            tile.Children.Add(new LineIcon { Kind = "file", Size = 28, Margin = new Thickness(0, 0, 0, 14), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
             tile.Children.Add(new TextBlock { Text = f.Name, FontSize = 11, Margin = new Thickness(8, 0, 8, 7), VerticalAlignment = VerticalAlignment.Bottom, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
         }
         tile.Children.Add(new Border { CornerRadius = new CornerRadius(6), BorderBrush = Ui.Brush("GlassStrokeBrush"), BorderThickness = new Thickness(1), IsHitTestVisible = false });
-        tile.PointerEntered += (_, _) => tile.Opacity = 0.85;
-        tile.PointerExited += (_, _) => tile.Opacity = 1;
+        if (f.Kind != "audio")
+        {
+            tile.PointerEntered += (_, _) => tile.Opacity = 0.85;
+            tile.PointerExited += (_, _) => tile.Opacity = 1;
+        }
         // Following a similar file replaces what is open: Back always returns to the Library in one step.
         tile.Tapped += (_, _) =>
         {

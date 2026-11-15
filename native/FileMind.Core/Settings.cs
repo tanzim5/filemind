@@ -29,6 +29,8 @@ public sealed class AppSettings
     public bool KeepRunning { get; set; } = true;
     /// <summary>Voice search: "local" (Whisper on this PC) or "windows" (Windows speech recognition).</summary>
     public string VoiceEngine { get; set; } = "local";
+    /// <summary>Where the viewer shows similar files: "below" the file (default) or "side" (the Similar tab in the side panel).</summary>
+    public string SimilarFiles { get; set; } = "below";
 
     public static AppSettings Load(AppPaths paths)
     {
