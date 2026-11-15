@@ -166,6 +166,7 @@
             <Button x:Name="RemoveFromSpaceBtn" Style="{StaticResource GlassButton}" Content="Remove" Click="RemoveFromSpace_Click" Padding="12,7" Visibility="Collapsed"/>
             <Button Style="{StaticResource GlassButton}" Content="Copy to…" Click="CopyTo_Click" Padding="12,7"/>
             <Button Style="{StaticResource GlassButton}" Content="Move to…" Click="MoveTo_Click" Padding="12,7"/>
+            <Button Style="{StaticResource GlassButton}" Content="Export…" Click="Export_Click" Padding="12,7" ToolTipService.ToolTip="Convert, shrink or resize the selected files into new files"/>
             <Button Style="{StaticResource GlassButton}" Content="Delete" Click="Delete_Click" Padding="12,7" Foreground="#FFFF7A7A"/>
             <Button Style="{StaticResource GlassButton}" Content="Select all" Click="SelectAll_Click" Padding="12,7"/>
             <Button Style="{StaticResource GlassButton}" Click="SelectNone_Click" Padding="10,7" ToolTipService.ToolTip="Clear"><local:LineIcon Kind="close" Size="12"/></Button>

@@ -119,6 +119,11 @@ public sealed partial class ViewerPage : Page
             case Windows.System.VirtualKey.Down when media: VolumeSlider.Value = Math.Max(0, VolumeSlider.Value - 5); break;
             case Windows.System.VirtualKey.M when media && !ctrl: Mute_Tapped(this, new TappedRoutedEventArgs()); break;
             case Windows.System.VirtualKey.F when !ctrl: SetFull(!_full); break;
+            case Windows.System.VirtualKey.I when media && !ctrl: MarkIn(); break;
+            case Windows.System.VirtualKey.O when media && !ctrl: MarkOut(); break;
+            case Windows.System.VirtualKey.E when !ctrl && ExportSpec.CanExport(_item.Kind): _ = ExportAsync(); break;
+            case (Windows.System.VirtualKey)188 when !ctrl && _item.Kind == "video": StepFrame(-1); break;   // ,
+            case (Windows.System.VirtualKey)190 when !ctrl && _item.Kind == "video": StepFrame(1); break;    // .
             case (Windows.System.VirtualKey)219 when media: StepSpeed(-1); break;   // [
             case (Windows.System.VirtualKey)221 when media: StepSpeed(1); break;    // ]
             case Windows.System.VirtualKey.C when ctrl && Down(Windows.System.VirtualKey.Shift): CopyPath(); break;
@@ -152,6 +157,68 @@ public sealed partial class ViewerPage : Page
             s.Position = TimeSpan.FromSeconds(d > 0 ? Math.Clamp(to, 0, Math.Max(0, d - 0.2)) : Math.Max(0, to));
         }
         catch (Exception ex) { App.Log("viewer-keys", ex, ex.Message); }
+    }
+
+    // ---- Trim marks and export ----
+    private double? _in, _out;
+
+    private double Position() { try { return _player?.PlaybackSession.Position.TotalSeconds ?? 0; } catch (Exception) { return 0; } }
+
+    private void MarkIn()
+    {
+        if (_player is null) return;
+        _in = Position();
+        if (_out is { } o && o <= _in) _out = null;
+        PaintTrim();
+    }
+
+    private void MarkOut()
+    {
+        if (_player is null) return;
+        var t = Position();
+        if (t < 0.05) return;                      // an end at the very start would be an empty clip
+        _out = t;
+        if (_in is { } i && i >= t) _in = null;
+        PaintTrim();
+    }
+
+    private void MarkRange(double from, double to) { _in = from; _out = to; PaintTrim(); }
+
+    private void PaintTrim()
+    {
+        InText.Text = _in is { } i ? "In " + Clock(i) : "In";
+        OutText.Text = _out is { } o ? "Out " + Clock(o) : "Out";
+        TrimClear.Visibility = _in is null && _out is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void MarkIn_Click(object sender, RoutedEventArgs e) { MarkIn(); Focus(FocusState.Programmatic); }
+    private void MarkOut_Click(object sender, RoutedEventArgs e) { MarkOut(); Focus(FocusState.Programmatic); }
+    private void TrimClear_Click(object sender, RoutedEventArgs e) { _in = _out = null; PaintTrim(); Focus(FocusState.Programmatic); }
+    private async void Export_Click(object sender, RoutedEventArgs e) => await ExportAsync();
+
+    private async Task ExportAsync()
+    {
+        try
+        {
+            try { _player?.Pause(); } catch (Exception) { }
+            await ExportDialog.ShowAsync(XamlRoot, [_item], _in, _out);
+        }
+        catch (Exception ex) { App.Log("viewer-export", ex, ex.Message); }
+        Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>One frame back or forward, paused, for finding the exact picture.</summary>
+    private void StepFrame(int by)
+    {
+        try
+        {
+            if (_player is null) return;
+            _player.Pause();
+            var fps = _item.Fps is > 1 and < 240 ? _item.Fps.Value : 30;
+            var s = _player.PlaybackSession;
+            s.Position = TimeSpan.FromSeconds(Math.Max(0, s.Position.TotalSeconds + by / fps));
+        }
+        catch (Exception ex) { App.Log("viewer-step", ex, ex.Message); }
     }
 
     private void StepSpeed(int by)
@@ -228,6 +295,9 @@ public sealed partial class ViewerPage : Page
         ZoomBox.Visibility = visual ? Visibility.Visible : Visibility.Collapsed;
         VolumeBox.Visibility = _item.Kind is "video" or "audio" ? Visibility.Visible : Visibility.Collapsed;
         SpeedButton.Visibility = VolumeBox.Visibility;
+        TrimBox.Visibility = VolumeBox.Visibility;
+        ExportButton.Visibility = ExportSpec.CanExport(_item.Kind) ? Visibility.Visible : Visibility.Collapsed;
+        _in = _out = null; PaintTrim();
         _speed = 1; SpeedText.Text = "1×";
 
         try { BuildStage(); } catch (Exception ex) { App.Log("viewer-stage", ex, ex.Message); ShowStageMessage("This file can't be previewed here."); }
@@ -1005,12 +1075,12 @@ public sealed partial class ViewerPage : Page
                 _momentsBox.Children.Clear();
                 if (s.Status == "ready")
                 {
-                    _momentsBox.Children.Add(new TextBlock { Text = $"{s.Segments.Count} searchable moments. Click one to jump there.", FontSize = 11.5, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
+                    _momentsBox.Children.Add(new TextBlock { Text = $"{s.Segments.Count} searchable moments. Click one to jump there and mark it; Export then saves just that part.", FontSize = 11.5, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
                     var wrap = new WrapPanel { Spacing = 6 };
                     foreach (var seg in s.Segments)
                     {
                         var b = new Button { Style = Ui.Style("GlassChip"), Padding = new Thickness(10, 4, 10, 4), CornerRadius = new CornerRadius(5), Content = new TextBlock { Text = $"{Clock(seg.Start)}–{Clock(seg.End)}", FontSize = 11.5 } };
-                        var at = seg.Start; b.Click += (_, _) => Seek(at);
+                        double at = seg.Start, until = seg.End; b.Click += (_, _) => { Seek(at); MarkRange(at, until); };
                         wrap.Children.Add(b);
                     }
                     _momentsBox.Children.Add(wrap);

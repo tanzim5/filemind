@@ -56,6 +56,20 @@
                   <Button x:Name="CopyFrameButton" Style="{StaticResource GlassButton}" Padding="12,6" CornerRadius="6" Click="CopyFrame_Click" ToolTipService.ToolTip="Copy the current frame as a picture">
                     <StackPanel Orientation="Horizontal" Spacing="6"><local:LineIcon Kind="photo" Size="14"/><TextBlock x:Name="CopyFrameText" Text="Copy frame" FontSize="12"/></StackPanel>
                   </Button>
+                  <!-- Mark the part to keep, then Export saves just that part. -->
+                  <Border x:Name="TrimBox" Background="{StaticResource GlassFillBrush}" CornerRadius="6" Padding="4,2">
+                    <StackPanel Orientation="Horizontal" Spacing="2">
+                      <Button Style="{StaticResource GlassButton}" Padding="9,5" CornerRadius="5" Click="MarkIn_Click" ToolTipService.ToolTip="Start the clip here (I)">
+                        <TextBlock x:Name="InText" Text="In" FontSize="12"/></Button>
+                      <Button Style="{StaticResource GlassButton}" Padding="9,5" CornerRadius="5" Click="MarkOut_Click" ToolTipService.ToolTip="End the clip here (O)">
+                        <TextBlock x:Name="OutText" Text="Out" FontSize="12"/></Button>
+                      <Button x:Name="TrimClear" Visibility="Collapsed" Style="{StaticResource GlassButton}" Width="26" Height="26" Padding="0" CornerRadius="5" Click="TrimClear_Click" ToolTipService.ToolTip="Clear the marks">
+                        <local:LineIcon Kind="close" Size="10"/></Button>
+                    </StackPanel>
+                  </Border>
+                  <Button x:Name="ExportButton" Style="{StaticResource GlassButton}" Padding="12,6" CornerRadius="6" Click="Export_Click" ToolTipService.ToolTip="Save a clip, another format or a smaller copy (E)">
+                    <StackPanel Orientation="Horizontal" Spacing="6"><local:LineIcon Kind="export" Size="14"/><TextBlock Text="Export" FontSize="12"/></StackPanel>
+                  </Button>
                   <Border x:Name="ZoomBox" Background="{StaticResource GlassFillBrush}" CornerRadius="6" Padding="4,2">
                     <StackPanel Orientation="Horizontal" Spacing="2">
                       <Button Style="{StaticResource GlassButton}" Width="28" Height="28" Padding="0" CornerRadius="5" Click="ZoomOut_Click"><local:LineIcon Kind="minus" Size="13"/></Button>

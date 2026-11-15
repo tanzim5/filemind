@@ -42,6 +42,25 @@
         </ToggleButton>
       </Grid>
 
+      <!-- Exports in progress and their result: a small frosted card in the corner, out of the way of the tiles. -->
+      <Border x:Name="ExportTray" Grid.Column="1" Visibility="Collapsed" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,18,18" Width="330"
+              Padding="14,12" CornerRadius="8" Background="{StaticResource ToolbarGlassBrush}" BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1">
+        <StackPanel Spacing="8">
+          <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock x:Name="ExportTitle" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            <Button x:Name="ExportClose" Grid.Column="1" Style="{StaticResource GlassButton}" Padding="7,6" CornerRadius="5" Click="ExportClose_Click" AutomationProperties.Name="Dismiss">
+              <p:LineIcon Kind="close" Size="11"/></Button>
+          </Grid>
+          <TextBlock x:Name="ExportNote" Style="{StaticResource SecondaryText}" FontSize="12" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis"/>
+          <ProgressBar x:Name="ExportBar" Minimum="0" Maximum="1"/>
+          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+            <Button x:Name="ExportCancel" Style="{StaticResource GlassButton}" Content="Cancel" Padding="12,6" Click="ExportCancel_Click"/>
+            <Button x:Name="ExportShow" Style="{StaticResource GlassAccentButton}" Content="Show in folder" Padding="12,6" Click="ExportShow_Click"/>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
       <!-- Settings slide in from the right, below the window buttons -->
       <Grid x:Name="SettingsScrim" Grid.ColumnSpan="2" Visibility="Collapsed" Background="{StaticResource ScrimBrush}" Tapped="SettingsScrim_Tapped">
         <Border x:Name="SettingsPanel" HorizontalAlignment="Right" Width="520" Margin="0,48,0,0" CornerRadius="8,0,0,0" Background="{StaticResource OverlayBrush}"

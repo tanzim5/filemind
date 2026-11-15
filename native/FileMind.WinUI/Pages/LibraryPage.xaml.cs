@@ -1468,6 +1468,19 @@ public sealed partial class LibraryPage : Page
         catch (Exception ex) { ShowToast(ex.Message); }
     }
 
+    private async void Export_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            // The dialog needs to know what each file is, which only loaded tiles tell it.
+            var items = SelectedItems();
+            if (items.Count < _sel.Count) { ShowToast($"{_sel.Count - items.Count:N0} of the selected files are not loaded yet. Scroll down to load them, then export."); return; }
+            var queued = await ExportDialog.ShowAsync(XamlRoot, items);
+            if (queued > 0) ClearSelection();
+        }
+        catch (Exception ex) { ShowToast(ex.Message); }
+    }
+
     private async void CopyTo_Click(object sender, RoutedEventArgs e) => await CopyMoveAsync("copy");
     private async void MoveTo_Click(object sender, RoutedEventArgs e) => await CopyMoveAsync("move");
 

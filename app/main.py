@@ -26,6 +26,7 @@ from . import discover as discover_mod
 from . import transcribe as transcribe_mod
 from . import duplicates as duplicates_mod
 from . import moments as moments_mod
+from . import export as export_mod
 
 app = FastAPI(title="Local File Brain")
 STATIC = Path(__file__).parent / "static"
@@ -1335,6 +1336,38 @@ def commits():
 @app.post("/api/commits/{cid}/undo")
 def commit_undo(cid: int):
     return commit_mod.undo(cid)
+
+
+# ---- Exports: new files made from library files with FFmpeg. Originals are only read. ----
+
+@app.post("/api/export")
+def export_start(body: dict = Body(...)):
+    ids = body.get("file_ids")
+    if not isinstance(ids, list) or not ids or len(ids) > 500 or any(type(i) is not int for i in ids):
+        raise HTTPException(400, "Choose files to export.")
+    try:
+        spec = export_mod.clean_spec(body)
+        return {"jobs": export_mod.submit(list(dict.fromkeys(ids)), spec, body.get("destination") or None)}
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
+
+
+@app.get("/api/export/jobs")
+def export_jobs():
+    return {"jobs": export_mod.jobs()}
+
+
+@app.post("/api/export/jobs/{job_id}/cancel")
+def export_cancel(job_id: int):
+    try:
+        return export_mod.cancel(job_id)
+    except KeyError:
+        raise HTTPException(404, "That export is no longer in the list.") from None
+
+
+@app.post("/api/export/clear")
+def export_clear():
+    return {"cleared": export_mod.clear_finished()}
 
 
 @app.middleware("http")

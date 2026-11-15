@@ -140,6 +140,14 @@ public sealed class ApiClient(Uri baseUri) : IDisposable
     public Task FileActionAsync(string action, IEnumerable<int> fileIds, string? destination = null, CancellationToken ct = default) =>
         PostAsync<JsonElement>("/api/file_actions", new { action, file_ids = fileIds.ToArray(), destination }, ct);
 
+    /// <summary>Queues one export per file. The engine writes new files and never touches the originals.</summary>
+    public async Task<List<ExportJob>> StartExportAsync(IEnumerable<int> fileIds, ExportSpec spec, string? destination, CancellationToken ct = default) =>
+        (await PostAsync<ExportJobs>("/api/export", spec.ToBody(fileIds, destination), ct)).Jobs;
+    public async Task<List<ExportJob>> GetExportJobsAsync(CancellationToken ct = default) => (await GetAsync<ExportJobs>("/api/export/jobs", ct)).Jobs;
+    public Task CancelExportAsync(int id, CancellationToken ct = default) => PostAsync<JsonElement>($"/api/export/jobs/{id}/cancel", null, ct);
+    /// <summary>Forgets the finished, failed and cancelled exports.</summary>
+    public Task ClearExportsAsync(CancellationToken ct = default) => PostAsync<JsonElement>("/api/export/clear", null, ct);
+
     private async Task<T> GetAsync<T>(string url, CancellationToken ct)
     {
         using var response = await _http.GetAsync(url, ct);

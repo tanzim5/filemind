@@ -291,6 +291,81 @@ public sealed partial class MainWindow : Window
         await BootAsync();
     }
 
+    // ---- Exports: a corner card that follows the engine's export queue until it is empty ----
+    private readonly DispatcherTimer _exportTimer = new() { Interval = TimeSpan.FromMilliseconds(500) };
+    private bool _exportHooked, _exportBusy;
+    private string? _exportLast;
+
+    /// <summary>Called after exports are queued: shows the card and keeps it up to date until they finish.</summary>
+    public void WatchExports()
+    {
+        if (!_exportHooked) { _exportHooked = true; _exportTimer.Tick += async (_, _) => await PollExportsAsync(); }
+        ExportTitle.Text = "Exporting"; ExportNote.Text = "";
+        ExportBar.Visibility = Visibility.Visible; ExportBar.IsIndeterminate = true;
+        ExportCancel.Visibility = Visibility.Visible; ExportShow.Visibility = ExportClose.Visibility = Visibility.Collapsed;
+        ExportTray.Visibility = Visibility.Visible;
+        _exportTimer.Start();
+        _ = PollExportsAsync();
+    }
+
+    private async Task PollExportsAsync()
+    {
+        if (_exportBusy || AppRuntime.Current.Api is not { } api) return;
+        _exportBusy = true;
+        try
+        {
+            var jobs = await api.GetExportJobsAsync();
+            var active = jobs.Where(j => j.Active).ToList();
+            if (active.Count > 0)
+            {
+                var now = active.FirstOrDefault(j => j.Status != "queued") ?? active[0];
+                ExportTitle.Text = jobs.Count == 1 ? "Exporting" : $"Exporting {jobs.Count - active.Count + 1} of {jobs.Count}";
+                ExportNote.Text = now.Status == "cancelling" ? "Stopping…" : now.Name;
+                ExportBar.IsIndeterminate = now.Progress <= 0;
+                ExportBar.Value = now.Progress;
+                return;
+            }
+            _exportTimer.Stop();
+            if (jobs.Count == 0) { ExportTray.Visibility = Visibility.Collapsed; return; }
+            var done = jobs.Where(j => j.Status == "done").ToList();
+            var failed = jobs.Where(j => j.Status == "error").ToList();
+            ExportTitle.Text = failed.Count > 0 ? (done.Count > 0 ? $"Exported {done.Count:N0}, {failed.Count:N0} failed" : "Export failed")
+                : done.Count == 1 ? "Exported" : done.Count > 1 ? $"Exported {done.Count:N0} files" : "Export cancelled";
+            ExportNote.Text = failed.Count > 0 ? $"{failed[0].Name}: {failed[0].Error}" : done.Count == 1 ? done[0].Name
+                : done.Count > 1 ? Path.GetDirectoryName(done[^1].Output) ?? "" : "Nothing was saved.";
+            _exportLast = done.Count > 0 ? done[^1].Output : null;
+            ExportBar.Visibility = ExportCancel.Visibility = Visibility.Collapsed;
+            ExportShow.Visibility = _exportLast is null ? Visibility.Collapsed : Visibility.Visible;
+            ExportClose.Visibility = Visibility.Visible;
+            await api.ClearExportsAsync();
+        }
+        catch (Exception ex) { App.Log("export-poll", ex, ex.Message); }
+        finally { _exportBusy = false; }
+    }
+
+    private async void ExportCancel_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (AppRuntime.Current.Api is not { } api) return;
+            foreach (var job in (await api.GetExportJobsAsync()).Where(j => j.Active)) await api.CancelExportAsync(job.Id);
+        }
+        catch (Exception ex) { App.Log("export-cancel", ex, ex.Message); }
+    }
+
+    private void ExportShow_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_exportLast is not null && File.Exists(_exportLast))
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"/select,\"{_exportLast}\"") { UseShellExecute = true });
+        }
+        catch (Exception ex) { App.Log("export-show", ex, ex.Message); }
+        ExportTray.Visibility = Visibility.Collapsed;
+    }
+
+    private void ExportClose_Click(object sender, RoutedEventArgs e) => ExportTray.Visibility = Visibility.Collapsed;
+
     /// <summary>Pages put their own sidebar content (the Library's filters) into the rail through this.</summary>
     public void SetSidebar(UIElement? content)
     {
