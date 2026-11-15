@@ -3,100 +3,116 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:local="using:FileMind.Pages">
   <Grid>
-    <ScrollViewer x:Name="Scroll" VerticalScrollBarVisibility="Hidden" ViewChanged="Scroll_ViewChanged">
-      <StackPanel Padding="20,56,20,90" Spacing="0">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="*"/>
+      <ColumnDefinition x:Name="PanelColumn" Width="320"/>
+    </Grid.ColumnDefinitions>
 
-        <!-- stage + details -->
-        <Grid ColumnSpacing="14">
+    <!-- The stage fills everything left of the panel; the shell's frosted bar is drawn over its top 48 px. -->
+    <Grid x:Name="StageArea" Margin="0,48,0,0">
+      <Grid x:Name="StageHost" Margin="24,24,24,88">
+        <Grid x:Name="MediaHost" RenderTransformOrigin="0.5,0.5">
+          <Grid.RenderTransform><ScaleTransform x:Name="ZoomTransform" ScaleX="1" ScaleY="1"/></Grid.RenderTransform>
+        </Grid>
+      </Grid>
+
+      <!-- Previous / next show only when the pointer is near the edge they sit on. -->
+      <Grid x:Name="PrevZone" Width="72" HorizontalAlignment="Left" Margin="0,0,0,88" Background="Transparent" PointerEntered="Zone_Enter" PointerExited="Zone_Exit">
+        <Button x:Name="PrevButton" Style="{StaticResource GlassButton}" Width="36" Height="36" Padding="0" CornerRadius="8" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="14,0,0,0"
+                Opacity="0" Click="Prev_Click" AutomationProperties.Name="Previous">
+          <local:LineIcon Kind="back" Size="16"/>
+        </Button>
+      </Grid>
+      <Grid x:Name="NextZone" Width="72" HorizontalAlignment="Right" Margin="0,0,0,88" Background="Transparent" PointerEntered="Zone_Enter" PointerExited="Zone_Exit">
+        <Button x:Name="NextButton" Style="{StaticResource GlassButton}" Width="36" Height="36" Padding="0" CornerRadius="8" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,14,0"
+                Opacity="0" Click="Next_Click" AutomationProperties.Name="Next">
+          <local:LineIcon Kind="fwd" Size="16"/>
+        </Button>
+      </Grid>
+
+      <!-- A short message (copied, couldn't copy) -->
+      <Border x:Name="ToastBox" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,12,0,0" Padding="14,7" CornerRadius="8"
+              Background="{StaticResource ToolbarGlassBrush}" BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1">
+        <TextBlock x:Name="ToastText" FontSize="12.5"/>
+      </Border>
+
+      <!-- Pictures: zoom out, level, zoom in, full screen. -->
+      <Border x:Name="ZoomPill" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,24" Padding="6,4" CornerRadius="8" Translation="0,0,24"
+              Background="{StaticResource ToolbarGlassBrush}" BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1">
+        <Border.Shadow><ThemeShadow/></Border.Shadow>
+        <StackPanel Orientation="Horizontal" Spacing="2">
+          <Button Style="{StaticResource BarButton}" Click="ZoomOut_Click" ToolTipService.ToolTip="Zoom out" AutomationProperties.Name="Zoom out"><local:LineIcon Kind="minus" Size="15"/></Button>
+          <TextBlock x:Name="ZoomText" Text="100%" FontSize="12.5" Width="48" TextAlignment="Center" VerticalAlignment="Center" Tapped="ZoomReset_Tapped"/>
+          <Button Style="{StaticResource BarButton}" Click="ZoomIn_Click" ToolTipService.ToolTip="Zoom in" AutomationProperties.Name="Zoom in"><local:LineIcon Kind="plus" Size="15"/></Button>
+          <Button Style="{StaticResource BarButton}" Click="Full_Click" ToolTipService.ToolTip="Full screen" AutomationProperties.Name="Full screen"><local:LineIcon Kind="full" Size="15"/></Button>
+        </StackPanel>
+      </Border>
+
+      <!-- Video and sound: one transport bar, always there. -->
+      <Border x:Name="TransportPill" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="24,0,24,24" Padding="8,4" CornerRadius="8" Translation="0,0,24" MaxWidth="760"
+              Background="{StaticResource ToolbarGlassBrush}" BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1">
+        <Border.Shadow><ThemeShadow/></Border.Shadow>
+        <Grid ColumnSpacing="6">
           <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*" MinWidth="120"/><ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
           </Grid.ColumnDefinitions>
+          <Button x:Name="PlayBtn" Style="{StaticResource BarButton}" Click="Play_Click" AutomationProperties.Name="Play or pause"><local:LineIcon x:Name="PlayIcon" Kind="play" Size="15"/></Button>
+          <TextBlock x:Name="NowText" Grid.Column="1" Text="0:00" FontSize="12" MinWidth="34" TextAlignment="Right" VerticalAlignment="Center" Foreground="{StaticResource GlassTextSecondaryBrush}"/>
+          <!-- The scrubber, with the marked part drawn under it as an accent range. -->
+          <Grid x:Name="SeekHost" Grid.Column="2" Height="28" VerticalAlignment="Center" SizeChanged="SeekHost_SizeChanged">
+            <Border x:Name="TrimRange" Visibility="Collapsed" Height="6" CornerRadius="3" HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False" Background="{StaticResource AccentTintStrongBrush}"/>
+            <Slider x:Name="SeekSlider" Minimum="0" Maximum="1000" Value="0" VerticalAlignment="Center" Foreground="{StaticResource AccentBrush}" ValueChanged="Seek_Changed"/>
+          </Grid>
+          <TextBlock x:Name="TotalText" Grid.Column="3" Text="0:00" FontSize="12" MinWidth="34" VerticalAlignment="Center" Foreground="{StaticResource GlassTextSecondaryBrush}"/>
+          <Button x:Name="SpeedButton" Grid.Column="4" Style="{StaticResource BarButton}" Width="40" Click="Speed_Click" ToolTipService.ToolTip="Playback speed" AutomationProperties.Name="Playback speed">
+            <TextBlock x:Name="SpeedText" Text="1×" FontSize="12.5"/></Button>
+          <Button x:Name="VolumeBtn" Grid.Column="5" Style="{StaticResource BarButton}" ToolTipService.ToolTip="Volume" AutomationProperties.Name="Volume"><local:LineIcon Kind="sound" Size="15"/></Button>
+          <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="0">
+            <Button x:Name="InBtn" Style="{StaticResource BarButton}" Width="auto" MinWidth="28" Padding="6,0" Click="MarkIn_Click" ToolTipService.ToolTip="Start the clip here" AutomationProperties.Name="Mark in">
+              <StackPanel Orientation="Horizontal" Spacing="4"><local:LineIcon Kind="markin" Size="15"/><TextBlock x:Name="InText" Visibility="Collapsed" FontSize="11.5" VerticalAlignment="Center"/></StackPanel></Button>
+            <Button x:Name="OutBtn" Style="{StaticResource BarButton}" Width="auto" MinWidth="28" Padding="6,0" Click="MarkOut_Click" ToolTipService.ToolTip="End the clip here" AutomationProperties.Name="Mark out">
+              <StackPanel Orientation="Horizontal" Spacing="4"><local:LineIcon Kind="markout" Size="15"/><TextBlock x:Name="OutText" Visibility="Collapsed" FontSize="11.5" VerticalAlignment="Center"/></StackPanel></Button>
+            <Button x:Name="TrimClear" Visibility="Collapsed" Style="{StaticResource BarButton}" Width="22" Click="TrimClear_Click" ToolTipService.ToolTip="Clear the marks" AutomationProperties.Name="Clear the marks"><local:LineIcon Kind="close" Size="10"/></Button>
+          </StackPanel>
+          <Button Grid.Column="7" Style="{StaticResource BarButton}" Click="Full_Click" ToolTipService.ToolTip="Full screen" AutomationProperties.Name="Full screen"><local:LineIcon Kind="full" Size="15"/></Button>
+        </Grid>
+      </Border>
+    </Grid>
 
-          <Border x:Name="StageCard" Height="640" Background="Transparent" CornerRadius="8" BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1">
-            <Grid>
-              <Grid x:Name="StageHost" Margin="26,26,26,86" CornerRadius="4">
-                <Grid x:Name="MediaHost" RenderTransformOrigin="0.5,0.5">
-                  <Grid.RenderTransform><ScaleTransform x:Name="ZoomTransform" ScaleX="1" ScaleY="1"/></Grid.RenderTransform>
-                </Grid>
-              </Grid>
+    <!-- The panel runs the full height of the window, under the bar, with its own tabs. -->
+    <Border x:Name="Panel" Grid.Column="1" Background="{StaticResource GlassFillBrush}" BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1,0,0,0">
+      <Grid Padding="0,48,0,0">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
 
-              <Button x:Name="PrevButton" Style="{StaticResource GlassButton}" Width="38" Height="38" Padding="0" CornerRadius="7" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="12,0,0,40" Click="Prev_Click" ToolTipService.ToolTip="Previous (Ctrl+Left)">
-                <local:LineIcon Kind="back" Size="16"/>
-              </Button>
-              <Button x:Name="NextButton" Style="{StaticResource GlassButton}" Width="38" Height="38" Padding="0" CornerRadius="7" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,40" Click="Next_Click" ToolTipService.ToolTip="Next (Ctrl+Right)">
-                <local:LineIcon Kind="fwd" Size="16"/>
-              </Button>
+        <Grid Margin="12,0" ColumnSpacing="4" Height="40">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <Button x:Name="InfoTab" Style="{StaticResource BarButton}" Width="auto" Padding="10,0" Click="InfoTab_Click" Height="40" CornerRadius="0">
+            <Grid Height="40"><TextBlock x:Name="InfoTabText" Text="Info" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
+              <Border x:Name="InfoTabLine" Height="2" VerticalAlignment="Bottom" Background="{StaticResource AccentBrush}"/></Grid></Button>
+          <Button x:Name="SimilarTab" Grid.Column="1" Style="{StaticResource BarButton}" Width="auto" Padding="10,0" Click="SimilarTab_Click" Height="40" CornerRadius="0">
+            <Grid Height="40"><TextBlock x:Name="SimilarTabText" Text="Similar" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
+              <Border x:Name="SimilarTabLine" Height="2" VerticalAlignment="Bottom" Background="{StaticResource AccentBrush}" Visibility="Collapsed"/></Grid></Button>
+        </Grid>
+        <Border VerticalAlignment="Bottom" Height="1" Background="{StaticResource DividerBrush}"/>
 
-              <!-- native-feeling control pill -->
-              <Border Style="{StaticResource GlassPill}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,22" Padding="6">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <Button x:Name="DragButton" Style="{StaticResource GlassButton}" Padding="12,6" CornerRadius="6" CanDrag="True" DragStarting="Drag_Starting" ToolTipService.ToolTip="Drag this file into any app or folder">
-                    <StackPanel Orientation="Horizontal" Spacing="6"><local:LineIcon Kind="file" Size="14"/><TextBlock Text="Drag file" FontSize="12"/></StackPanel>
-                  </Button>
-                  <Button x:Name="CopyFrameButton" Style="{StaticResource GlassButton}" Padding="12,6" CornerRadius="6" Click="CopyFrame_Click" ToolTipService.ToolTip="Copy the current frame as a picture">
-                    <StackPanel Orientation="Horizontal" Spacing="6"><local:LineIcon Kind="photo" Size="14"/><TextBlock x:Name="CopyFrameText" Text="Copy frame" FontSize="12"/></StackPanel>
-                  </Button>
-                  <!-- Mark the part to keep, then Export saves just that part. -->
-                  <Border x:Name="TrimBox" Background="{StaticResource GlassFillBrush}" CornerRadius="6" Padding="4,2">
-                    <StackPanel Orientation="Horizontal" Spacing="2">
-                      <Button Style="{StaticResource GlassButton}" Padding="9,5" CornerRadius="5" Click="MarkIn_Click" ToolTipService.ToolTip="Start the clip here (I)">
-                        <TextBlock x:Name="InText" Text="In" FontSize="12"/></Button>
-                      <Button Style="{StaticResource GlassButton}" Padding="9,5" CornerRadius="5" Click="MarkOut_Click" ToolTipService.ToolTip="End the clip here (O)">
-                        <TextBlock x:Name="OutText" Text="Out" FontSize="12"/></Button>
-                      <Button x:Name="TrimClear" Visibility="Collapsed" Style="{StaticResource GlassButton}" Width="26" Height="26" Padding="0" CornerRadius="5" Click="TrimClear_Click" ToolTipService.ToolTip="Clear the marks">
-                        <local:LineIcon Kind="close" Size="10"/></Button>
-                    </StackPanel>
-                  </Border>
-                  <Button x:Name="ExportButton" Style="{StaticResource GlassButton}" Padding="12,6" CornerRadius="6" Click="Export_Click" ToolTipService.ToolTip="Save a clip, another format or a smaller copy (E)">
-                    <StackPanel Orientation="Horizontal" Spacing="6"><local:LineIcon Kind="export" Size="14"/><TextBlock Text="Export" FontSize="12"/></StackPanel>
-                  </Button>
-                  <Border x:Name="ZoomBox" Background="{StaticResource GlassFillBrush}" CornerRadius="6" Padding="4,2">
-                    <StackPanel Orientation="Horizontal" Spacing="2">
-                      <Button Style="{StaticResource GlassButton}" Width="28" Height="28" Padding="0" CornerRadius="5" Click="ZoomOut_Click"><local:LineIcon Kind="minus" Size="13"/></Button>
-                      <TextBlock x:Name="ZoomText" Text="100%" FontSize="12" Width="46" TextAlignment="Center" VerticalAlignment="Center" Tapped="ZoomReset_Tapped"/>
-                      <Button Style="{StaticResource GlassButton}" Width="28" Height="28" Padding="0" CornerRadius="5" Click="ZoomIn_Click"><local:LineIcon Kind="plus" Size="13"/></Button>
-                    </StackPanel>
-                  </Border>
-                  <Button x:Name="SpeedButton" Style="{StaticResource GlassButton}" Padding="10,6" CornerRadius="6" MinWidth="46" Click="Speed_Click" ToolTipService.ToolTip="Playback speed ([ and ])">
-                    <TextBlock x:Name="SpeedText" Text="1×" FontSize="12"/>
-                  </Button>
-                  <Button x:Name="FullButton" Style="{StaticResource GlassButton}" Width="32" Height="32" Padding="0" CornerRadius="6" Click="Full_Click" ToolTipService.ToolTip="Full screen (F)">
-                    <local:LineIcon Kind="photo" Size="14"/>
-                  </Button>
-                  <Border x:Name="VolumeBox" Background="{StaticResource GlassFillBrush}" CornerRadius="6" Padding="12,2">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                      <local:LineIcon Kind="audio" Size="14" VerticalAlignment="Center" Tapped="Mute_Tapped"/>
-                      <Slider x:Name="VolumeSlider" Width="96" Minimum="0" Maximum="100" Value="60" VerticalAlignment="Center" ValueChanged="Volume_Changed"/>
-                      <TextBlock x:Name="VolumeText" Text="60%" FontSize="12" Width="34" VerticalAlignment="Center"/>
-                    </StackPanel>
-                  </Border>
-                </StackPanel>
-              </Border>
-            </Grid>
-          </Border>
+        <ScrollViewer x:Name="InfoScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto">
+          <StackPanel x:Name="Details" Padding="18,16,18,24" Spacing="16"/>
+        </ScrollViewer>
 
-          <!-- details -->
-          <Border Grid.Column="1" Width="350" Height="640" Background="{StaticResource SurfaceBrush}" CornerRadius="8" BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1">
-            <ScrollViewer VerticalScrollBarVisibility="Hidden">
-              <StackPanel x:Name="Details" Padding="22,20,22,22" Spacing="16"/>
-            </ScrollViewer>
-          </Border>
+        <Grid x:Name="SimilarView" Grid.Row="1" Visibility="Collapsed">
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+          <TextBlock x:Name="MoreNote" Margin="18,14,18,8" FontSize="12" TextWrapping="Wrap" Foreground="{StaticResource GlassTextSecondaryBrush}"/>
+          <ScrollViewer x:Name="SimilarScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" ViewChanged="Similar_ViewChanged">
+            <local:WrapPanel x:Name="More" Columns="2" Spacing="8" Margin="14,0,14,18"/>
+          </ScrollViewer>
         </Grid>
 
-        <!-- more like this -->
-        <Grid Margin="0,34,0,14">
-          <StackPanel>
-            <TextBlock Text="More like this" Style="{StaticResource TitleText}" FontSize="38"/>
-            <TextBlock x:Name="MoreNote" Text="Closest first, by what is in them. Keep scrolling; click any to follow it." FontSize="12" Foreground="{StaticResource GlassTextTertiaryBrush}"/>
-          </StackPanel>
-          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Bottom">
-            <Button Style="{StaticResource GlassButton}" Padding="14,7" CornerRadius="6" Click="OpenAsResults_Click"><TextBlock Text="Open as results" FontSize="12"/></Button>
-            <Button Style="{StaticResource GlassAccentButton}" Padding="14,7" CornerRadius="6" Click="MakeCollection_Click"><TextBlock Text="Make a collection" FontSize="12"/></Button>
-          </StackPanel>
-        </Grid>
-        <local:WrapPanel x:Name="More" Spacing="10"/>
-      </StackPanel>
-    </ScrollViewer>
-
+        <StackPanel x:Name="SimilarActions" Grid.Row="2" Visibility="Collapsed" Orientation="Horizontal" Spacing="8" Padding="14,10" HorizontalAlignment="Stretch">
+          <Button Style="{StaticResource GlassButton}" Padding="12,7" CornerRadius="6" Click="OpenAsResults_Click"><TextBlock Text="Open as results" FontSize="12"/></Button>
+          <Button Style="{StaticResource GlassAccentButton}" Padding="12,7" CornerRadius="6" Click="MakeCollection_Click"><TextBlock Text="Make a collection" FontSize="12"/></Button>
+        </StackPanel>
+      </Grid>
+    </Border>
   </Grid>
 </Page>

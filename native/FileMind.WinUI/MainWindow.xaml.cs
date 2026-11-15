@@ -514,7 +514,23 @@ public sealed partial class MainWindow : Window
                 _ = Pages.LibraryPage.Current?.PrimeAsync();
                 DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () => ContentFrame.Navigate(page));
             }
+            else if (!_devPageDone && dev is "viewer" or "viewer-video")
+            {
+                _devPageDone = true;
+                _ = OpenDevViewerAsync(dev == "viewer-video");
+            }
         }
+    }
+
+    /// <summary>Screenshot helper: opens the first library item (the first video with <paramref name="video"/>) in the viewer.</summary>
+    private async Task OpenDevViewerAsync(bool video)
+    {
+        try
+        {
+            var page = await AppRuntime.Current.Api!.GetFilesAsync(new Core.FileQuery { Kind = video ? "video" : "all" }, 40, 0);
+            if (page.Files.Count > 0) ContentFrame.Navigate(typeof(Pages.ViewerPage), new Pages.ViewerRequest(page.Files[0], page.Files));
+        }
+        catch (Exception ex) { App.Log("dev-viewer", ex, ex.Message); }
     }
 
     private void OpenSettings_Click(object sender, RoutedEventArgs e) => OpenSettings();
