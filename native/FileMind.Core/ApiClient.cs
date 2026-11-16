@@ -138,6 +138,9 @@ public sealed class ApiClient(Uri baseUri) : IDisposable
     /// <summary>The engine's proposals for new spaces ("Auto-group"). Nothing is created until the caller keeps one.</summary>
     public Task<ClusterResponse> ProposeSpacesAsync(bool unassignedOnly = true, CancellationToken ct = default) =>
         PostAsync<ClusterResponse>("/api/cluster", new { unassigned = unassignedOnly }, ct);
+    /// <summary>Which files fit these short descriptions ("cats", "dogs at the beach"). Read only.</summary>
+    public Task<SpaceMatchResult> MatchSpacesAsync(IEnumerable<string> descriptions, CancellationToken ct = default) =>
+        PostAsync<SpaceMatchResult>("/api/spaces/match", new { descriptions = descriptions.ToArray() }, ct);
     public Task AddToProjectAsync(int project, IEnumerable<int> fileIds, CancellationToken ct = default) =>
         PostAsync<JsonElement>($"/api/projects/{project}/add", new { file_ids = fileIds.ToArray() }, ct);
     /// <summary>Files that probably belong in a space (nearest to what it holds, not members, not dismissed). Nothing is added.</summary>

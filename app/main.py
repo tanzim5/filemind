@@ -28,7 +28,7 @@ from . import duplicates as duplicates_mod
 from . import moments as moments_mod
 from . import export as export_mod
 from . import search_mix
-from . import space_suggest
+from . import space_suggest, space_match
 
 app = FastAPI(title="Local File Brain")
 STATIC = Path(__file__).parent / "static"
@@ -1177,6 +1177,26 @@ def project_suggestions_dismiss(pid: int, body: dict = Body(...)):
         c.execute("INSERT OR IGNORE INTO space_dismissals VALUES(?,?)", (pid, int(fid)))
     c.commit()
     return {"ok": True}
+
+
+@app.post("/api/spaces/match")
+def spaces_match(body: dict = Body(...)):
+    """Which files fit these short descriptions ("cats", "dogs at the beach")? Read only: nothing is created here.
+    Returns every matching id (best first, at most space_match.MAX_FILES), a preview of the first few files and how many
+    fit each description."""
+    raw = body.get("descriptions")
+    texts = [t.strip() for t in raw if isinstance(t, str) and t.strip()] if isinstance(raw, list) else []
+    if not texts or len(texts) > 8 or any(len(t) > 200 for t in texts):
+        raise HTTPException(400, "Give one to eight short descriptions")
+    ids, mat = indexer.matrix()
+    found, per = space_match.match(ids, mat, [embedder.embed_query(t) for t in texts])
+    c = db.conn()
+    wanted = [fid for fid, _ in found[:12]]
+    rows = {r["id"]: r for r in c.execute(
+        f"SELECT * FROM files WHERE id IN ({','.join('?' for _ in wanted) or 'NULL'})", wanted)}
+    score = dict(found)
+    return {"file_ids": [fid for fid, _ in found], "count": len(found),
+            "per_description": per, "preview": [_file_dict(rows[f], score[f]) for f in wanted if f in rows]}
 
 
 @app.post("/api/projects/{pid}/remove")

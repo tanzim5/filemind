@@ -37,7 +37,7 @@ public sealed partial class SpacesPage : Page
         _bar = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         _bar.Children.Add(_organise); _bar.Children.Add(plus);
 
-        Loaded += async (_, _) => { App.Window?.SetTitle("Spaces"); App.Window?.SetActions(_bar); await LoadAsync(); };
+        Loaded += async (_, _) => { App.Window?.SetTitle("Spaces"); App.Window?.SetActions(_bar); await LoadAsync(); _ = ShowSuggestionsAsync(false); };
         Unloaded += (_, _) => _cts.Cancel();
     }
 
@@ -64,10 +64,12 @@ public sealed partial class SpacesPage : Page
     }
 
     /// <summary>A stack of up to three thumbnails (first one in front, the others fanned behind), then ring, name and count.</summary>
-    private UIElement Card(string name, int count, List<int> covers, string ring, Action open, UIElement? extra = null)
+    private UIElement Card(string name, int count, List<int> covers, string ring, Action open, UIElement? extra = null, bool dashed = false)
     {
         const double W = 152, H = 108;
         var stack = new Grid { Width = 190, Height = H + 30, HorizontalAlignment = HorizontalAlignment.Center };
+        if (dashed)
+            stack.Children.Add(new Rectangle { RadiusX = 10, RadiusY = 10, StrokeThickness = 1.5, StrokeDashArray = [4, 3], Stroke = Ui.Brush("GlassTextTertiaryBrush"), Margin = new Thickness(0, 0, 0, 0) });
         if (covers.Count == 0)
             stack.Children.Add(StackCard(W, H, null, 0, 0, 0));
         // back to front: the last cover is drawn first, the first cover ends up on top
@@ -136,39 +138,54 @@ public sealed partial class SpacesPage : Page
 
     private async void NewSpace_Click(object sender, RoutedEventArgs e)
     {
-        var box = new TextBox { PlaceholderText = "Name this space" };
-        box.Loaded += (_, _) => box.Focus(FocusState.Programmatic);
-        if (!await Dialogs.ShowAsync(XamlRoot, "New space", box, "Create", width: 400) || string.IsNullOrWhiteSpace(box.Text)) return;
-        try { await Api.CreateProjectAsync(box.Text.Trim(), []); await LoadAsync(); }
+        try { if (await NewSpaceDialog.ShowAsync(XamlRoot, Api)) await LoadAsync(); }
         catch (Exception ex) { Note.Text = ex.Message; }
     }
 
-    // ---- Organise for me: the engine proposes groups from the files that are in no space; nothing is made until you keep one ----
+    // ---- Suggested: the engine proposes groups from files in no space; nothing is made until you keep one ----
+    private static ClusterResponse? _cache;                 // for the session: opening the page again does not ask the engine again
+    private static Task<ClusterResponse>? _pending;
+    private static DismissedSpaces? _dismissed;
+    private DismissedSpaces Dismissed => _dismissed ??= new DismissedSpaces(AppRuntime.Current.Paths.DismissedSpacesFile);
+
     private async void Organise_Click(object sender, RoutedEventArgs e)
     {
         _organise.IsEnabled = false;
         Note.Text = "Looking through the files that are in no space…";
-        try
-        {
-            var found = await Api.ProposeSpacesAsync(true, _cts.Token);
-            Note.Text = "";
-            if (found.Clusters.Count == 0)
-            {
-                CloseReview();
-                Note.Text = found.Leftover == 0 ? "Every file is already in a space." : $"Nothing clear to suggest yet. {found.Leftover:N0} files are in no space, but they don't form groups of five or more.";
-                return;
-            }
-            Review.Children.Clear();
-            foreach (var c in found.Clusters) Review.Children.Add(Proposal(c));
-            ReviewNote.Text = $"{found.Clusters.Count} {(found.Clusters.Count == 1 ? "group" : "groups")} from files in no space";
-            ReviewBox.Visibility = YourTitle.Visibility = Visibility.Visible;
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex) { App.Log("organise", ex, ex.Message); Note.Text = "Couldn't suggest spaces just now."; }
+        try { await ShowSuggestionsAsync(true); }
         finally { _organise.IsEnabled = true; }
     }
 
-    /// <summary>A suggestion drawn like a space, with Keep and Dismiss under it.</summary>
+    private async Task ShowSuggestionsAsync(bool refresh)
+    {
+        try
+        {
+            if (refresh) _cache = null;
+            var found = _cache;
+            if (found is null)
+            {
+                _pending ??= Api.ProposeSpacesAsync(true);
+                try { found = await _pending; } finally { _pending = null; }
+                _cache = found;
+            }
+            if (!IsLoaded) return;
+            Note.Text = "";
+            var shown = Dismissed.Visible(found.Clusters);
+            Review.Children.Clear();
+            foreach (var c in shown) Review.Children.Add(Proposal(c));
+            if (shown.Count == 0)
+            {
+                SuggestBox.Visibility = YourTitle.Visibility = Visibility.Collapsed;
+                if (refresh) Note.Text = found.Leftover == 0 ? "Every file is already in a space." : "Nothing clear to suggest yet.";
+                return;
+            }
+            SuggestNote.Text = "from files in no space";
+            SuggestBox.Visibility = YourTitle.Visibility = Visibility.Visible;
+        }
+        catch (Exception ex) { App.Log("organise", ex, ex.Message); if (refresh && IsLoaded) Note.Text = "Couldn't suggest spaces just now."; }
+    }
+
+    /// <summary>A suggestion drawn as a dashed stack, with Keep and Dismiss under it.</summary>
     private UIElement Proposal(ClusterProposal c)
     {
         var covers = c.Sample.Where(f => f.HasThumb).Take(3).Select(f => f.Id).ToList();
@@ -176,12 +193,17 @@ public sealed partial class SpacesPage : Page
         var dismiss = new Button { Style = Ui.Style("GlassButton"), Padding = new Thickness(14, 5, 14, 5), CornerRadius = new CornerRadius(6), Content = new TextBlock { Text = "Dismiss", FontSize = 12.5 } };
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
         buttons.Children.Add(keep); buttons.Children.Add(dismiss);
-        var card = Card(c.Name, c.Count, covers, "#F2552C", () => { }, buttons);
-        dismiss.Click += (_, _) => Remove(card);
+        var card = Card(c.Name, c.Count, covers, "#F2552C", () => { }, buttons, dashed: true);
+        dismiss.Click += (_, _) => { Dismissed.Dismiss(c.Name); Remove(card); };
         keep.Click += async (_, _) =>
         {
             keep.IsEnabled = dismiss.IsEnabled = false;
-            try { await Api.CreateProjectAsync(c.Name, c.FileIds, _cts.Token); Remove(card); await LoadAsync(); }
+            try
+            {
+                await Api.CreateProjectAsync(c.Name, c.FileIds, _cts.Token);
+                _cache?.Clusters.Remove(c);
+                Remove(card); await LoadAsync();
+            }
             catch (Exception ex) { App.Log("organise", ex, ex.Message); keep.IsEnabled = dismiss.IsEnabled = true; Note.Text = "Couldn't save that space."; }
         };
         return card;
@@ -190,14 +212,6 @@ public sealed partial class SpacesPage : Page
     private void Remove(UIElement card)
     {
         Review.Children.Remove(card);
-        if (Review.Children.Count == 0) CloseReview();
-    }
-
-    private void CloseReview_Click(object sender, RoutedEventArgs e) => CloseReview();
-
-    private void CloseReview()
-    {
-        Review.Children.Clear();
-        ReviewBox.Visibility = YourTitle.Visibility = Visibility.Collapsed;
+        if (Review.Children.Count == 0) SuggestBox.Visibility = YourTitle.Visibility = Visibility.Collapsed;
     }
 }

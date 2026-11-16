@@ -14,7 +14,8 @@ internal static class Dialogs
     /// <summary>Shows <paramref name="body"/> in a dialog. <paramref name="onPrimary"/> runs when the primary button is pressed and
     /// returns an error to show (the dialog stays open) or null to close it. Returns true when the primary action went through.</summary>
     public static async Task<bool> ShowAsync(XamlRoot root, string title, UIElement? body, string? primary, string? secondary = "Cancel",
-        Func<Task<string?>>? onPrimary = null, double width = 440, bool enterConfirms = true, Action<Action>? gotClose = null)
+        Func<Task<string?>>? onPrimary = null, double width = 440, bool enterConfirms = true, Action<Action>? gotClose = null,
+        string? extra = null, Func<Task<string?>>? onExtra = null, Action<Button>? gotPrimary = null)
     {
         var dlg = new ContentDialog { XamlRoot = root, RequestedTheme = ThemeEngine.Element(), Padding = new Thickness(0) };
         var surface = Ui.Brush(ThemeEngine.Liquid ? "OverlayBrush" : "SurfaceBrush");
@@ -36,18 +37,18 @@ internal static class Dialogs
         var problem = new TextBlock { Foreground = Ui.Hex("#FF7A7A"), FontSize = 12.5, TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
         Button? primaryBtn = null;
 
-        async Task Confirm()
+        async Task Confirm(Func<Task<string?>>? action, Button? pressed)
         {
-            if (primaryBtn is { IsEnabled: false }) return;
-            if (primaryBtn is not null) primaryBtn.IsEnabled = false;
+            if (pressed is { IsEnabled: false }) return;
+            if (pressed is not null) pressed.IsEnabled = false;
             try
             {
-                var err = onPrimary is null ? null : await onPrimary();
+                var err = action is null ? null : await action();
                 if (err is null) { ok = true; dlg.Hide(); return; }
                 problem.Text = err; problem.Visibility = Visibility.Visible;
             }
             catch (Exception ex) { problem.Text = ex.Message; problem.Visibility = Visibility.Visible; }
-            finally { if (primaryBtn is not null) primaryBtn.IsEnabled = true; }
+            finally { if (pressed is not null) pressed.IsEnabled = true; }
         }
 
         var stack = new StackPanel { Spacing = 16, Padding = new Thickness(20) };
@@ -62,10 +63,17 @@ internal static class Dialogs
             quiet.Click += (_, _) => dlg.Hide();
             buttons.Children.Add(quiet);
         }
+        if (extra is not null)
+        {
+            var other = new Button { Content = extra, Style = Ui.Style("GlassButton"), Padding = new Thickness(16, 7, 16, 7) };
+            other.Click += async (_, _) => await Confirm(onExtra, other);
+            buttons.Children.Add(other);
+        }
         if (primary is not null)
         {
             primaryBtn = new Button { Content = primary, Style = Ui.Style("GlassAccentButton"), Padding = new Thickness(18, 7, 18, 7) };
-            primaryBtn.Click += async (_, _) => await Confirm();
+            primaryBtn.Click += async (_, _) => await Confirm(onPrimary, primaryBtn);
+            gotPrimary?.Invoke(primaryBtn);
             buttons.Children.Add(primaryBtn);
         }
         stack.Children.Add(buttons);
@@ -76,7 +84,7 @@ internal static class Dialogs
             if (e.Key == VirtualKey.Escape) { e.Handled = true; dlg.Hide(); }
             else if (e.Key == VirtualKey.Enter && enterConfirms && primary is not null && e.OriginalSource is not (Button or ToggleButton or TextBox { AcceptsReturn: true }))
             {
-                e.Handled = true; await Confirm();
+                e.Handled = true; await Confirm(onPrimary, primaryBtn);
             }
         };
         await dlg.ShowAsync();

@@ -5,18 +5,17 @@
   <Grid>
     <ScrollViewer VerticalScrollBarVisibility="Hidden">
       <StackPanel Padding="40,72,40,60" Spacing="28">
-        <!-- What "Organise for me" found: each group is a stack you can keep or dismiss. -->
-        <StackPanel x:Name="ReviewBox" Visibility="Collapsed" Spacing="16">
+        <TextBlock x:Name="YourTitle" Visibility="Collapsed" Text="Your spaces" Style="{StaticResource TitleText}" FontSize="26"/>
+        <local:WrapPanel x:Name="Cards" Spacing="26" SizeChanged="Grid_SizeChanged"/>
+
+        <!-- Groups the engine proposes from files in no space: each is a dashed stack you can keep or dismiss. Nothing is made until Keep. -->
+        <StackPanel x:Name="SuggestBox" Visibility="Collapsed" Spacing="16">
           <StackPanel Orientation="Horizontal" Spacing="14">
-            <TextBlock Text="Suggested spaces" Style="{StaticResource TitleText}" FontSize="26"/>
-            <TextBlock x:Name="ReviewNote" Style="{StaticResource SecondaryText}" VerticalAlignment="Bottom" Margin="0,0,0,4"/>
-            <Button Style="{StaticResource GlassButton}" VerticalAlignment="Bottom" Padding="12,4" CornerRadius="6" Click="CloseReview_Click"><TextBlock Text="Done" FontSize="12.5"/></Button>
+            <TextBlock Text="Suggested" Style="{StaticResource TitleText}" FontSize="26"/>
+            <TextBlock x:Name="SuggestNote" Style="{StaticResource SecondaryText}" VerticalAlignment="Bottom" Margin="0,0,0,4"/>
           </StackPanel>
           <local:WrapPanel x:Name="Review" Spacing="26" SizeChanged="Grid_SizeChanged"/>
         </StackPanel>
-
-        <TextBlock x:Name="YourTitle" Visibility="Collapsed" Text="Your spaces" Style="{StaticResource TitleText}" FontSize="26"/>
-        <local:WrapPanel x:Name="Cards" Spacing="26" SizeChanged="Grid_SizeChanged"/>
         <TextBlock x:Name="Note" Style="{StaticResource SecondaryText}" TextWrapping="Wrap"/>
       </StackPanel>
     </ScrollViewer>
