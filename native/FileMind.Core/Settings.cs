@@ -35,6 +35,8 @@ public sealed class AppSettings
     public string IndexSpeed { get; set; } = "balanced";
     /// <summary>Sidebar sections the person folded away (by key, e.g. "spaces" or "refine:Shape").</summary>
     public List<string> Collapsed { get; set; } = [];
+    /// <summary>Order of the Library's sidebar sections (keys, top to bottom). Empty means the default order.</summary>
+    public List<string> SidebarOrder { get; set; } = [];
     /// <summary>Where the viewer shows similar files: "below" the file (default) or "side" (the Similar tab in the side panel).</summary>
     public string SimilarFiles { get; set; } = "below";
 

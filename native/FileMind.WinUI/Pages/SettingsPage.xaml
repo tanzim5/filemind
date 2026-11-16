@@ -85,6 +85,15 @@
           </StackPanel>
         </Border>
 
+        <Border x:Name="SecSidebar" Style="{StaticResource GlassCard}">
+          <StackPanel Spacing="14">
+            <StackPanel Orientation="Horizontal" Spacing="10"><local:LineIcon Kind="f-all" Size="16" Foreground="{StaticResource AccentBrush}"/><TextBlock Text="Sidebar order" Style="{StaticResource CardTitle}"/></StackPanel>
+            <TextBlock Text="Choose where each section sits in the Library's left sidebar. Use the arrows to move one up or down. You can also fold a section by clicking its name there." Style="{StaticResource Helper}" TextWrapping="Wrap"/>
+            <StackPanel x:Name="OrderList" Spacing="4"/>
+            <Button Content="Reset to the default order" Click="OrderReset_Click" Style="{StaticResource GlassButton}" HorizontalAlignment="Left"/>
+          </StackPanel>
+        </Border>
+
         <Border x:Name="SecViewer" Style="{StaticResource GlassCard}">
           <StackPanel Spacing="14">
             <StackPanel Orientation="Horizontal" Spacing="10"><local:LineIcon Kind="f-video" Size="16" Foreground="{StaticResource AccentBrush}"/><TextBlock Text="Viewer" Style="{StaticResource CardTitle}"/></StackPanel>

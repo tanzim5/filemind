@@ -43,6 +43,8 @@ def _startup():
     c.execute("DELETE FROM project_files WHERE file_id NOT IN (SELECT id FROM files)")
     c.execute("DELETE FROM proposed_names WHERE file_id NOT IN (SELECT id FROM files)")
     c.commit()
+    _drop_files(c, "root_id NOT IN (SELECT id FROM roots)")     # left behind by a folder that was forgotten long ago
+    _sweep_thumbs(c)
     indexer.invalidate()
     import threading
     threading.Thread(target=indexer.backfill_colors, daemon=True).start()     # colours for older files
@@ -157,6 +159,8 @@ def add_root(body: dict = Body(...)):
     path = os.path.abspath(os.path.expandvars(os.path.expanduser(body.get("path", ""))))
     if not os.path.isdir(path):
         raise HTTPException(400, f"Not a folder: {path}")
+    if Path(path).is_relative_to(db.DATA_DIR):
+        raise HTTPException(400, "That folder holds File Mind's own data, so it can't be added.")
     c = db.conn()
     c.execute("INSERT OR IGNORE INTO roots(path, added) VALUES(?,?)", (path, time.time()))
     c.commit()
@@ -165,13 +169,37 @@ def add_root(body: dict = Body(...)):
     return {"id": rid, "path": path}
 
 
+_FILE_LINKS = ("project_files", "proposed_names", "file_tags", "moments", "moment_runs", "space_dismissals")
+
+
+def _drop_files(c, where: str, args: tuple = ()) -> int:
+    """Takes files out of the index with everything attached to them and their cached thumbnails. Never touches the originals."""
+    thumbs = [r["thumb"] for r in c.execute(f"SELECT thumb FROM files WHERE {where}", args) if r["thumb"]]
+    n = c.execute(f"SELECT COUNT(*) AS n FROM files WHERE {where}", args).fetchone()["n"]
+    if n == 0:
+        return 0
+    for table in _FILE_LINKS:
+        c.execute(f"DELETE FROM {table} WHERE file_id IN (SELECT id FROM files WHERE {where})", args)
+    c.execute(f"DELETE FROM files WHERE {where}", args)
+    c.commit()
+    for name in thumbs:
+        (extract.THUMB_DIR / name).unlink(missing_ok=True)
+    return n
+
+
+def _sweep_thumbs(c) -> None:
+    """Deletes cached thumbnails that no file in the index uses any more."""
+    used = {r["thumb"] for r in c.execute("SELECT thumb FROM files WHERE thumb IS NOT NULL")}
+    for f in extract.THUMB_DIR.glob("*.jpg"):
+        if f.name not in used:
+            f.unlink(missing_ok=True)
+
+
 @app.delete("/api/roots/{rid}")
 def del_root(rid: int):
-    """Forget a folder from the index. Never deletes anything on disk."""
+    """Forget a folder: its files, thumbnails and tags leave the index. Never deletes anything on disk."""
     c = db.conn()
-    c.execute("DELETE FROM project_files WHERE file_id IN (SELECT id FROM files WHERE root_id=?)", (rid,))
-    c.execute("DELETE FROM proposed_names WHERE file_id IN (SELECT id FROM files WHERE root_id=?)", (rid,))
-    c.execute("DELETE FROM files WHERE root_id=?", (rid,))
+    _drop_files(c, "root_id=?", (rid,))
     c.execute("DELETE FROM roots WHERE id=?", (rid,))
     c.commit()
     indexer.invalidate()

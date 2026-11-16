@@ -72,11 +72,32 @@ public sealed partial class LibraryPage : Page
     public void ApplySections()
     {
         SectionStack.Children.Clear();
-        foreach (var sec in new UIElement[] { SecTypes, SecTags, SecSpaces, SecSources, SecDetails, SecColours, SecMoods, SecFolders })
+        var byKey = new Dictionary<string, UIElement>
         {
+            ["types"] = SecTypes, ["tags"] = SecTags, ["spaces"] = SecSpaces, ["sources"] = SecSources,
+            ["refine"] = SecDetails, ["colours"] = SecColours, ["moods"] = SecMoods, ["folders"] = SecFolders,
+        };
+        foreach (var key in OrderedSectionKeys())
+        {
+            var sec = byKey[key];
             sec.Visibility = Visibility.Visible;
             SectionStack.Children.Add(sec);
         }
+    }
+
+    /// <summary>The sidebar sections in the default order, with their names for Settings.</summary>
+    public static readonly (string Key, string Name)[] SidebarSections =
+    [
+        ("types", "File types"), ("tags", "Tags"), ("spaces", "Spaces"), ("sources", "Sources"),
+        ("refine", "Refine"), ("colours", "Colours"), ("moods", "Looks & moods"), ("folders", "Folders"),
+    ];
+
+    /// <summary>The order chosen in Settings; sections it doesn't mention keep their default place after it.</summary>
+    public static List<string> OrderedSectionKeys()
+    {
+        var all = SidebarSections.Select(s => s.Key).ToList();
+        var chosen = AppRuntime.Current.Settings.SidebarOrder.Where(all.Contains).Distinct().ToList();
+        return chosen.Concat(all.Where(k => !chosen.Contains(k))).ToList();
     }
 
     private static bool IsFolded(string key) => AppRuntime.Current.Settings.Collapsed.Contains(key);

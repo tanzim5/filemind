@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 
 from . import colors, embedder, extract, runtime
-from .db import conn
+from .db import DATA_DIR, conn
 
 SKIP_DIRS = {"node_modules", ".git", "__pycache__", "$RECYCLE.BIN", "System Volume Information",
              ".venv", "venv"}
@@ -73,7 +73,7 @@ def scan(root_id: int, root: str) -> int:
     c = conn()
     seen = set()
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and os.path.join(dirpath, d) != str(DATA_DIR)]   # never File Mind's own data
         for fn in filenames:
             low = fn.lower()
             ext = os.path.splitext(fn)[1].lower()

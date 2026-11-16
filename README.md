@@ -38,7 +38,7 @@ that runs on your own machine. Type what you remember ("red logo on black", "a m
 - **Automatic tags and colours** on every file. Filter by colour, type, source tool, date or size.
 - **Quick search from anywhere.** Press **Ctrl+Shift+Space** for a launcher with results, a preview and file details.
 - **Favourites and your own tags.** Star files, make coloured tags, and filter by them.
-- **A sidebar you can fold.** Click the heading of Tags, Spaces, Sources, Refine or any filter group to fold it away; File Mind remembers. Spaces shows five at first, with the rest one click away.
+- **A sidebar you can fold.** Click the heading of Tags, Spaces, Sources, Refine or any filter group to fold it away; File Mind remembers. Spaces shows five at first, with the rest one click away. Settings > Sidebar order lets you put the sections in any order you like.
 
 ### 🧭 Explore your library
 - **Discover** visual themes (architecture, products, illustrations…) or start from a suggested question.
@@ -47,6 +47,8 @@ that runs on your own machine. Type what you remember ("red logo on black", "a m
 
 ### 🖱️ Work with your files
 - **Right-click a tile** in the Library for a menu: open, show in folder, copy the file or its path, favourite, find similar, add to a space, delete. Over several ticked files it acts on all of them. Right-click in the viewer for copy, show in Explorer, export and previous or next file.
+- **Look closely.** Double-click a picture to zoom in on that spot (again to zoom out), drag to move around while zoomed in, and use the wheel with **Ctrl** to zoom. In full screen the wheel goes to the previous or next picture.
+- **Pick several similar files.** In the viewer's *More like this*, Ctrl-click or right-click to select several, then copy, favourite, add to a space or delete them together.
 - **Drag originals into other apps**: Photoshop, After Effects, Explorer and more. Drag a tile, or select several and drag them together.
 - **Copy a video frame** as a PNG straight from the viewer.
 - **Export.** Save part of a video or sound as its own clip (mark the start with **I** and the end with **O**), turn files into MP4, WebM, GIF, MP3, WAV, JPG, PNG or WebP, shrink them to fit under a size, pull the sound out of a video, or make a contact sheet. Exports are always new files; the original is never changed. Select several files in the Library to export them together.
@@ -70,7 +72,7 @@ Nothing to install: Python, ffmpeg and everything else are inside the download. 
 
 **Quick search anywhere:** press **Ctrl+Shift+Space** for the Raycast-style launcher. Change the shortcut in Settings.
 
-**Keyboard:** in the viewer, **Space** plays or pauses, **Left/Right** skip 5 seconds (or step between pictures), **Ctrl+Left/Right** go to the previous or next file, **Up/Down** change the volume, **M** mutes, **[** and **]** change the speed, **,** and **.** step one frame, **I** and **O** mark a clip, **E** exports, **F** fills the screen and **Esc** goes back. In the Library, right-click a tile for its menu, **Ctrl+C** copies the selected files, **Ctrl+Shift+C** copies their paths and **Enter** opens the selected file.
+**Keyboard:** in the viewer, **Space** plays or pauses, **Left/Right** skip 5 seconds (or step between pictures), **Ctrl+Left/Right** go to the previous or next file, **Up/Down** change the volume, **M** mutes, **[** and **]** change the speed, **,** and **.** step one frame, **I** and **O** mark a clip, **E** exports, **F** fills the screen (then the wheel changes pictures), double-click zooms, drag pans and **Esc** goes back. In the Library, right-click a tile for its menu, **Ctrl+C** copies the selected files, **Ctrl+Shift+C** copies their paths and **Enter** opens the selected file.
 
 ➡ Get them from the **[latest release](https://github.com/tanzim5/filemind/releases/latest)**.
 
@@ -93,7 +95,7 @@ Nothing to install: Python, ffmpeg and everything else are inside the download. 
 - Everything runs on your computer. Your files, the index and every search stay there.
 - File Mind's own network use is downloading models from Hugging Face (and PyTorch on first run). Voice search is local unless you choose Windows speech recognition in Settings: see *Search by voice* above. The speech model (~148 MB) downloads only if you choose **Transcribe audio**.
 - Indexing only reads your folders. Staged renames and moves happen when you press commit and can be undone. Copy, Move and Delete act immediately; deleted files go to the Recycle Bin.
-- The index lives in a `data` folder next to the app. Delete it to forget everything.
+- The index lives in a `data` folder next to the app. Forgetting a folder removes its files, tags and cached thumbnails from the index (never the files themselves). Delete `data` to forget everything.
 
 ## Build and run from source
 

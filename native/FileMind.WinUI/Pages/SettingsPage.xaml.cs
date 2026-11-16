@@ -22,6 +22,7 @@ public sealed partial class SettingsPage : Page
         InitializeComponent();
         Loaded += async (_, _) => await FillAsync();
         GlassSlider.Value = St.Transparency * 100;
+        BuildOrder();
         ShowHotkey(); KeepSwitch.IsOn = St.KeepRunning;
         VoiceChoice.SelectedIndex = St.VoiceEngine == "windows" ? 1 : 0;
         SimilarChoice.SelectedIndex = St.SimilarFiles == "side" ? 1 : 0;
@@ -47,6 +48,49 @@ public sealed partial class SettingsPage : Page
         St.IndexSpeed = (string)r.Tag;
         Save();
         if (AppRuntime.Current.Api is { } api) await api.SetIndexSpeedAsync(St.IndexSpeed);
+    }
+
+    // ---- the order of the Library's sidebar sections ----
+    private void BuildOrder()
+    {
+        OrderList.Children.Clear();
+        var keys = LibraryPage.OrderedSectionKeys();
+        for (var i = 0; i < keys.Count; i++)
+        {
+            var at = i;
+            var name = LibraryPage.SidebarSections.First(s => s.Key == keys[i]).Name;
+            var row = new Grid { ColumnSpacing = 6, Padding = new Thickness(12, 4, 6, 4), CornerRadius = new CornerRadius(6), Background = Ui.Brush("GlassFillBrush") };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.Children.Add(new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center });
+            Button Arrow(string icon, string tip, int by, int col)
+            {
+                var b = new Button { Style = Ui.Style("GlassButton"), Padding = new Thickness(9, 6, 9, 6), Content = new LineIcon { Kind = icon, Size = 13 }, IsEnabled = at + by >= 0 && at + by < keys.Count };
+                ToolTipService.SetToolTip(b, tip);
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(b, tip + " " + name);
+                b.Click += (_, _) => MoveSection(at, at + by);
+                Grid.SetColumn(b, col); row.Children.Add(b);
+                return b;
+            }
+            Arrow("chevup", "Move up", -1, 1);
+            Arrow("chevdown", "Move down", 1, 2);
+            OrderList.Children.Add(row);
+        }
+    }
+
+    private void MoveSection(int from, int to)
+    {
+        var keys = LibraryPage.OrderedSectionKeys();
+        var k = keys[from]; keys.RemoveAt(from); keys.Insert(to, k);
+        St.SidebarOrder = keys;
+        Save(); BuildOrder(); LibraryPage.Current?.ApplySections();
+    }
+
+    private void OrderReset_Click(object sender, RoutedEventArgs e)
+    {
+        St.SidebarOrder = [];
+        Save(); BuildOrder(); LibraryPage.Current?.ApplySections();
     }
 
     private void Voice_Changed(object sender, SelectionChangedEventArgs e)
@@ -83,7 +127,7 @@ public sealed partial class SettingsPage : Page
 
     private void BuildSections()
     {
-        foreach (var (name, card) in new (string, FrameworkElement)[] { ("Appearance", SecAppearance), ("Library", SecLibrary), ("Quick search", SecQuick), ("Viewer", SecViewer), ("Engine", SecEngine), ("Folders", SecFolders), ("About", SecAbout) })
+        foreach (var (name, card) in new (string, FrameworkElement)[] { ("Appearance", SecAppearance), ("Library", SecLibrary), ("Quick search", SecQuick), ("Sidebar", SecSidebar), ("Viewer", SecViewer), ("Engine", SecEngine), ("Folders", SecFolders), ("About", SecAbout) })
         {
             var chip = new ToggleButton { Style = Ui.Style("GlassChip"), Padding = new Thickness(12, 5, 12, 5), CornerRadius = new CornerRadius(6), Content = new TextBlock { Text = name, FontSize = 12.5 } };
             var c = card;
