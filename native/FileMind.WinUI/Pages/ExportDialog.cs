@@ -21,22 +21,16 @@ internal static class ExportDialog
         var timed = single is "video" or "audio";
         var visual = kinds.All(k => k is "video" or "image");
         string? folder = null;
+        var ranged = start is not null || end is not null;
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
 
-        ComboBox Combo(string header, IEnumerable<(string Key, string Label)> options)
-        {
-            var c = new ComboBox { Header = header, HorizontalAlignment = HorizontalAlignment.Stretch };
-            foreach (var (key, label) in options) c.Items.Add(new ComboBoxItem { Content = label, Tag = key });
-            c.SelectedIndex = 0;
-            return c;
-        }
-        static string Picked(ComboBox c) => (string)((ComboBoxItem)c.SelectedItem).Tag;
-
-        var format = Combo("Format", ExportSpec.FormatsFor(kinds));
-        var size = Combo("Size", [("", "Original size"), ("2160", "4K (2160p)"), ("1080", "1080p"), ("720", "720p"), ("480", "480p")]);
-        var limit = Combo("Fit under", [("", "No limit"), ("10", "10 MB"), ("25", "25 MB"), ("50", "50 MB"), ("100", "100 MB"), ("500", "500 MB")]);
-        var rotate = Combo("Rotate", [("0", "No"), ("90", "90° right"), ("180", "180°"), ("270", "90° left")]);
-        var speed = Combo("Speed", [("1", "Normal"), ("0.5", "Half speed"), ("1.5", "1.5×"), ("2", "2×"), ("4", "4×")]);
-        var copy = new CheckBox { Content = "Fast cut: no quality loss, may start a moment early" };
+        var format = new ChipGroup(ExportSpec.FormatsFor(kinds));
+        var size = new ChipGroup([("", "Original"), ("1080", "1080p"), ("720", "720p"), ("480", "480p")]);
+        var limit = new ChipGroup([("", "No limit"), ("8", "8 MB"), ("25", "25 MB"), ("50", "50 MB"), ("custom", "Custom")]);
+        var custom = new TextBox { PlaceholderText = "MB", Width = 90, Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Center };
+        var rotate = new ChipGroup([("0", "None"), ("90", "90° right"), ("180", "180°"), ("270", "90° left")]);
+        var speed = new ChipGroup([("0.5", "0.5×"), ("1", "1×"), ("1.5", "1.5×"), ("2", "2×"), ("4", "4×")], "1");
+        var copy = new ToggleSwitch { OnContent = "", OffContent = "", MinWidth = 0, VerticalAlignment = VerticalAlignment.Center };
         var vertical = new CheckBox { Content = "Crop to vertical (9:16)" };
         var normalize = new CheckBox { Content = "Even out the loudness" };
         var silence = new CheckBox { Content = "Trim silence from both ends" };
@@ -48,101 +42,134 @@ internal static class ExportDialog
             var picked = await PickFolderAsync();
             if (picked is null) return;
             folder = picked; where.Text = picked;
+            ToolTipService.SetToolTip(where, picked);
         };
 
-        var body = new StackPanel { Spacing = 12, MinWidth = 380 };
-        body.Children.Add(new TextBlock
+        StackPanel Section(string label, UIElement content, out StackPanel box)
         {
-            Text = items.Count == 1 ? items[0].Name : $"{items.Count:N0} files",
-            Style = Ui.Style("SecondaryText"), TextTrimming = TextTrimming.CharacterEllipsis,
-        });
-        if (start is not null || end is not null)
-            body.Children.Add(new TextBlock { Text = $"Only the part from {Clock(start ?? 0)} to {(end is { } e ? Clock(e) : "the end")}", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
-        body.Children.Add(format);
-        var pair = new Grid { ColumnSpacing = 10 };
-        pair.ColumnDefinitions.Add(new ColumnDefinition()); pair.ColumnDefinitions.Add(new ColumnDefinition());
-        Grid.SetColumn(limit, 1); pair.Children.Add(size); pair.Children.Add(limit);
-        if (visual) body.Children.Add(pair);
-        if (start is not null || end is not null) body.Children.Add(copy);
-
-        var more = new StackPanel { Spacing = 8 };
-        if (visual)
-        {
-            var turn = new Grid { ColumnSpacing = 10 };
-            turn.ColumnDefinitions.Add(new ColumnDefinition()); turn.ColumnDefinitions.Add(new ColumnDefinition());
-            turn.Children.Add(rotate);
-            if (single == "video") { Grid.SetColumn(speed, 1); turn.Children.Add(speed); }
-            more.Children.Add(turn);
-            more.Children.Add(vertical);
+            box = new StackPanel { Spacing = 7 };
+            box.Children.Add(new TextBlock { Text = label, Style = Ui.Style("SectionLabel") });
+            box.Children.Add(content);
+            return box;
         }
-        else if (timed) more.Children.Add(speed);
-        if (timed) { more.Children.Add(normalize); more.Children.Add(silence); }
-        if (single == "video") more.Children.Add(mute);
-        if (more.Children.Count > 0)
-            body.Children.Add(new Expander { Header = "More options", Content = more, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch });
 
+        var body = new StackPanel { Spacing = 16 };
+        var head = new StackPanel { Spacing = 2 };
+        head.Children.Add(new TextBlock
+        {
+            Text = items.Count == 1 ? items[0].Name : $"{items.Count:N0} files", FontSize = 13.5, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Ui.Brush("GlassTextPrimaryBrush"),
+        });
+        if (ranged)
+            head.Children.Add(new TextBlock { Text = $"Only the part from {Clock(start ?? 0)} to {(end is { } e ? Clock(e) : "the end")}", Style = Ui.Style("SecondaryText"), FontSize = 12.5 });
+        body.Children.Add(head);
+
+        Section("Format", format.Panel, out var formatBox);
+        body.Children.Add(formatBox);
+        Section("Size", size.Panel, out var sizeBox);
+        if (visual) body.Children.Add(sizeBox);
+        var limitWrap = new Grid { ColumnSpacing = 8 };
+        limitWrap.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); limitWrap.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        limitWrap.Children.Add(limit.Panel); Grid.SetColumn(custom, 1); limitWrap.Children.Add(custom);
+        Section("Fit under", limitWrap, out var limitBox);
+        if (visual) body.Children.Add(limitBox);
+        limit.Changed += () => custom.Visibility = limit.Value == "custom" ? Visibility.Visible : Visibility.Collapsed;
+
+        var fast = new Grid { ColumnSpacing = 12 };
+        fast.ColumnDefinitions.Add(new ColumnDefinition()); fast.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        fast.Children.Add(new TextBlock { Text = "Fast cut (no quality loss)", FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Brush("GlassTextPrimaryBrush") });
+        copy.HorizontalAlignment = HorizontalAlignment.Right; copy.Margin = new Thickness(0);
+        Grid.SetColumn(copy, 1); fast.Children.Add(copy);
+        if (ranged) body.Children.Add(fast);
+
+        var more = new StackPanel { Spacing = 14, Visibility = Visibility.Collapsed };
+        if (visual) { Section("Rotate", rotate.Panel, out var rb); more.Children.Add(rb); }
+        if (timed) { Section("Speed", speed.Panel, out var sb); more.Children.Add(sb); }
+        var checks = new StackPanel { Spacing = 2 };
+        if (visual) checks.Children.Add(vertical);
+        if (timed) { checks.Children.Add(normalize); checks.Children.Add(silence); }
+        if (single == "video") checks.Children.Add(mute);
+        if (checks.Children.Count > 0) more.Children.Add(checks);
+        if (more.Children.Count > 0)
+        {
+            var chev = new LineIcon { Kind = "chevdown", Size = 12 };
+            var toggle = new Button { Style = Ui.Style("GlassButton"), Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent), BorderThickness = new Thickness(0), Padding = new Thickness(0, 4, 8, 4), HorizontalAlignment = HorizontalAlignment.Left };
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7 };
+            row.Children.Add(new TextBlock { Text = "More options", FontSize = 12.5, Foreground = Ui.Brush("GlassTextSecondaryBrush") }); row.Children.Add(chev);
+            toggle.Content = row;
+            toggle.Click += (_, _) =>
+            {
+                var open = more.Visibility == Visibility.Collapsed;
+                more.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+                chev.Kind = open ? "chevup" : "chevdown";
+            };
+            body.Children.Add(toggle); body.Children.Add(more);
+        }
+
+        body.Children.Add(new Border { Height = 1, Background = Ui.Brush("DividerBrush") });
         var dest = new Grid { ColumnSpacing = 10 };
         dest.ColumnDefinitions.Add(new ColumnDefinition()); dest.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(choose, 1); dest.Children.Add(where); dest.Children.Add(choose);
         body.Children.Add(dest);
-        var problem = new TextBlock { Foreground = Ui.Hex("#FF7A7A"), TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
-        body.Children.Add(problem);
 
-        // Options that cannot apply to the chosen format are switched off instead of being silently ignored.
+        // Options that cannot apply to the chosen format are hidden or switched off instead of being silently ignored.
+        bool rotOk = false, speedOk = true;
         void Sync()
         {
-            var f = Picked(format);
+            var f = format.Value;
             var soundOnly = f is "mp3" or "wav" or "m4a" or "flac";
             var sheet = f == "sheet";
             var moving = single == "video" && !soundOnly && !sheet && f != "gif";
-            size.IsEnabled = !soundOnly && !sheet;
-            limit.IsEnabled = single == "image" ? f is "jpg" or "same" : moving;
-            rotate.IsEnabled = vertical.IsEnabled = !soundOnly && !sheet;
-            speed.IsEnabled = !sheet;
+            var sizeOk = !soundOnly && !sheet;
+            var limitOk = single == "image" ? f is "jpg" or "same" : moving;
+            sizeBox.Visibility = visual && sizeOk ? Visibility.Visible : Visibility.Collapsed;
+            limitBox.Visibility = visual && limitOk ? Visibility.Visible : Visibility.Collapsed;
+            size.IsEnabled = sizeOk; limit.IsEnabled = limitOk;
+            rotate.IsEnabled = vertical.IsEnabled = sizeOk;
+            speed.IsEnabled = !sheet; rotOk = visual && sizeOk; speedOk = timed && !sheet;
             mute.IsEnabled = moving;
             normalize.IsEnabled = silence.IsEnabled = timed && !sheet && f != "gif";
             copy.IsEnabled = f == "same";
-            if (!copy.IsEnabled) copy.IsChecked = false;
+            if (!copy.IsEnabled) copy.IsOn = false;
         }
-        format.SelectionChanged += (_, _) => Sync();
+        format.Changed += Sync;
         Sync();
 
-        var dialog = new ContentDialog
-        {
-            Title = start is not null || end is not null ? "Export clip" : "Export", Content = body, PrimaryButtonText = "Export",
-            CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Primary, XamlRoot = root, RequestedTheme = ThemeEngine.Element(),
-        };
         var queued = 0;
-        dialog.PrimaryButtonClick += async (_, args) =>
+        var done = await Dialogs.ShowAsync(root, ranged ? "Export clip" : "Export", body, "Export", "Cancel", async () =>
         {
             // The dialog stays open if the engine refuses, so the reason can be read and the choice changed.
-            var wait = args.GetDeferral();
             try
             {
+                double? mb = null;
+                if (limitBox.Visibility == Visibility.Visible)
+                {
+                    if (limit.Value == "custom")
+                    {
+                        if (!double.TryParse(custom.Text.Trim().Replace(',', '.'), System.Globalization.NumberStyles.Float, inv, out var m) || m <= 0) return "Type a size in MB, or pick another limit.";
+                        mb = m;
+                    }
+                    else if (double.TryParse(limit.Value, System.Globalization.NumberStyles.Float, inv, out var m2)) mb = m2;
+                }
                 var spec = new ExportSpec
                 {
-                    Format = Picked(format), Start = start, End = end,
-                    Height = size.IsEnabled && int.TryParse(Picked(size), out var h) ? h : null,
-                    TargetMb = limit.IsEnabled && double.TryParse(Picked(limit), System.Globalization.CultureInfo.InvariantCulture, out var mb) ? mb : null,
-                    Rotate = rotate.IsEnabled ? int.Parse(Picked(rotate)) : 0,
-                    Speed = speed.IsEnabled ? double.Parse(Picked(speed), System.Globalization.CultureInfo.InvariantCulture) : 1,
+                    Format = format.Value, Start = start, End = end,
+                    Height = sizeBox.Visibility == Visibility.Visible && int.TryParse(size.Value, out var h) ? h : null,
+                    TargetMb = mb,
+                    Rotate = rotOk && int.TryParse(rotate.Value, out var rot) ? rot : 0,
+                    Speed = speedOk && double.TryParse(speed.Value, System.Globalization.NumberStyles.Float, inv, out var sp) ? sp : 1,
                     Vertical = vertical.IsEnabled && vertical.IsChecked == true,
                     Normalize = normalize.IsEnabled && normalize.IsChecked == true,
                     TrimSilence = silence.IsEnabled && silence.IsChecked == true,
                     Mute = mute.IsEnabled && mute.IsChecked == true,
-                    Copy = copy.IsChecked == true,
+                    Copy = copy.IsOn,
                 };
                 queued = (await AppRuntime.Current.Api!.StartExportAsync(items.Select(i => i.Id), spec, folder)).Count;
+                return null;
             }
-            catch (Exception ex)
-            {
-                args.Cancel = true;
-                problem.Text = ex.Message; problem.Visibility = Visibility.Visible;
-            }
-            finally { wait.Complete(); }
-        };
-        await dialog.ShowAsync();
-        if (queued > 0) App.Window?.WatchExports();
+            catch (Exception ex) { return ex.Message; }
+        }, width: 480);
+        if (done && queued > 0) App.Window?.WatchExports();
         return queued;
     }
 

@@ -207,6 +207,7 @@ public sealed partial class ViewerPage : Page
     private double? _in, _out;
 
     /// <summary>Screenshot helper: marks a short range on the playing clip.</summary>
+    public void DevExport() { DevTrim(); _ = ExportAsync(); }
     public void DevTrim() { _in = 1; _out = 2.5; PaintTrim(); }
 
     private double Position() { try { return _player?.PlaybackSession.Position.TotalSeconds ?? 0; } catch (Exception) { return 0; } }

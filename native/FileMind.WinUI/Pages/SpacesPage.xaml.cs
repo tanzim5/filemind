@@ -132,11 +132,13 @@ public sealed partial class SpacesPage : Page
         return card;
     }
 
+    public void DevNewSpace() => NewSpace_Click(this, new RoutedEventArgs());
+
     private async void NewSpace_Click(object sender, RoutedEventArgs e)
     {
         var box = new TextBox { PlaceholderText = "Name this space" };
-        var dlg = new ContentDialog { Title = "New space", Content = box, PrimaryButtonText = "Create", CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot, RequestedTheme = ThemeEngine.Element() };
-        if (await dlg.ShowAsync() != ContentDialogResult.Primary || string.IsNullOrWhiteSpace(box.Text)) return;
+        box.Loaded += (_, _) => box.Focus(FocusState.Programmatic);
+        if (!await Dialogs.ShowAsync(XamlRoot, "New space", box, "Create", width: 400) || string.IsNullOrWhiteSpace(box.Text)) return;
         try { await Api.CreateProjectAsync(box.Text.Trim(), []); await LoadAsync(); }
         catch (Exception ex) { Note.Text = ex.Message; }
     }

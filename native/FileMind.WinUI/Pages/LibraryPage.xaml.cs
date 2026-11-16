@@ -1136,19 +1136,13 @@ public sealed partial class LibraryPage : Page
         try { groups = await Api.GetNameGroupsAsync(); }
         catch (Exception ex) { ShowToast(ex.Message); return; }
         var list = new StackPanel { Spacing = 8 };
-        var dialog = new ContentDialog
-        { RequestedTheme = ThemeEngine.Element(),
-            Title = "Group by file name",
-            XamlRoot = XamlRoot,
-            CloseButtonText = "Close",
-            Content = new ScrollViewer { MaxHeight = 460, Content = list, Padding = new Thickness(0, 0, 14, 0) },
-        };
+        Action? closeDialog = null;
         if (groups.Count == 0) list.Children.Add(new TextBlock { Text = "No shared name patterns found. Files from known tools are already under Sources.", TextWrapping = TextWrapping.Wrap });
         foreach (var g in groups)
         {
             var pattern = g.Pattern;
             var view = new Button { Content = "View", Style = Ui.Style("GlassAccentButton"), Padding = new Thickness(14, 5, 14, 5) };
-            view.Click += async (_, _) => { dialog.Hide(); await GoAsync(() => { _q.Pattern = pattern; _title = "Names like “" + pattern + "”"; }); };
+            view.Click += async (_, _) => { closeDialog?.Invoke(); await GoAsync(() => { _q.Pattern = pattern; _title = "Names like “" + pattern + "”"; }); };
             var line = new Grid { ColumnSpacing = 12 };
             line.ColumnDefinitions.Add(new ColumnDefinition());
             line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -1159,7 +1153,7 @@ public sealed partial class LibraryPage : Page
             Grid.SetColumn(view, 1); line.Children.Add(view);
             list.Children.Add(line);
         }
-        await dialog.ShowAsync();
+        await Dialogs.ShowAsync(XamlRoot, "Group by file name", new ScrollViewer { MaxHeight = 460, Content = list, Padding = new Thickness(0, 0, 14, 0) }, null, "Close", width: 520, gotClose: h => closeDialog = h);
     }
 
     // ------------------------------------------------------------------ refine
@@ -1686,10 +1680,8 @@ public sealed partial class LibraryPage : Page
         if (_focused is null) return;
         var id = _focused.Item.Id;
         var body = new TextBlock { Text = "Reading what is said…", TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
-        var dialog = new ContentDialog { RequestedTheme = ThemeEngine.Element(), Title = "What is said", XamlRoot = XamlRoot, CloseButtonText = "Close", Content = new ScrollViewer { MaxHeight = 420, Content = body } };
         var open = true;
-        dialog.Closed += (_, _) => open = false;
-        _ = dialog.ShowAsync();
+        _ = Dialogs.ShowAsync(XamlRoot, "What is said", new ScrollViewer { MaxHeight = 420, Content = body }, null, "Close", width: 520).ContinueWith(_ => open = false);
         try
         {
             var state = await Api.GetTranscriptAsync(id);
@@ -1707,15 +1699,14 @@ public sealed partial class LibraryPage : Page
     // ------------------------------------------------------------------ actions on the selection
     private async Task<bool> AskAsync(string title, string body, string primary)
     {
-        var d = new ContentDialog { RequestedTheme = ThemeEngine.Element(), Title = title, Content = new TextBlock { Text = body, TextWrapping = TextWrapping.Wrap }, PrimaryButtonText = primary, CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Close, XamlRoot = XamlRoot };
-        return await d.ShowAsync() == ContentDialogResult.Primary;
+        return await Dialogs.ShowAsync(XamlRoot, title, Dialogs.Text(body), primary, "Cancel", enterConfirms: false);
     }
 
     private async Task<string?> PromptAsync(string title, string placeholder, string initial = "")
     {
-        var box = new TextBox { PlaceholderText = placeholder, Text = initial, MinWidth = 320 };
-        var d = new ContentDialog { RequestedTheme = ThemeEngine.Element(), Title = title, Content = box, PrimaryButtonText = "Save", CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Primary, XamlRoot = XamlRoot };
-        return await d.ShowAsync() == ContentDialogResult.Primary && box.Text.Trim().Length > 0 ? box.Text.Trim() : null;
+        var box = new TextBox { PlaceholderText = placeholder, Text = initial };
+        box.Loaded += (_, _) => { box.Focus(FocusState.Programmatic); box.SelectAll(); };
+        return await Dialogs.ShowAsync(XamlRoot, title, box, "Save", width: 400) && box.Text.Trim().Length > 0 ? box.Text.Trim() : null;
     }
 
     private async Task<string?> PickFolderAsync()

@@ -223,9 +223,7 @@ public sealed partial class DuplicatesPage : Page
 
     private async Task<bool> Dialog(string title, string body, string? primary)
     {
-        var dlg = new ContentDialog { Title = title, Content = body, CloseButtonText = primary is null ? "OK" : "Cancel", XamlRoot = XamlRoot, RequestedTheme = ThemeEngine.Element() };
-        if (primary is not null) { dlg.PrimaryButtonText = primary; dlg.DefaultButton = ContentDialogButton.Close; }
-        return await dlg.ShowAsync() == ContentDialogResult.Primary;
+        return await Dialogs.ShowAsync(XamlRoot, title, Dialogs.Text(body), primary, primary is null ? "OK" : "Cancel", enterConfirms: false);
     }
 
     private static string Size(long b) => new FileItem { Size = b }.SizeText;

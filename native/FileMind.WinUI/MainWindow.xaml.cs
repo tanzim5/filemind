@@ -540,6 +540,19 @@ public sealed partial class MainWindow : Window
                 t.Tick += (_, _) => { t.Stop(); if (SidebarHost.Content is Border { Child: ScrollViewer sv }) sv.ChangeView(null, 500, null, true); };
                 t.Start();
             }
+            else if (!_devPageDone && dev is "new-space" or "quick" or "quick-empty")
+            {
+                // Screenshot helper: opens the New space dialog, or the quick search window.
+                _devPageDone = true;
+                var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
+                t.Tick += (_, _) =>
+                {
+                    t.Stop();
+                    if (dev == "new-space") { ContentFrame.Navigate(typeof(Pages.SpacesPage)); var t2 = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) }; t2.Tick += (_, _) => { t2.Stop(); (ContentFrame.Content as Pages.SpacesPage)?.DevNewSpace(); }; t2.Start(); }
+                    else { if (dev == "quick") App.Launcher?.DevQuery("drum"); App.Launcher?.Toggle(); }
+                };
+                t.Start();
+            }
             else if (!_devPageDone && dev == "library-ref")
             {
                 // Screenshot helper: shows a reference-picture search with words added to it.
@@ -567,14 +580,14 @@ public sealed partial class MainWindow : Window
                 };
                 t.Start();
             }
-            else if (!_devPageDone && dev is "viewer" or "viewer-video" or "viewer-trim")
+            else if (!_devPageDone && dev is "viewer" or "viewer-video" or "viewer-trim" or "viewer-export")
             {
                 _devPageDone = true;
                 _ = OpenDevViewerAsync(dev != "viewer");
-                if (dev == "viewer-trim")
+                if (dev is "viewer-trim" or "viewer-export")
                 {
                     var tt = new DispatcherTimer { Interval = TimeSpan.FromSeconds(9) };
-                    tt.Tick += (_, _) => { tt.Stop(); (ContentFrame.Content as Pages.ViewerPage)?.DevTrim(); };
+                    tt.Tick += (_, _) => { tt.Stop(); if (dev == "viewer-export") (ContentFrame.Content as Pages.ViewerPage)?.DevExport(); else (ContentFrame.Content as Pages.ViewerPage)?.DevTrim(); };
                     tt.Start();
                 }
             }
