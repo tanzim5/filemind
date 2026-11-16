@@ -4,55 +4,90 @@
         xmlns:p="using:FileMind.Pages"
         Title="File Mind">
   <Grid x:Name="Root" RequestedTheme="Dark">
-    <Grid.RowDefinitions>
-      <RowDefinition x:Name="TitleRow" Height="38"/>
-      <RowDefinition Height="*"/>
-    </Grid.RowDefinitions>
+    <!-- The strip you drag the window by. It has no fill, so it never takes a click from the controls drawn over it;
+         MainWindow.UpdateTitleRegions tells Windows which parts of it are buttons and boxes. -->
+    <Grid x:Name="TitleBar" Height="54" VerticalAlignment="Top"/>
 
-    <Grid x:Name="TitleBar" Padding="20,0,0,0">
-      <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-        <Image Source="ms-appx:///Assets/icon.png" Width="20" Height="20"/>
-        <TextBlock Text="File Mind" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center"/>
-        <ToggleButton x:Name="SettingsRail" Style="{StaticResource GlassChip}" Click="OpenSettings_Click" AutomationProperties.Name="Settings" ToolTipService.ToolTip="Settings (Ctrl+,)"
-                      Padding="7" MinHeight="0" Margin="6,0,0,0" CornerRadius="6" Background="Transparent" VerticalAlignment="Center">
-          <p:LineIcon Kind="settings" Size="15"/>
-        </ToggleButton>
-      </StackPanel>
-    </Grid>
-
-    <Grid x:Name="Shell" Grid.Row="1" Visibility="Collapsed">
+    <Grid x:Name="Shell" Visibility="Collapsed">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition x:Name="RailColumn" Width="284"/>
+        <ColumnDefinition x:Name="RailColumn" Width="268"/>
         <ColumnDefinition Width="*"/>
       </Grid.ColumnDefinitions>
 
-      <!-- The sidebar sits on the window itself: brand, quick search, destinations, the page's filters, settings. -->
-      <Grid x:Name="RailCard" Padding="12,6,10,0">
+      <!-- The page fills the window to its right and bottom edges: no card, no border, no gap. -->
+      <Grid x:Name="PanelCard" Grid.Column="1" Background="#E617171B">
+        <Rectangle IsHitTestVisible="False" Fill="{StaticResource AuraBrush}"/>
+        <Frame x:Name="ContentFrame"/>
+        <!-- The permanent top bar: back and forward, the page title, the page's own actions, and room for the window buttons.
+             It is frosted, so a page scrolling beneath it stays readable. -->
+        <Border x:Name="TopBar" Height="54" VerticalAlignment="Top" Background="{StaticResource ToolbarGlassBrush}">
+          <Grid Padding="14,5,0,0" ColumnSpacing="10">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="136"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel x:Name="NavButtons" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <Button x:Name="BackBtn" Style="{StaticResource BoxButton}" Padding="0" IsEnabled="False" Click="NavBack_Click" AutomationProperties.Name="Back" ToolTipService.ToolTip="Back">
+                <p:LineIcon Kind="back" Size="15"/></Button>
+              <Button x:Name="FwdBtn" Style="{StaticResource BoxButton}" Padding="0" IsEnabled="False" Click="NavFwd_Click" AutomationProperties.Name="Forward" ToolTipService.ToolTip="Forward">
+                <p:LineIcon Kind="fwd" Size="15"/></Button>
+            </StackPanel>
+            <!-- A page may put its own centrepiece here (the Library's search pill); it then takes the title's place. -->
+            <ContentControl x:Name="CenterHost" Grid.Column="1" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center" IsTabStop="False" Visibility="Collapsed"/>
+            <StackPanel x:Name="TitleStack" Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+              <TextBlock x:Name="TitleText" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="560" VerticalAlignment="Center"/>
+              <TextBlock x:Name="TitleNote" Style="{StaticResource SecondaryText}" FontSize="12" VerticalAlignment="Center"/>
+            </StackPanel>
+            <ContentControl x:Name="ActionsHost" Grid.Column="2" Margin="-10,0,0,0" VerticalAlignment="Center" HorizontalContentAlignment="Right" IsTabStop="False"/>
+          </Grid>
+        </Border>
+      </Grid>
+
+      <!-- The sidebar is the window's own frosted glass, top to bottom: destinations, filters, settings. -->
+      <Grid x:Name="RailCard" Padding="10,18,10,8">
         <Grid.RowDefinitions>
-          <RowDefinition Height="0"/>
-          <RowDefinition Height="Auto"/>
           <RowDefinition Height="Auto"/>
           <RowDefinition Height="*"/>
           <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <StackPanel x:Name="NavStack" Grid.Row="2" Spacing="2" Margin="0,4,0,16"/>
-        <ContentControl x:Name="SidebarHost" Grid.Row="3" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
-
+        <StackPanel x:Name="NavStack" Spacing="2" Margin="0,0,0,18"/>
+        <!-- Clipped, so the scrolling filters never paint over the fixed destinations above. -->
+        <Grid x:Name="SidebarClip" Grid.Row="1" SizeChanged="SidebarClip_SizeChanged">
+          <ContentControl x:Name="SidebarHost" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
+          <Border Height="1" VerticalAlignment="Top" Margin="4,0" Background="{StaticResource DividerBrush}" IsHitTestVisible="False"/>
+        </Grid>
+        <ToggleButton x:Name="SettingsRail" Grid.Row="2" Style="{StaticResource RailItem}" MinHeight="30" Margin="0,6,0,0" Click="OpenSettings_Click"
+                      AutomationProperties.Name="Settings" ToolTipService.ToolTip="Settings (Ctrl+,)">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <p:LineIcon Kind="f-settings" Size="16" Opacity="0.75" VerticalAlignment="Center"/>
+            <TextBlock Text="Settings" FontSize="13" VerticalAlignment="Center"/>
+          </StackPanel>
+        </ToggleButton>
       </Grid>
 
-      <!-- The page sits on one calm panel; a soft glow in the accent colour gives it depth. -->
-      <Border x:Name="PanelCard" Grid.Column="1" Margin="0,0,8,8" CornerRadius="8" Background="#E617171B" BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1">
-        <Grid>
-          <Rectangle IsHitTestVisible="False" Fill="{StaticResource AuraBrush}"/>
-          <Frame x:Name="ContentFrame"/>
-        </Grid>
+      <!-- Exports in progress and their result: a small frosted card in the corner, out of the way of the tiles. -->
+      <Border x:Name="ExportTray" Grid.Column="1" Visibility="Collapsed" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,18,18" Width="330"
+              Padding="14,12" CornerRadius="8" Background="{StaticResource ToolbarGlassBrush}" BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1">
+        <StackPanel Spacing="8">
+          <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock x:Name="ExportTitle" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            <Button x:Name="ExportClose" Grid.Column="1" Style="{StaticResource GlassButton}" Padding="7,6" CornerRadius="5" Click="ExportClose_Click" AutomationProperties.Name="Dismiss">
+              <p:LineIcon Kind="close" Size="11"/></Button>
+          </Grid>
+          <TextBlock x:Name="ExportNote" Style="{StaticResource SecondaryText}" FontSize="12" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis"/>
+          <ProgressBar x:Name="ExportBar" Minimum="0" Maximum="1"/>
+          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+            <Button x:Name="ExportCancel" Style="{StaticResource GlassButton}" Content="Cancel" Padding="12,6" Click="ExportCancel_Click"/>
+            <Button x:Name="ExportShow" Style="{StaticResource GlassAccentButton}" Content="Show in folder" Padding="12,6" Click="ExportShow_Click"/>
+          </StackPanel>
+        </StackPanel>
       </Border>
 
-      <!-- Settings slide in from the right -->
+      <!-- Settings slide in from the right, below the window buttons -->
       <Grid x:Name="SettingsScrim" Grid.ColumnSpan="2" Visibility="Collapsed" Background="{StaticResource ScrimBrush}" Tapped="SettingsScrim_Tapped">
-        <Border x:Name="SettingsPanel" HorizontalAlignment="Right" Width="520" Margin="0,0,8,8" CornerRadius="8" Background="{StaticResource OverlayBrush}"
-                BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1" Tapped="SettingsPanel_Tapped">
+        <Border x:Name="SettingsPanel" HorizontalAlignment="Right" Width="520" Margin="0,54,0,0" CornerRadius="8,0,0,0" Background="{StaticResource OverlayBrush}"
+                BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1,1,0,0" Tapped="SettingsPanel_Tapped">
           <Grid>
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
             <Grid Margin="24,18,14,6">
@@ -67,6 +102,6 @@
     </Grid>
 
     <!-- First run, engine start-up and model download happen here, over the shell. -->
-    <Frame x:Name="SetupFrame" Grid.Row="1" Visibility="Collapsed" Background="{StaticResource SurfaceBrush}"/>
+    <Frame x:Name="SetupFrame" Visibility="Collapsed" Background="{StaticResource SurfaceBrush}"/>
   </Grid>
 </Window>

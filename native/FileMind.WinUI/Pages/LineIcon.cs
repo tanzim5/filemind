@@ -17,9 +17,30 @@ public sealed class LineIcon : UserControl
     private static string Box(double x, double y, double w, double h, double r) =>
         $"M{N(x + r)},{N(y)} H{N(x + w - r)} A{N(r)},{N(r)} 0 0 1 {N(x + w)},{N(y + r)} V{N(y + h - r)} A{N(r)},{N(r)} 0 0 1 {N(x + w - r)},{N(y + h)} H{N(x + r)} A{N(r)},{N(r)} 0 0 1 {N(x)},{N(y + h - r)} V{N(y + r)} A{N(r)},{N(r)} 0 0 1 {N(x + r)},{N(y)} Z";
 
+    // Solid glyphs from Phosphor Icons (MIT), drawn on a 256-unit grid and filled instead of stroked. Their names
+    // start with "f-". They are used where an icon carries colour: the sidebar destinations and the type tiles.
+    private static readonly Dictionary<string, string> Filled = new()
+    {
+        ["f-library"] = "M216,40H72A16,16,0,0,0,56,56V72H40A16,16,0,0,0,24,88V200a16,16,0,0,0,16,16H184a16,16,0,0,0,16-16V184h16a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40ZM172,72a12,12,0,1,1-12,12A12,12,0,0,1,172,72Zm12,128H40V88H56v80a16,16,0,0,0,16,16H184Zm32-32H72V120.69l30.34-30.35a8,8,0,0,1,11.32,0L163.31,140,189,114.34a8,8,0,0,1,11.31,0L216,130.07V168Z",
+        ["f-discover"] = "M208,144a15.78,15.78,0,0,1-10.42,14.94L146,178l-19,51.62a15.92,15.92,0,0,1-29.88,0L78,178l-51.62-19a15.92,15.92,0,0,1,0-29.88L78,110l19-51.62a15.92,15.92,0,0,1,29.88,0L146,110l51.62,19A15.78,15.78,0,0,1,208,144ZM152,48h16V64a8,8,0,0,0,16,0V48h16a8,8,0,0,0,0-16H184V16a8,8,0,0,0-16,0V32H152a8,8,0,0,0,0,16Zm88,32h-8V72a8,8,0,0,0-16,0v8h-8a8,8,0,0,0,0,16h8v8a8,8,0,0,0,16,0V96h8a8,8,0,0,0,0-16Z",
+        ["f-spaces"] = "M216,72H131.31L104,44.69A15.88,15.88,0,0,0,92.69,40H40A16,16,0,0,0,24,56V200.62A15.41,15.41,0,0,0,39.39,216h177.5A15.13,15.13,0,0,0,232,200.89V88A16,16,0,0,0,216,72ZM40,56H92.69l16,16H40Z",
+        ["f-duplicates"] = "M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32Zm-8,128H176V88a8,8,0,0,0-8-8H96V48H208Z",
+        ["f-settings"] = "M216,130.16q.06-2.16,0-4.32l14.92-18.64a8,8,0,0,0,1.48-7.06,107.6,107.6,0,0,0-10.88-26.25,8,8,0,0,0-6-3.93l-23.72-2.64q-1.48-1.56-3-3L186,40.54a8,8,0,0,0-3.94-6,107.29,107.29,0,0,0-26.25-10.86,8,8,0,0,0-7.06,1.48L130.16,40Q128,40,125.84,40L107.2,25.11a8,8,0,0,0-7.06-1.48A107.6,107.6,0,0,0,73.89,34.51a8,8,0,0,0-3.93,6L67.32,64.27q-1.56,1.49-3,3L40.54,70a8,8,0,0,0-6,3.94,107.71,107.71,0,0,0-10.87,26.25,8,8,0,0,0,1.49,7.06L40,125.84Q40,128,40,130.16L25.11,148.8a8,8,0,0,0-1.48,7.06,107.6,107.6,0,0,0,10.88,26.25,8,8,0,0,0,6,3.93l23.72,2.64q1.49,1.56,3,3L70,215.46a8,8,0,0,0,3.94,6,107.71,107.71,0,0,0,26.25,10.87,8,8,0,0,0,7.06-1.49L125.84,216q2.16.06,4.32,0l18.64,14.92a8,8,0,0,0,7.06,1.48,107.21,107.21,0,0,0,26.25-10.88,8,8,0,0,0,3.93-6l2.64-23.72q1.56-1.48,3-3L215.46,186a8,8,0,0,0,6-3.94,107.71,107.71,0,0,0,10.87-26.25,8,8,0,0,0-1.49-7.06ZM128,168a40,40,0,1,1,40-40A40,40,0,0,1,128,168Z",
+        ["f-all"] = "M120,56v48a16,16,0,0,1-16,16H56a16,16,0,0,1-16-16V56A16,16,0,0,1,56,40h48A16,16,0,0,1,120,56Zm80-16H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40Zm-96,96H56a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,104,136Zm96,0H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,200,136Z",
+        ["f-photo"] = "M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40ZM156,88a12,12,0,1,1-12,12A12,12,0,0,1,156,88Zm60,112H40V160.69l46.34-46.35a8,8,0,0,1,11.32,0h0L165,181.66a8,8,0,0,0,11.32-11.32l-17.66-17.65L173,138.34a8,8,0,0,1,11.31,0L216,170.07V200Z",
+        ["f-video"] = "M192,72V184a16,16,0,0,1-16,16H32a16,16,0,0,1-16-16V72A16,16,0,0,1,32,56H176A16,16,0,0,1,192,72Zm58,.25a8.23,8.23,0,0,0-6.63,1.22L209.78,95.86A4,4,0,0,0,208,99.19v57.62a4,4,0,0,0,1.78,3.33l33.78,22.52a8,8,0,0,0,8.58.19,8.33,8.33,0,0,0,3.86-7.17V80A8,8,0,0,0,250,72.25Z",
+        ["f-music"] = "M212.92,17.71a7.89,7.89,0,0,0-6.86-1.46l-128,32A8,8,0,0,0,72,56V166.1A36,36,0,1,0,88,196V102.25l112-28V134.1A36,36,0,1,0,216,164V24A8,8,0,0,0,212.92,17.71Z",
+        ["f-file"] = "M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,176H96a8,8,0,0,1,0-16h64a8,8,0,0,1,0,16Zm0-32H96a8,8,0,0,1,0-16h64a8,8,0,0,1,0,16Zm-8-56V44l44,44Z",
+        ["f-text"] = "M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM184,96a8,8,0,0,1-16,0V88H136v88h12a8,8,0,0,1,0,16H108a8,8,0,0,1,0-16h12V88H88v8a8,8,0,0,1-16,0V80a8,8,0,0,1,8-8h96a8,8,0,0,1,8,8Z",
+    };
+
     private static readonly Dictionary<string, string> Paths = new()
     {
         ["back"] = "M15,18 L9,12 L15,6",
+        ["copy"] = Box(9, 9, 12, 12, 2) + " M5,15 H4 A2,2 0 0 1 2,13 V4 A2,2 0 0 1 4,2 H13 A2,2 0 0 1 15,4 V5",
+        ["download"] = "M12,3 V15 M7,10 L12,15 L17,10 M5,20 H19",
+        ["dragframe"] = "M5,8 H5.01 M5,12 H5.01 M5,16 H5.01 " + Box(10, 5, 11, 14, 2.5) + " " + Circle(14, 10, 1.4) + " M21,16 L18.5,13.5 L12,19",
+        ["dragfile"] = "M5,8 H5.01 M5,12 H5.01 M5,16 H5.01 " + Box(10, 5, 11, 14, 2.5) + " M13,10 H18 M13,14 H18",
         ["fwd"] = "M9,18 L15,12 L9,6",
         ["filter"] = "M21,4 H14 M10,4 H3 M21,12 H12 M8,12 H3 M21,20 H16 M12,20 H3 M14,2 V6 M8,10 V14 M16,18 V22",
         ["search"] = Circle(11, 11, 8) + " M21,21 L16.65,16.65",
@@ -54,7 +75,10 @@ public sealed class LineIcon : UserControl
         ["star"] = "M12,3.6 L14.6,8.9 L20.4,9.7 L16.2,13.8 L17.2,19.6 L12,16.9 L6.8,19.6 L7.8,13.8 L3.6,9.7 L9.4,8.9 Z",
         ["tag"] = "M3.5,12 L3.5,4.8 A1.3,1.3 0 0 1 4.8,3.5 L12,3.5 L20.2,11.7 A1.5,1.5 0 0 1 20.2,13.8 L13.8,20.2 A1.5,1.5 0 0 1 11.7,20.2 Z M8,8 L8.01,8",
         ["close"] = "M18,6 L6,18 M6,6 L18,18",
+        ["export"] = "M12,15 V3 M7,8 L12,3 L17,8 M5,13 V19 A2,2 0 0 0 7,21 H17 A2,2 0 0 0 19,19 V13",
         ["check"] = "M20,6 L9,17 L4,12",
+        ["chevup"] = "M6,15 L12,9 L18,15",
+        ["chevdown"] = "M6,9 L12,15 L18,9",
         ["play"] = "M7,4.5 L19,12 L7,19.5 Z",
         ["pause"] = "M8,5 V19 M16,5 V19",
         ["palette"] = "M12,22 A1,1 0 0 1 12,2 A10,9 0 0 1 22,11 A5,5 0 0 1 17,16 H14.75 A1.75,1.75 0 0 0 13.35,18.8 L13.65,19.2 A1.75,1.75 0 0 1 12.25,22 Z M13.5,6.5 H13.51 M17.5,10.5 H17.51 M6.5,12.5 H6.51 M8.5,7.5 H8.51",
@@ -63,18 +87,23 @@ public sealed class LineIcon : UserControl
         ["audio"] = "M9,18 V5 L21,3 V16 " + Circle(6, 18, 3) + " " + Circle(18, 16, 3),
         ["video"] = Box(2, 6, 14, 12, 2.5) + " M16,13 L21.22,16.48 A0.5,0.5 0 0 0 22,16.07 V7.87 A0.5,0.5 0 0 0 21.25,7.44 L16,10.5",
         ["file"] = "M15,2 H6 A2,2 0 0 0 4,4 V20 A2,2 0 0 0 6,22 H18 A2,2 0 0 0 20,20 V7 Z M14,2 V6 A2,2 0 0 0 16,8 H20",
+        ["more"] = Circle(5, 12, 1.1) + " " + Circle(12, 12, 1.1) + " " + Circle(19, 12, 1.1),
+        ["full"] = "M4,9 V4 H9 M20,9 V4 H15 M4,15 V20 H9 M20,15 V20 H15",
+        ["markin"] = "M9,4 H5 V20 H9 M10,12 H19 M16,8.5 L19.5,12 L16,15.5",
+        ["markout"] = "M15,4 H19 V20 H15 M14,12 H5 M8,8.5 L4.5,12 L8,15.5",
         ["refresh"] = "M3,12 A9,9 0 0 1 12,3 A9.75,9.75 0 0 1 18.74,5.74 L21,8 M21,3 V8 H16 M21,12 A9,9 0 0 1 12,21 A9.75,9.75 0 0 1 5.26,18.26 L3,16 M8,16 H3 V21",
     };
 
     private readonly Microsoft.UI.Xaml.Shapes.Path _path = new() { StrokeThickness = 1.6, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round };
     private readonly Viewbox _box = new() { Stretch = Stretch.Uniform };
+    private readonly Grid _host = new() { Width = 24, Height = 24 };
+    private bool _filled;
 
     public LineIcon()
     {
         IsTabStop = false;
-        var host = new Grid { Width = 24, Height = 24 };
-        host.Children.Add(_path);
-        _box.Child = host;
+        _host.Children.Add(_path);
+        _box.Child = _host;
         Content = _box;
         _path.SetBinding(Shape.StrokeProperty, new Binding { Source = this, Path = new PropertyPath(nameof(Foreground)) });
         Size = 16;
@@ -100,7 +129,20 @@ public sealed class LineIcon : UserControl
         {
             _kind = value;
             // An unknown name or a malformed path leaves the icon blank; it never takes the app down.
-            try { if (Paths.TryGetValue(value ?? "", out var d)) _path.Data = (Geometry)XamlBindingHelper.ConvertValue(typeof(Geometry), d); }
+            try
+            {
+                var filled = Filled.TryGetValue(value ?? "", out var d);
+                if (!filled && !Paths.TryGetValue(value ?? "", out d)) return;
+                if (filled != _filled)
+                {
+                    _filled = filled;
+                    _host.Width = _host.Height = filled ? 256 : 24;
+                    _path.ClearValue(filled ? Shape.StrokeProperty : Shape.FillProperty);
+                    _path.SetBinding(filled ? Shape.FillProperty : Shape.StrokeProperty, new Binding { Source = this, Path = new PropertyPath(nameof(Foreground)) });
+                    Restroke();
+                }
+                _path.Data = (Geometry)XamlBindingHelper.ConvertValue(typeof(Geometry), d);
+            }
             catch (Exception ex) { App.Log("icon", ex, value); }
         }
     }
@@ -110,7 +152,7 @@ public sealed class LineIcon : UserControl
     // 24-unit grid and scaled; a fixed grid stroke would turn hairline-thin and grey at 12-14 px).
     private double _stroke = 1.5;
     public double Stroke { get => _stroke; set { _stroke = value; Restroke(); } }
-    private void Restroke() => _path.StrokeThickness = _stroke * 24 / Math.Max(1, _box.Width);
+    private void Restroke() => _path.StrokeThickness = _filled ? 0 : _stroke * 24 / Math.Max(1, _box.Width);
 
     public double Size { get => _box.Width; set { _box.Width = value; _box.Height = value; Restroke(); } }
 }

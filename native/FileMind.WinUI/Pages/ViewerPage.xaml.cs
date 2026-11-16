@@ -3,6 +3,7 @@ using System.Text.Json;
 using FileMind.Core;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
@@ -18,10 +19,10 @@ using Windows.UI;
 
 namespace FileMind.Pages;
 
-/// <summary>One file at full size: a stage for the picture, clip or sound, the details beside it, and more like it below.</summary>
+/// <summary>One file at full size: a stage for the picture, clip or sound with a floating control pill, and an Info | Similar panel beside it.</summary>
 public sealed partial class ViewerPage : Page
 {
-    private static double _volume = AppRuntime.Current.Settings.Volume;   // remembered between files, starts at the Settings default
+    private static double _volume = 0.5;   // remembered between files, starts at the Settings default
     public static void SetDefaultVolume(double v) => _volume = v;
     private static readonly Color Orange = Color.FromArgb(255, 255, 90, 31);
 
@@ -35,8 +36,6 @@ public sealed partial class ViewerPage : Page
     private double _zoom = 1;
     private readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromMilliseconds(200) };
     private bool _settingPosition;
-    private Slider? _seek;
-    private TextBlock? _now, _total;
     private List<Rectangle> _bars = [];
     private double _duration;
 
@@ -46,16 +45,60 @@ public sealed partial class ViewerPage : Page
 
     private ApiClient Api => AppRuntime.Current.Api!;
 
+    private readonly Button RevealButton, ExportBar, MoreBar;
+    private readonly StackPanel _actions;
+    private readonly MenuFlyoutItem _copyFrameItem;
+    // The volume slider lives in a flyout built here, because XAML names inside a flyout are not reachable from code.
+    private readonly Slider VolumeSlider = new() { Minimum = 0, Maximum = 100, Value = 50, Width = 150, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock VolumeText = new() { Text = "50%", FontSize = 12, Width = 36, VerticalAlignment = VerticalAlignment.Center };
+
+    /// <summary>Frosted or liquid look for the pills drawn over the stage.</summary>
+    public void ApplySurface()
+    {
+        Ui.Surface(ZoomPill, 20); Ui.Surface(TransportPill, 20); Ui.Surface(ToolsPill, 20); Ui.Surface(ToastBox, 18);
+    }
+
     public ViewerPage()
     {
         InitializeComponent();
+        ApplySurface();
         DragHelper.Attach(StageHost, () => _item.Path, null);          // drag the picture, clip or track itself out of the viewer
-        DragHelper.Attach(TitleBox, () => _item.Path, () => _item.Path);
         var esc = new KeyboardAccelerator { Key = Windows.System.VirtualKey.Escape };
         esc.Invoked += (_, e) => { if (_full) SetFull(false); else GoBack(); e.Handled = true; };
         IsTabStop = true;
+        KeyboardAcceleratorPlacementMode = Microsoft.UI.Xaml.Input.KeyboardAcceleratorPlacementMode.Hidden;
+
+        // The shell's top bar carries the file name and, on the right, Show in Explorer, Export and a menu.
+        static Button Bar(string icon, string tip)
+        {
+            var b = new Button { Style = Ui.Style("BarButton"), Content = new LineIcon { Kind = icon, Size = 16 } };
+            ToolTipService.SetToolTip(b, tip); AutomationProperties.SetName(b, tip);
+            return b;
+        }
+        RevealButton = Bar("folder", "Show in Explorer"); RevealButton.Click += Reveal_Click;
+        ExportBar = Bar("export", "Export"); ExportBar.Click += Export_Click;
+        MoreBar = Bar("more", "More");
+        var menu = new MenuFlyout();
+        var copyFile = new MenuFlyoutItem { Text = "Copy file" }; copyFile.Click += async (_, _) => await CopyFileAsync();
+        var copyPath = new MenuFlyoutItem { Text = "Copy path" }; copyPath.Click += (_, _) => CopyPath();
+        _copyFrameItem = new MenuFlyoutItem { Text = "Copy frame" }; _copyFrameItem.Click += CopyFrame_Click;
+        menu.Items.Add(copyFile); menu.Items.Add(copyPath); menu.Items.Add(_copyFrameItem);
+        menu.Closed += (_, _) => Focus(FocusState.Programmatic);
+        MoreBar.Flyout = menu;
+        _actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        _actions.Children.Add(RevealButton); _actions.Children.Add(ExportBar); _actions.Children.Add(MoreBar);
+
+        VolumeSlider.ValueChanged += Volume_Changed;
+        var vol = new Flyout { Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { VolumeSlider, VolumeText } } };
+        vol.Closed += (_, _) => Focus(FocusState.Programmatic);
+        VolumeBtn.Flyout = vol;
+        PrevButton.OpacityTransition = new ScalarTransition(); NextButton.OpacityTransition = new ScalarTransition();
+        SetTab(false);
+        SizeChanged += (_, _) => FitStage();
+        StageArea.SizeChanged += (_, _) => FitPillRow();
+
         PreviewKeyDown += Keys_Down;
-        Loaded += (_, _) => Focus(FocusState.Programmatic);
+        Loaded += (_, _) => { PushTitle(); App.Window?.SetActions(_actions); App.Window?.SyncNav(); Focus(FocusState.Programmatic); };
         KeyboardAccelerators.Add(esc);
         _tick.Tick += (_, _) => UpdateProgress();
     }
@@ -63,6 +106,7 @@ public sealed partial class ViewerPage : Page
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+        SetSimilarPlacement(AppRuntime.Current.Settings.SimilarFiles == "side");
         if (e.Parameter is ViewerRequest r)
         {
             _siblings = r.Siblings.Count > 0 ? r.Siblings : [r.Item];
@@ -81,8 +125,9 @@ public sealed partial class ViewerPage : Page
         _cts.Cancel();
     }
 
+    private void PushTitle() => App.Window?.SetTitle(_item.Name, $"{KindName(_item)} · {_item.SizeText}");
+
     private void GoBack() { if (Frame.CanGoBack) Frame.GoBack(); }
-    private void Back_Click(object sender, RoutedEventArgs e) => GoBack();
     private void Prev_Click(object sender, RoutedEventArgs e) { if (_index > 0) Show(_index - 1); }
     private void Next_Click(object sender, RoutedEventArgs e) { if (_index < _siblings.Count - 1) Show(_index + 1); }
 
@@ -90,7 +135,6 @@ public sealed partial class ViewerPage : Page
     private static readonly double[] Speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
     private double _speed = 1;
     private bool _full;
-    private double _stageHeight;
 
     private static bool Down(Windows.System.VirtualKey k) =>
         Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(k).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
@@ -119,6 +163,11 @@ public sealed partial class ViewerPage : Page
             case Windows.System.VirtualKey.Down when media: VolumeSlider.Value = Math.Max(0, VolumeSlider.Value - 5); break;
             case Windows.System.VirtualKey.M when media && !ctrl: Mute_Tapped(this, new TappedRoutedEventArgs()); break;
             case Windows.System.VirtualKey.F when !ctrl: SetFull(!_full); break;
+            case Windows.System.VirtualKey.I when media && !ctrl: MarkIn(); break;
+            case Windows.System.VirtualKey.O when media && !ctrl: MarkOut(); break;
+            case Windows.System.VirtualKey.E when !ctrl && ExportSpec.CanExport(_item.Kind): _ = ExportAsync(); break;
+            case (Windows.System.VirtualKey)188 when !ctrl && _item.Kind == "video": StepFrame(-1); break;   // ,
+            case (Windows.System.VirtualKey)190 when !ctrl && _item.Kind == "video": StepFrame(1); break;    // .
             case (Windows.System.VirtualKey)219 when media: StepSpeed(-1); break;   // [
             case (Windows.System.VirtualKey)221 when media: StepSpeed(1); break;    // ]
             case Windows.System.VirtualKey.C when ctrl && Down(Windows.System.VirtualKey.Shift): CopyPath(); break;
@@ -154,6 +203,134 @@ public sealed partial class ViewerPage : Page
         catch (Exception ex) { App.Log("viewer-keys", ex, ex.Message); }
     }
 
+    // ---- Trim marks and export ----
+    private double? _in, _out;
+
+    /// <summary>Screenshot helper: marks a short range on the playing clip.</summary>
+    public void DevExport() { DevTrim(); _ = ExportAsync(); }
+    public void DevTrim() { _in = 1; _out = 2.5; PaintTrim(); }
+
+    private double Position() { try { return _player?.PlaybackSession.Position.TotalSeconds ?? 0; } catch (Exception) { return 0; } }
+
+    private void MarkIn()
+    {
+        if (_player is null) return;
+        _in = Position();
+        if (_out is { } o && o <= _in) _out = null;
+        PaintTrim();
+    }
+
+    private void MarkOut()
+    {
+        if (_player is null) return;
+        var t = Position();
+        if (t < 0.05) return;                      // an end at the very start would be an empty clip
+        _out = t;
+        if (_in is { } i && i >= t) _in = null;
+        PaintTrim();
+    }
+
+    private void MarkRange(double from, double to) { _in = from; _out = to; PaintTrim(); }
+
+    private double Dur()
+    {
+        var d = 0.0;
+        try { d = _player?.PlaybackSession.NaturalDuration.TotalSeconds ?? 0; } catch (Exception) { }
+        return d > 0 ? d : _duration;
+    }
+
+    private void PaintTrim()
+    {
+        var any = _in is not null || _out is not null;
+        TrimRow.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+        if (any)
+        {
+            var a = _in ?? 0; var b = _out ?? Dur();
+            var len = Math.Max(0, b - a);
+            var lenText = len < 60 ? $"{len:0.#}s" : Clock(len);
+            TrimInfo.Text = $"{Clock(a)} – {(_out is null ? "end" : Clock(b))} · {lenText}";
+        }
+        PaintRange();
+    }
+
+    /// <summary>The marked part, drawn on the scrubber as an accent band with a handle at each end (the slider's thumb is inset about 10 px each side).</summary>
+    private void PaintRange()
+    {
+        var d = Dur();
+        var w = SeekHost.ActualWidth - 20;
+        if (d <= 0 || w <= 0 || (_in is null && _out is null))
+        {
+            TrimRange.Visibility = StartHandle.Visibility = EndHandle.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var a = Math.Clamp((_in ?? 0) / d, 0, 1); var b = Math.Clamp((_out ?? d) / d, 0, 1);
+        TrimRange.Margin = new Thickness(10 + a * w, 0, 0, 0);
+        TrimRange.Width = Math.Max(4, (b - a) * w);
+        TrimRange.Visibility = StartHandle.Visibility = EndHandle.Visibility = Visibility.Visible;
+        StartHandle.Margin = new Thickness(10 + a * w - 5, 0, 0, 0);
+        EndHandle.Margin = new Thickness(10 + b * w - 5, 0, 0, 0);
+    }
+
+    private bool _dragging;
+
+    private void Handle_Pressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        _dragging = true;
+        ((UIElement)sender).CapturePointer(e.Pointer);
+        e.Handled = true;
+    }
+
+    private void Handle_Moved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (!_dragging) return;
+        var d = Dur(); var w = SeekHost.ActualWidth - 20;
+        if (d <= 0 || w <= 0) return;
+        var t = Math.Clamp((e.GetCurrentPoint(SeekHost).Position.X - 10) / w, 0, 1) * d;
+        if (ReferenceEquals(sender, StartHandle)) _in = Math.Clamp(t, 0, Math.Max(0, (_out ?? d) - 0.1));
+        else _out = Math.Clamp(t, (_in ?? 0) + 0.1, d);
+        PaintTrim();
+        e.Handled = true;
+    }
+
+    private void Handle_Released(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        _dragging = false;
+        ((UIElement)sender).ReleasePointerCaptures();
+        e.Handled = true;
+    }
+
+    private void SeekHost_SizeChanged(object sender, SizeChangedEventArgs e) => PaintRange();
+
+    private void MarkIn_Click(object sender, RoutedEventArgs e) { MarkIn(); Focus(FocusState.Programmatic); }
+    private void MarkOut_Click(object sender, RoutedEventArgs e) { MarkOut(); Focus(FocusState.Programmatic); }
+    private void TrimClear_Click(object sender, RoutedEventArgs e) { _in = _out = null; PaintTrim(); Focus(FocusState.Programmatic); }
+    private async void Export_Click(object sender, RoutedEventArgs e) => await ExportAsync();
+
+    private async Task ExportAsync()
+    {
+        try
+        {
+            try { _player?.Pause(); } catch (Exception) { }
+            await ExportDialog.ShowAsync(XamlRoot, [_item], _in, _out);
+        }
+        catch (Exception ex) { App.Log("viewer-export", ex, ex.Message); }
+        Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>One frame back or forward, paused, for finding the exact picture.</summary>
+    private void StepFrame(int by)
+    {
+        try
+        {
+            if (_player is null) return;
+            _player.Pause();
+            var fps = _item.Fps is > 1 and < 240 ? _item.Fps.Value : 30;
+            var s = _player.PlaybackSession;
+            s.Position = TimeSpan.FromSeconds(Math.Max(0, s.Position.TotalSeconds + by / fps));
+        }
+        catch (Exception ex) { App.Log("viewer-step", ex, ex.Message); }
+    }
+
     private void StepSpeed(int by)
     {
         var i = Array.IndexOf(Speeds, _speed);
@@ -177,7 +354,7 @@ public sealed partial class ViewerPage : Page
 
     private void Full_Click(object sender, RoutedEventArgs e) { SetFull(!_full); Focus(FocusState.Programmatic); }
 
-    /// <summary>Fills the screen with the stage: the window goes full screen and the sidebar steps aside.</summary>
+    /// <summary>Fills the screen with the stage: the window goes full screen and the sidebar, bar and panel step aside.</summary>
     private void SetFull(bool on)
     {
         if (_full == on) return;
@@ -185,14 +362,24 @@ public sealed partial class ViewerPage : Page
         try
         {
             App.Window?.SetImmersive(on);
-            if (on) { _stageHeight = StageCard.Height; StageCard.Height = Math.Max(400, (XamlRoot?.Size.Height ?? 900) - 76); SizeChanged += Full_SizeChanged; }
-            else { SizeChanged -= Full_SizeChanged; if (_stageHeight > 0) StageCard.Height = _stageHeight; }
+            PageStack.Padding = on ? new Thickness(0) : new Thickness(20, 66, 20, 40);
+            StageCard.CornerRadius = new CornerRadius(on ? 0 : 8); StageCard.BorderThickness = new Thickness(on ? 0 : 1);
+            DetailsCard.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+            MoreSection.Visibility = on || _side ? Visibility.Collapsed : Visibility.Visible;
             Scroll.ChangeView(null, 0, null, true);
+            FitStage();
         }
         catch (Exception ex) { App.Log("viewer-full", ex, ex.Message); }
     }
 
-    private void Full_SizeChanged(object sender, SizeChangedEventArgs e) { if (_full) StageCard.Height = Math.Max(400, e.NewSize.Height - 76); }
+    /// <summary>The stage and the panel beside it fill the window under the bar, leaving the heading of More like this in view below.</summary>
+    private void FitStage()
+    {
+        var h = Scroll.ActualHeight;
+        if (h < 100) return;
+        var v = _full ? h : Math.Clamp(h - 150, 520, 760);
+        StageCard.Height = DetailsCard.Height = v;
+    }
 
     private void CopyPath()
     {
@@ -215,19 +402,28 @@ public sealed partial class ViewerPage : Page
         _item = _siblings[index];
         _info = null;
         _zoom = 1; ZoomText.Text = "100%"; ZoomTransform.ScaleX = ZoomTransform.ScaleY = 1;
+        SimilarScroll.ChangeView(null, 0, null, true);
         Scroll.ChangeView(null, 0, null, true);
 
-        TitleBox.Text = _item.Name;
-        SubtitleBox.Text = $"{KindName(_item)} · {_item.SizeText}";
-        PrevButton.Visibility = index > 0 ? Visibility.Visible : Visibility.Collapsed;
-        NextButton.Visibility = index < _siblings.Count - 1 ? Visibility.Visible : Visibility.Collapsed;
+        if (IsLoaded) PushTitle();
+        PrevZone.Visibility = index > 0 ? Visibility.Visible : Visibility.Collapsed;
+        NextZone.Visibility = index < _siblings.Count - 1 ? Visibility.Visible : Visibility.Collapsed;
 
         var visual = _item.Kind is "image" or "video";
-        CopyFrameButton.Visibility = visual ? Visibility.Visible : Visibility.Collapsed;
-        CopyFrameText.Text = _item.Kind == "video" ? "Copy frame" : "Copy image";
-        ZoomBox.Visibility = visual ? Visibility.Visible : Visibility.Collapsed;
-        VolumeBox.Visibility = _item.Kind is "video" or "audio" ? Visibility.Visible : Visibility.Collapsed;
-        SpeedButton.Visibility = VolumeBox.Visibility;
+        var timed = _item.Kind is "video" or "audio";
+        ZoomPill.Visibility = _item.Kind == "image" ? Visibility.Visible : Visibility.Collapsed;
+        TransportPill.Visibility = timed ? Visibility.Visible : Visibility.Collapsed;
+        StageHost.Margin = new Thickness(24, 24, 24, visual || timed ? 88 : 24);
+        _copyFrameItem.Visibility = visual ? Visibility.Visible : Visibility.Collapsed;
+        ToolsPill.Visibility = visual || timed ? Visibility.Visible : Visibility.Collapsed;
+        var isVideo = _item.Kind == "video";
+        CopyFrameBtn.Visibility = visual ? Visibility.Visible : Visibility.Collapsed;
+        SaveFrameBtn.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
+        ToolTipService.SetToolTip(CopyFrameBtn, isVideo ? "Copy frame" : "Copy image");
+        FitPillRow();
+        _copyFrameItem.Text = _item.Kind == "video" ? "Copy frame" : "Copy image";
+        ExportBar.Visibility = ExportSpec.CanExport(_item.Kind) ? Visibility.Visible : Visibility.Collapsed;
+        _in = _out = null; PaintTrim();
         _speed = 1; SpeedText.Text = "1×";
 
         try { BuildStage(); } catch (Exception ex) { App.Log("viewer-stage", ex, ex.Message); ShowStageMessage("This file can't be previewed here."); }
@@ -236,11 +432,31 @@ public sealed partial class ViewerPage : Page
         _ = LoadSimilarAsync(_cts.Token);
     }
 
+    // The hover arrows: each shows only while the pointer is in the strip it sits in.
+    private void Zone_Enter(object sender, PointerRoutedEventArgs e) { if (sender is Grid { Children.Count: > 0 } g) g.Children[0].Opacity = 1; }
+    private void Zone_Exit(object sender, PointerRoutedEventArgs e) { if (sender is Grid { Children.Count: > 0 } g) g.Children[0].Opacity = 0; }
+
+    // ---- the Info | Similar tabs ----
+    private bool _similarTab;
+    private void InfoTab_Click(object sender, RoutedEventArgs e) => SetTab(false);
+    private void SimilarTab_Click(object sender, RoutedEventArgs e) => SetTab(true);
+
+    private void SetTab(bool similar)
+    {
+        _similarTab = similar;
+        InfoScroll.Visibility = similar ? Visibility.Collapsed : Visibility.Visible;
+        SimilarView.Visibility = SimilarActions.Visibility = similar ? Visibility.Visible : Visibility.Collapsed;
+        InfoTabLine.Visibility = similar ? Visibility.Collapsed : Visibility.Visible;
+        SimilarTabLine.Visibility = similar ? Visibility.Visible : Visibility.Collapsed;
+        if (similar) { InfoTabText.Foreground = Ui.Brush("GlassTextSecondaryBrush"); SimilarTabText.ClearValue(TextBlock.ForegroundProperty); }
+        else { SimilarTabText.Foreground = Ui.Brush("GlassTextSecondaryBrush"); InfoTabText.ClearValue(TextBlock.ForegroundProperty); }
+    }
+
     private void Teardown()
     {
         _tick.Stop();
         var old = _player;
-        _player = null; _imageScroller = null; _seek = null; _now = _total = null; _bars = [];
+        _player = null; _imageScroller = null; _bars = []; ResetTransport();
         try
         {
             // Detach the picture from the player first, then let go of the player a moment later,
@@ -367,6 +583,7 @@ public sealed partial class ViewerPage : Page
 
     private void BuildVideo()
     {
+        _volume = 0.5;      // a video always opens at half volume
         var player = new MediaPlayer { Volume = _volume, AutoPlay = true, IsLoopingEnabled = true, Source = MediaSource.CreateFromUri(Api.FileUri(_item.Id)) };
         _player = player;
         var element = new MediaPlayerElement { AreTransportControlsEnabled = false, Stretch = Stretch.Uniform, AutoPlay = true, Background = new SolidColorBrush(Colors.Transparent), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -388,50 +605,46 @@ public sealed partial class ViewerPage : Page
         player.MediaFailed += (_, a) => DispatcherQueue.TryEnqueue(() => App.Log("viewer-video", null, a.ErrorMessage));
         MediaHost.Children.Add(element);
         VolumeSlider.Value = _volume * 100;
+        HookPlayer(player, true);
+        element.Tapped += (_, _) => TogglePlay();
+        _tick.Start();
+    }
 
-        // A minimal, quiet transport: one thin bar that fades in under the pointer.
-        var play = new Button { Style = Ui.Style("GlassButton"), Width = 30, Height = 30, Padding = new Thickness(0), CornerRadius = new CornerRadius(5), Content = new LineIcon { Kind = "pause", Size = 13 } };
-        _now = new TextBlock { Text = "0:00", FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Brush("GlassTextSecondaryBrush") };
-        _total = new TextBlock { Text = "0:00", FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Brush("GlassTextSecondaryBrush") };
-        _seek = new Slider { Minimum = 0, Maximum = 1000, Value = 0, VerticalAlignment = VerticalAlignment.Center, Foreground = new SolidColorBrush(Orange), Height = 28 };
-        _seek.ValueChanged += (_, a) =>
-        {
-            if (_settingPosition || _player is null) return;
-            var d = _player.PlaybackSession.NaturalDuration.TotalSeconds;
-            if (d > 0) _player.PlaybackSession.Position = TimeSpan.FromSeconds(d * a.NewValue / 1000);
-        };
-        void Toggle() { if (_player is null) return; if (_player.PlaybackSession.PlaybackState == MediaPlaybackState.Playing) _player.Pause(); else _player.Play(); }
-        play.Click += (_, _) => Toggle();
-        element.Tapped += (_, _) => Toggle();
+    /// <summary>The pill's play button follows the player's state.</summary>
+    private void HookPlayer(MediaPlayer player, bool playing)
+    {
+        PlayIcon.Kind = playing ? "pause" : "play";
         player.PlaybackSession.PlaybackStateChanged += (s, _) => DispatcherQueue.TryEnqueue(() =>
         {
-            try { play.Content = new LineIcon { Kind = s.PlaybackState == MediaPlaybackState.Playing ? "pause" : "play", Size = 13 }; } catch { }
+            if (!ReferenceEquals(_player, player)) return;
+            try { PlayIcon.Kind = s.PlaybackState == MediaPlaybackState.Playing ? "pause" : "play"; } catch { }
         });
+    }
 
-        var row = new Grid { ColumnSpacing = 10, Padding = new Thickness(12, 18, 12, 8) };
-        row.Background = new LinearGradientBrush { StartPoint = new Windows.Foundation.Point(0, 0), EndPoint = new Windows.Foundation.Point(0, 1), GradientStops = { new GradientStop { Color = Color.FromArgb(0, 0, 0, 0), Offset = 0 }, new GradientStop { Color = Color.FromArgb(200, 0, 0, 0), Offset = 1 } } };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.Children.Add(play);
-        Grid.SetColumn(_now, 1); row.Children.Add(_now);
-        Grid.SetColumn(_seek, 2); row.Children.Add(_seek);
-        Grid.SetColumn(_total, 3); row.Children.Add(_total);
-        row.VerticalAlignment = VerticalAlignment.Bottom;
-        row.Opacity = 0;
-        MediaHost.PointerEntered += (_, _) => row.Opacity = 1;
-        MediaHost.PointerExited += (_, _) => row.Opacity = 0;
-        row.OpacityTransition = new ScalarTransition();
-        MediaHost.Children.Add(row);
-        _tick.Start();
+    private void ResetTransport()
+    {
+        _settingPosition = true;
+        try { SeekSlider.Value = 0; } finally { _settingPosition = false; }
+        NowText.Text = TotalText.Text = "0:00";
+        _duration = 0; _playedBars = 0;
+    }
+
+    private void Play_Click(object sender, RoutedEventArgs e) { TogglePlay(); Focus(FocusState.Programmatic); }
+
+    private void Seek_Changed(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    {
+        if (_settingPosition || _player is null) return;
+        var d = _player.PlaybackSession.NaturalDuration.TotalSeconds;
+        if (d > 0) _player.PlaybackSession.Position = TimeSpan.FromSeconds(d * e.NewValue / 1000);
     }
 
     private async void BuildAudio()
     {
+        _volume = 0.5;      // so does a sound
         var player = new MediaPlayer { Volume = _volume, AutoPlay = false, Source = MediaSource.CreateFromUri(Api.FileUri(_item.Id)) };
         _player = player;
         VolumeSlider.Value = _volume * 100;
+        HookPlayer(player, false);
 
         const int n = 64;
         var bars = new Grid { Height = 190, Background = new SolidColorBrush(Colors.Transparent) };
@@ -453,38 +666,14 @@ public sealed partial class ViewerPage : Page
             if (d > 0) Seek(d * Math.Clamp(e.GetPosition(bars).X / Math.Max(bars.ActualWidth, 1), 0, 1));
             else _player?.Play();
         };
-
-        var play = new Button { Style = Ui.Style("GlassAccentButton"), Width = 52, Height = 52, Padding = new Thickness(0), CornerRadius = new CornerRadius(26), Content = new LineIcon { Kind = "play", Size = 18 } };
-        _now = new TextBlock { Text = "0:00", FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-        _total = new TextBlock { Text = "0:00", FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Brush("GlassTextSecondaryBrush") };
-        play.Click += (_, _) =>
-        {
-            if (_player is null) return;
-            if (_player.PlaybackSession.PlaybackState == MediaPlaybackState.Playing) _player.Pause(); else _player.Play();
-        };
-        player.PlaybackSession.PlaybackStateChanged += (s, _) => DispatcherQueue.TryEnqueue(() =>
-        {
-            try { play.Content = new LineIcon { Kind = s.PlaybackState == MediaPlaybackState.Playing ? "pause" : "play", Size = 18 }; } catch { }
-        });
         player.MediaEnded += (_, _) => DispatcherQueue.TryEnqueue(() => { try { if (_player is not null) _player.PlaybackSession.Position = TimeSpan.Zero; } catch { } });
-
-        var row = new Grid { ColumnSpacing = 14, Margin = new Thickness(0, 18, 0, 0) };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition());
-        row.Children.Add(play);
-        var times = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
-        times.Children.Add(_now); times.Children.Add(new TextBlock { Text = "/", FontSize = 13, Foreground = Ui.Brush("GlassTextTertiaryBrush") }); times.Children.Add(_total);
-        Grid.SetColumn(times, 1); row.Children.Add(times);
-        var nameText = new TextBlock { Text = _item.Name, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Brush("GlassTextTertiaryBrush") };
-        Grid.SetColumn(nameText, 2); row.Children.Add(nameText);
 
         var head = new Grid { Margin = new Thickness(0, 0, 0, 16) };
         head.Children.Add(new TextBlock { Text = "NOW PLAYING", FontSize = 10, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, CharacterSpacing = 100, Foreground = new SolidColorBrush(Orange) });
-        head.Children.Add(new TextBlock { Text = $"{_item.Ext.TrimStart('.').ToUpperInvariant()} · {_item.SizeText}", FontSize = 11, HorizontalAlignment = HorizontalAlignment.Right, Foreground = Ui.Brush("GlassTextTertiaryBrush") });
+        head.Children.Add(new TextBlock { Text = $"{_item.Ext.TrimStart('.').ToUpperInvariant()} · {_item.SizeText}", FontSize = 11, HorizontalAlignment = HorizontalAlignment.Right, Foreground = new SolidColorBrush(Color.FromArgb(200, 255, 255, 255)) });
 
         var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        stack.Children.Add(head); stack.Children.Add(bars); stack.Children.Add(row);
+        stack.Children.Add(head); stack.Children.Add(bars);
 
         // a warm glow rising from the bottom edge of the card
         var glow = new Rectangle
@@ -498,7 +687,7 @@ public sealed partial class ViewerPage : Page
         };
         var card = new Grid
         {
-            MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(24, 0, 24, 0),
+            MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center,
             CornerRadius = new CornerRadius(8), BorderBrush = Ui.Brush("GlassStrokeBrush"), BorderThickness = new Thickness(1),
             Background = new LinearGradientBrush
             {
@@ -507,7 +696,7 @@ public sealed partial class ViewerPage : Page
             },
         };
         card.Children.Add(glow);
-        card.Children.Add(new Border { Padding = new Thickness(30, 24, 30, 26), Child = stack });
+        card.Children.Add(new Border { Padding = new Thickness(30, 28, 30, 30), Child = stack });
         MediaHost.Children.Add(card);
         _tick.Start();
 
@@ -519,7 +708,7 @@ public sealed partial class ViewerPage : Page
                 _duration = wave.Duration;
                 for (var i = 0; i < _bars.Count; i++)
                     _bars[i].Height = 14 + 150 * wave.Peaks[Math.Min(i * wave.Peaks.Count / _bars.Count, wave.Peaks.Count - 1)];
-                if (_total is not null && _duration > 0) _total.Text = Clock(_duration);
+                if (_duration > 0) { TotalText.Text = Clock(_duration); PaintRange(); }
             }
         }
         catch (OperationCanceledException) { }
@@ -543,10 +732,10 @@ public sealed partial class ViewerPage : Page
             if (d <= 0) d = _duration;
             var p = _player.PlaybackSession.Position.TotalSeconds;
             _settingPosition = true;
-            if (_seek is not null) _seek.Value = d > 0 ? Math.Clamp(p / d * 1000, 0, 1000) : 0;
+            SeekSlider.Value = d > 0 ? Math.Clamp(p / d * 1000, 0, 1000) : 0;
             _settingPosition = false;
-            if (_now is not null) _now.Text = Clock(p);
-            if (_total is not null && d > 0) _total.Text = Clock(d);
+            NowText.Text = Clock(p);
+            if (d > 0) { var t = Clock(d); if (TotalText.Text != t) { TotalText.Text = t; PaintRange(); } }
             _playedBars = d > 0 ? (int)(p / d * _bars.Count) : 0;
             PaintBars(-1);
         }
@@ -592,49 +781,68 @@ public sealed partial class ViewerPage : Page
         try { if (_player is not null) _player.Volume = _volume; } catch { }
     }
 
-    private async void Drag_Starting(UIElement sender, DragStartingEventArgs e)
+    /// <summary>Makes the current frame a picture file: a video frame is cut with ffmpeg at the playhead; a picture is the file itself.</summary>
+    private async Task<StorageFile?> GetFrameFileAsync()
     {
-        var deferral = e.GetDeferral();
-        try
-        {
-            var file = await StorageFile.GetFileFromPathAsync(_item.Path);
-            e.Data.SetStorageItems([file]);
-            e.Data.RequestedOperation = DataPackageOperation.Copy;
-        }
-        catch (Exception ex) { App.Log("viewer-drag", ex, ex.Message); e.Cancel = true; }
-        finally { deferral.Complete(); }
+        if (_item.Kind != "video") return await StorageFile.GetFileFromPathAsync(_item.Path);
+        var ffmpeg = FindFfmpeg();
+        if (ffmpeg is null) { await Toast("ffmpeg isn't available, so the frame can't be read."); return null; }
+        var png = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"{System.IO.Path.GetFileNameWithoutExtension(_item.Name)}-frame-{Guid.NewGuid():N}.png");
+        var at = _player?.PlaybackSession.Position.TotalSeconds ?? 0;
+        var psi = new ProcessStartInfo(ffmpeg) { CreateNoWindow = true, UseShellExecute = false, RedirectStandardError = true };
+        foreach (var a in new[] { "-v", "error", "-ss", at.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture), "-i", _item.Path, "-frames:v", "1", "-y", png }) psi.ArgumentList.Add(a);
+        using var proc = Process.Start(psi)!;
+        await proc.WaitForExitAsync(_cts.Token);
+        if (!File.Exists(png)) { await Toast("Couldn't read a frame at this moment."); return null; }
+        return await StorageFile.GetFileFromPathAsync(png);
     }
 
     private async void CopyFrame_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            StorageFile file;
-            if (_item.Kind == "video")
-            {
-                var ffmpeg = FindFfmpeg();
-                var png = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"filemind-frame-{Guid.NewGuid():N}.png");
-                var at = _player?.PlaybackSession.Position.TotalSeconds ?? 0;
-                if (ffmpeg is null) { await Toast("ffmpeg isn't available, so the frame can't be copied."); return; }
-                var psi = new ProcessStartInfo(ffmpeg) { CreateNoWindow = true, UseShellExecute = false, RedirectStandardError = true };
-                foreach (var a in new[] { "-v", "error", "-ss", at.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture), "-i", _item.Path, "-frames:v", "1", "-y", png }) psi.ArgumentList.Add(a);
-                using var proc = Process.Start(psi)!;
-                await proc.WaitForExitAsync(_cts.Token);
-                if (!File.Exists(png)) { await Toast("Couldn't read a frame at this moment."); return; }
-                file = await StorageFile.GetFileFromPathAsync(png);
-            }
-            else file = await StorageFile.GetFileFromPathAsync(_item.Path);
-
+            var file = await GetFrameFileAsync();
+            if (file is null) return;
             var data = new DataPackage { RequestedOperation = DataPackageOperation.Copy };
             data.SetBitmap(RandomAccessStreamReference.CreateFromFile(file));
             data.SetStorageItems([file]);
             Clipboard.SetContent(data);
-            try { Clipboard.Flush(); } catch (Exception fx) { App.Log("viewer-copyframe", fx, "flush: " + fx.Message); }   // keeps it on the clipboard after the app moves on
-            App.Log("viewer-copyframe", null, $"copied {file.Path}");
+            try { Clipboard.Flush(); } catch (Exception fx) { App.Log("viewer-copyframe", fx, "flush: " + fx.Message); }
             await Toast(_item.Kind == "video" ? "Frame copied" : "Image copied");
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { App.Log("viewer-copyframe", ex, ex.Message); await Toast("Couldn't copy that."); }
+    }
+
+    private async void SaveFrame_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var file = await GetFrameFileAsync();
+            if (file is null) return;
+            var picker = new Windows.Storage.Pickers.FileSavePicker { SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary };
+            var at = _player?.PlaybackSession.Position ?? TimeSpan.Zero;
+            picker.SuggestedFileName = $"{System.IO.Path.GetFileNameWithoutExtension(_item.Name)}-{(int)at.TotalMinutes}m{at.Seconds:00}s";
+            picker.FileTypeChoices.Add("PNG picture", [".png"]);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(App.Window));
+            var target = await picker.PickSaveFileAsync();
+            if (target is null) return;
+            await file.CopyAndReplaceAsync(target);
+            await Toast("Frame saved");
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { App.Log("viewer-saveframe", ex, ex.Message); await Toast("Couldn't save that."); }
+    }
+
+    /// <summary>Video and sound: the transport pill takes the row's width (up to 900) with the tools pill after it; a picture's pills are their own size.</summary>
+    private void FitPillRow()
+    {
+        if (TransportPill.Visibility == Visibility.Visible)
+        {
+            PillRow.Width = Math.Max(320, Math.Min(900, StageArea.ActualWidth - 48));
+            PillMainCol.Width = new GridLength(1, GridUnitType.Star);
+        }
+        else { PillRow.Width = double.NaN; PillMainCol.Width = GridLength.Auto; }
     }
 
     private static string? FindFfmpeg()
@@ -650,10 +858,10 @@ public sealed partial class ViewerPage : Page
 
     private async Task Toast(string text)
     {
-        var old = CopyFrameText.Text;
-        CopyFrameText.Text = text;
+        ToastText.Text = text;
+        ToastBox.Visibility = Visibility.Visible;
         try { await Task.Delay(1600, _cts.Token); } catch { }
-        CopyFrameText.Text = _item.Kind == "video" ? "Copy frame" : "Copy image";
+        ToastBox.Visibility = Visibility.Collapsed;
     }
 
     private async void Reveal_Click(object sender, RoutedEventArgs e)
@@ -662,19 +870,19 @@ public sealed partial class ViewerPage : Page
     }
 
     // ------------------------------------------------------------------ details panel
-    private static TextBlock Small(string text) => new() { Text = text, FontSize = 11, Foreground = Ui.Brush("GlassTextTertiaryBrush") };
-    private static TextBlock Value(string text) => new() { Text = text, FontSize = 12.5, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
+    private static TextBlock Small(string text) => new() { Text = text, FontSize = 12, Foreground = Ui.Brush("GlassTextSecondaryBrush") };
+    private static TextBlock Value(string text) => new() { Text = text, FontSize = 12.5, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true, Foreground = Ui.Brush("GlassTextPrimaryBrush") };
 
     private static UIElement Header(string icon, string text, string? hint = null)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        if (icon.Length > 0) row.Children.Add(new LineIcon { Kind = icon, Size = 14, VerticalAlignment = VerticalAlignment.Center });
-        row.Children.Add(new TextBlock { Text = text.ToUpperInvariant(), FontSize = 10.5, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, CharacterSpacing = 70, VerticalAlignment = VerticalAlignment.Center });
-        if (hint is not null) row.Children.Add(new TextBlock { Text = "· " + hint, FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Brush("GlassTextTertiaryBrush") });
+        if (icon.Length > 0) row.Children.Add(new LineIcon { Kind = icon, Size = 14, VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
+        row.Children.Add(new TextBlock { Text = text.ToUpperInvariant(), FontSize = 10.5, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, CharacterSpacing = 70, VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
+        if (hint is not null) row.Children.Add(new TextBlock { Text = "· " + hint, FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
         return row;
     }
 
-    private static Border Divider() => new() { Height = 1, Background = Ui.Brush("GlassStrokeBrush"), Opacity = 0.6 };
+    private static Border Divider() => new() { Height = 1, Background = Ui.Brush("DividerBrush") };
 
     private static string Ago(double mtime)
     {
@@ -699,8 +907,8 @@ public sealed partial class ViewerPage : Page
         if (_item.Fps is > 0) two.Add($"{_item.Fps:0.#} fps");
         if (!string.IsNullOrEmpty(_item.Codec)) two.Add(_item.Codec!.ToUpperInvariant());
         var p = new StackPanel { Spacing = 2 };
-        p.Children.Add(new TextBlock { Text = string.Join(" · ", one.Where(s => s.Length > 0)), FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, MaxLines = 1 });
-        if (two.Count > 0) p.Children.Add(new TextBlock { Text = string.Join(" · ", two), FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, MaxLines = 1, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
+        p.Children.Add(new TextBlock { Text = string.Join(" · ", one.Where(s => s.Length > 0)), FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Foreground = Ui.Brush("GlassTextPrimaryBrush") });
+        if (two.Count > 0) p.Children.Add(new TextBlock { Text = string.Join(" · ", two), FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
         return p;
     }
 
@@ -728,22 +936,35 @@ public sealed partial class ViewerPage : Page
         Details.Children.Clear();
         Details.Children.Add(DetailGrid(null));
 
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-        var reveal = IconButton("library", "Show in Explorer", Reveal_Click);
-        reveal.Style = Ui.Style("GlassAccentButton");
-        actions.Children.Add(reveal);
-        actions.Children.Add(IconButton("fwd", "Open with the default app", async (_, _) =>
+        var show = Pill("folder", "Show in Explorer", Reveal_Click);
+        show.HorizontalAlignment = HorizontalAlignment.Stretch; show.HorizontalContentAlignment = HorizontalAlignment.Center;
+        Details.Children.Add(show);
+        // Labelled actions, two to a row: an icon alone said too little about what each one does.
+        var actions = new Grid { ColumnSpacing = 8, RowSpacing = 8 };
+        actions.ColumnDefinitions.Add(new ColumnDefinition()); actions.ColumnDefinitions.Add(new ColumnDefinition());
+        void Act(string icon, string label, string tip, RoutedEventHandler click)
+        {
+            var b = Pill(icon, label, click);
+            b.HorizontalAlignment = HorizontalAlignment.Stretch; b.HorizontalContentAlignment = HorizontalAlignment.Left;
+            b.Padding = new Thickness(11, 7, 8, 7);
+            ToolTipService.SetToolTip(b, tip);
+            var n = actions.Children.Count;
+            if (n % 2 == 0) actions.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Grid.SetRow(b, n / 2); Grid.SetColumn(b, n % 2);
+            actions.Children.Add(b);
+        }
+        Act(_item.Kind is "video" or "audio" ? "play" : "eye", "Open", "Open with the default app", async (_, _) =>
         {
             try { await Windows.System.Launcher.LaunchFileAsync(await StorageFile.GetFileFromPathAsync(_item.Path)); } catch (Exception ex) { App.Log("viewer-open", ex, ex.Message); }
-        }));
-        actions.Children.Add(IconButton("text", "Copy the file path (Ctrl+Shift+C)", (_, _) => CopyPath()));
-        actions.Children.Add(IconButton("file", "Copy the file (Ctrl+C)", async (_, _) => await CopyFileAsync()));
-        actions.Children.Add(IconButton("search", "Search with this file", (_, _) =>
+        });
+        Act("copy", "Copy path", "Copy the file path (Ctrl+Shift+C)", (_, _) => CopyPath());
+        Act("file", "Copy file", "Copy the file itself (Ctrl+C)", async (_, _) => await CopyFileAsync());
+        Act("search", "Find similar", "Search the library with this file", (_, _) =>
         {
             LibraryPage.Request = new LibraryRequest(new FileQuery(), "", null, _item.Id, _item.Name);
             App.Window?.ShowLibrary();
-        }));
-        if (_item.Kind is "video" or "audio") actions.Children.Add(IconButton("rows", "Find moments", async (_, _) => await ToggleMomentsAsync()));
+        });
+        if (_item.Kind is "video" or "audio") Act("rows", "Find moments", "Find moments inside this file", async (_, _) => await ToggleMomentsAsync());
         Details.Children.Add(actions);
         _momentsBox = new StackPanel { Spacing = 8, Visibility = Visibility.Collapsed };
         Details.Children.Add(_momentsBox);
@@ -782,7 +1003,12 @@ public sealed partial class ViewerPage : Page
             var wrap = new WrapPanel { Spacing = 6 };
             foreach (var t in tags)
             {
-                var chip = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton { Style = Ui.Style("GlassChip"), Content = new TextBlock { Text = t, FontSize = 11.5 }, Padding = new Thickness(10, 4, 10, 4), CornerRadius = new CornerRadius(5) };
+                var chip = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton
+                {
+                    Style = Ui.Style("GlassChip"), Content = new TextBlock { Text = t, FontSize = 12, Foreground = Ui.Brush("GlassTextPrimaryBrush") },
+                    Padding = new Thickness(10, 4, 10, 4), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1),
+                    Background = new SolidColorBrush(Color.FromArgb(0x38, 0x80, 0x80, 0x88)), BorderBrush = new SolidColorBrush(Color.FromArgb(0x70, 0x80, 0x80, 0x88)),
+                };
                 chip.Click += (_, _) => { LibraryPage.Request = new LibraryRequest(new FileQuery(), "", [(t, t)]); App.Window?.ShowLibrary(); };
                 wrap.Children.Add(chip);
             }
@@ -795,46 +1021,30 @@ public sealed partial class ViewerPage : Page
             _slot.Children.Add(Header("palette", "Colors", "tap to search"));
             if (info.Colors.Count > 0)
             {
-                var strip = new Grid { Height = 36, CornerRadius = new CornerRadius(4), ColumnSpacing = 3 };
-                var caption = new TextBlock { FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Margin = new Thickness(2, 6, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
-                var cols = new List<ColumnDefinition>();
-                var mostly = string.Join(" · ", info.Swatches.Take(3).Select(sw => $"{Title(sw.Key)} {Math.Round(sw.Share * 100)}%"));
-                void Rest() { caption.Text = mostly.Length > 0 ? "Mostly " + mostly : "Tap a colour to find similar"; caption.Foreground = Ui.Brush("GlassTextSecondaryBrush"); foreach (var c in cols) c.Width = new GridLength(1, GridUnitType.Star); }
-                for (var i = 0; i < info.Colors.Count; i++)
+                // At most five clearly different colours: near-identical ones merge into the first of them.
+                var picked = new List<string>();
+                foreach (var c in info.Colors)
                 {
-                    var cd = new ColumnDefinition(); cols.Add(cd); strip.ColumnDefinitions.Add(cd);
-                    var hex = info.Colors[i].StartsWith('#') ? info.Colors[i] : "#" + info.Colors[i];
-                    var r = new Rectangle { Fill = Ui.Hex(hex), RadiusX = 6, RadiusY = 6 };
-                    var idx = i;
-                    r.PointerEntered += (_, _) =>
-                    {
-                        for (var k = 0; k < cols.Count; k++) cols[k].Width = new GridLength(k == idx ? 4 : 1, GridUnitType.Star);
-                        var (name, share) = NearestSwatch(info, hex);
-                        caption.Text = share > 0 ? $"{Title(name)} · {Math.Round(share * 100)}% · {hex.ToUpperInvariant()}" : hex.ToUpperInvariant();
-                        caption.Foreground = Ui.Brush("GlassTextPrimaryBrush");
-                    };
-                    r.PointerExited += (_, _) => Rest();
-                    r.Tapped += (_, _) => { LibraryPage.Request = new LibraryRequest(new FileQuery { Near = hex }, ""); App.Window?.ShowLibrary(); };
-                    Grid.SetColumn(r, i); strip.Children.Add(r);
+                    var hx = c.StartsWith('#') ? c : "#" + c;
+                    var rgb = Ui.Hex(hx).Color;
+                    if (picked.All(o => { var q = Ui.Hex(o).Color; return Math.Sqrt(Math.Pow(rgb.R - q.R, 2) + Math.Pow(rgb.G - q.G, 2) + Math.Pow(rgb.B - q.B, 2)) > 70; })) picked.Add(hx);
+                    if (picked.Count == 5) break;
                 }
-                Rest();
+                // Equal rounded swatches that never move. Hover is a soft brighten; a tap searches by that colour.
+                var strip = new Grid { Height = 40, ColumnSpacing = 6 };
+                for (var i = 0; i < picked.Count; i++)
+                {
+                    strip.ColumnDefinitions.Add(new ColumnDefinition());
+                    var hex = picked[i];
+                    var cell = new Grid { Background = new SolidColorBrush(Colors.Transparent) };
+                    var fill = new Rectangle { Fill = Ui.Hex(hex), RadiusX = 8, RadiusY = 8, Opacity = 0.92, OpacityTransition = new ScalarTransition { Duration = TimeSpan.FromMilliseconds(150) } };
+                    cell.Children.Add(fill);
+                    cell.PointerEntered += (_, _) => fill.Opacity = 1;
+                    cell.PointerExited += (_, _) => fill.Opacity = 0.92;
+                    cell.Tapped += (_, _) => { LibraryPage.Request = new LibraryRequest(new FileQuery { Near = hex }, ""); App.Window?.ShowLibrary(); };
+                    Grid.SetColumn(cell, i); strip.Children.Add(cell);
+                }
                 _slot.Children.Add(strip);
-                _slot.Children.Add(caption);
-            }
-            if (info.Swatches.Count > 0)
-            {
-                var wrap = new WrapPanel { Spacing = 6 };
-                foreach (var s in info.Swatches.Take(6))
-                {
-                    var key = s.Key;
-                    var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-                    row.Children.Add(new Ellipse { Width = 10, Height = 10, Fill = Ui.Hex(s.Swatch), VerticalAlignment = VerticalAlignment.Center });
-                    row.Children.Add(new TextBlock { Text = $"{Title(key)} {Math.Round(s.Share * 100)}%", FontSize = 11.5 });
-                    var chip = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton { Style = Ui.Style("GlassChip"), Content = row, Padding = new Thickness(10, 4, 10, 4), CornerRadius = new CornerRadius(5) };
-                    chip.Click += (_, _) => { LibraryPage.Request = new LibraryRequest(new FileQuery { Color = key }, ""); App.Window?.ShowLibrary(); };
-                    wrap.Children.Add(chip);
-                }
-                _slot.Children.Add(wrap);
             }
         }
 
@@ -1005,12 +1215,12 @@ public sealed partial class ViewerPage : Page
                 _momentsBox.Children.Clear();
                 if (s.Status == "ready")
                 {
-                    _momentsBox.Children.Add(new TextBlock { Text = $"{s.Segments.Count} searchable moments. Click one to jump there.", FontSize = 11.5, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
+                    _momentsBox.Children.Add(new TextBlock { Text = $"{s.Segments.Count} searchable moments. Click one to jump there and mark it; Export then saves just that part.", FontSize = 11.5, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
                     var wrap = new WrapPanel { Spacing = 6 };
                     foreach (var seg in s.Segments)
                     {
                         var b = new Button { Style = Ui.Style("GlassChip"), Padding = new Thickness(10, 4, 10, 4), CornerRadius = new CornerRadius(5), Content = new TextBlock { Text = $"{Clock(seg.Start)}–{Clock(seg.End)}", FontSize = 11.5 } };
-                        var at = seg.Start; b.Click += (_, _) => Seek(at);
+                        double at = seg.Start, until = seg.End; b.Click += (_, _) => { Seek(at); MarkRange(at, until); };
                         wrap.Children.Add(b);
                     }
                     _momentsBox.Children.Add(wrap);
@@ -1035,38 +1245,82 @@ public sealed partial class ViewerPage : Page
         catch (Exception ex) { App.Log("viewer-moments", ex, ex.Message); }
     }
 
-    // ------------------------------------------------------------------ more like this (infinite)
+    // ------------------------------------------------------------------ similar: below the file (default) or in the side panel
+    private bool _side;
+
+    /// <summary>Puts the one grid of similar files where Settings says: under the stage, or in the panel's Similar tab.</summary>
+    private void SetSimilarPlacement(bool side)
+    {
+        _side = side;
+        if (side)
+        {
+            MoreBelowHost.Children.Remove(More);
+            SimilarScroll.Content = More;
+            More.Columns = 2; More.Margin = new Thickness(14, 0, 14, 18);
+            MoreSection.Visibility = Visibility.Collapsed;
+            TabBar.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            SimilarScroll.Content = null;
+            if (!MoreBelowHost.Children.Contains(More)) MoreBelowHost.Children.Add(More);
+            More.Margin = new Thickness(0);
+            MoreSection.Visibility = Visibility.Visible;
+            TabBar.Visibility = Visibility.Collapsed;
+            FitMoreColumns();
+        }
+        SetTab(false);
+    }
+
+    private void More_SizeChanged(object sender, SizeChangedEventArgs e) { if (!_side) FitMoreColumns(); }
+
+    /// <summary>Equal columns about 230 px wide, so the tiles always fill the row edge to edge.</summary>
+    private void FitMoreColumns()
+    {
+        var w = MoreBelowHost.ActualWidth;
+        if (w < 100) return;
+        var cols = Math.Max(2, (int)((w + 8) / 238));
+        if (More.Columns != cols) { More.Columns = cols; More.InvalidateMeasure(); }
+    }
+
     private async Task LoadSimilarAsync(CancellationToken ct)
     {
         More.Children.Clear();
         _similar = []; _shown = 0;
+        MoreNote.Text = SideNote.Text = "";
         try
         {
-            var list = await Api.SimilarAsync(_item.Id, new FileQuery(), 240, ct);
+            var list = await Api.SimilarAsync(_item.Id, new FileQuery(), 240, ct: ct);
             if (ct.IsCancellationRequested) return;
             _similar = list.Where(f => f.Id != _item.Id).ToList();
-            MoreNote.Text = _similar.Count == 0 ? "Nothing similar has been indexed yet." : "Closest first, by what is in them. Keep scrolling; click any to follow it.";
+            MoreNote.Text = SideNote.Text = _similar.Count == 0 ? "Nothing similar has been indexed yet." : "Closest first, by what is in them. Click any to follow it.";
             AddMore();
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) { App.Log("viewer-similar", ex, ex.Message); MoreNote.Text = "Couldn't find similar files just now."; }
+        catch (Exception ex) { App.Log("viewer-similar", ex, ex.Message); MoreNote.Text = SideNote.Text = "Couldn't find similar files just now."; }
     }
 
     private void Scroll_ViewChanged(object sender, ScrollViewerViewChangedEventArgs e)
     {
-        if (_shown < _similar.Count && Scroll.ScrollableHeight - Scroll.VerticalOffset < 900) AddMore();
+        if (!_side && _shown < _similar.Count && Scroll.ScrollableHeight - Scroll.VerticalOffset < 900) AddMore();
+    }
+
+    private void Similar_ViewChanged(object sender, ScrollViewerViewChangedEventArgs e)
+    {
+        if (_side && _shown < _similar.Count && SimilarScroll.ScrollableHeight - SimilarScroll.VerticalOffset < 600) AddMore();
     }
 
     private void AddMore()
     {
-        var end = Math.Min(_shown + Batch, _similar.Count);
+        // whole rows at a time, so the grid never has a ragged end while more is still coming
+        var end = Math.Min(_shown + Math.Max(1, More.Columns) * 4, _similar.Count);
         for (var i = _shown; i < end; i++) More.Children.Add(MoreTile(_similar[i]));
         _shown = end;
     }
 
     private UIElement MoreTile(FileItem f)
     {
-        var tile = new Grid { Width = 232, Height = 168, CornerRadius = new CornerRadius(5), Background = Ui.Brush("GlassFillBrush") };
+        var tile = new Grid { Height = _side ? 108 : 150, CornerRadius = new CornerRadius(6), Background = Ui.Brush("GlassFillBrush") };
         DragHelper.Attach(tile, () => f.Path);
         if (f.Kind == "audio")
         {
@@ -1076,14 +1330,14 @@ public sealed partial class ViewerPage : Page
         {
             tile.Children.Add(new Image { Source = new BitmapImage(Api.ThumbUri(f.Id)) { DecodePixelWidth = 480 }, Stretch = Stretch.UniformToFill });
             if (f.Kind == "video")
-                tile.Children.Add(new Border { Width = 38, Height = 38, CornerRadius = new CornerRadius(5), Background = new SolidColorBrush(Color.FromArgb(140, 0, 0, 0)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Child = new LineIcon { Kind = "play", Size = 14, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } });
+                tile.Children.Add(new Border { Width = 34, Height = 34, CornerRadius = new CornerRadius(6), Background = new SolidColorBrush(Color.FromArgb(150, 0, 0, 0)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Child = new LineIcon { Kind = "play", Size = 13, Foreground = new SolidColorBrush(Colors.White), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } });
         }
         else
         {
-            tile.Children.Add(new LineIcon { Kind = "file", Size = 34, Opacity = 0.5, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
-            tile.Children.Add(new TextBlock { Text = f.Name, FontSize = 11, Margin = new Thickness(10, 0, 10, 8), VerticalAlignment = VerticalAlignment.Bottom, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
+            tile.Children.Add(new LineIcon { Kind = "file", Size = 28, Margin = new Thickness(0, 0, 0, 14), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+            tile.Children.Add(new TextBlock { Text = f.Name, FontSize = 11, Margin = new Thickness(8, 0, 8, 7), VerticalAlignment = VerticalAlignment.Bottom, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
         }
-        tile.Children.Add(new Border { CornerRadius = new CornerRadius(5), BorderBrush = Ui.Brush("GlassStrokeBrush"), BorderThickness = new Thickness(1), IsHitTestVisible = false });
+        tile.Children.Add(new Border { CornerRadius = new CornerRadius(6), BorderBrush = Ui.Brush("GlassStrokeBrush"), BorderThickness = new Thickness(1), IsHitTestVisible = false });
         if (f.Kind != "audio")
         {
             tile.PointerEntered += (_, _) => tile.Opacity = 0.85;

@@ -89,7 +89,7 @@ public sealed class TileLayout : VirtualizingLayout
             case TileMode.Masonry:
             {
                 var cn = Math.Max(2, (int)Math.Round((width + gap) / (_target + gap)));
-                var w = Math.Floor((width - gap * (cn - 1)) / cn);
+                var w = (width - gap * (cn - 1)) / cn;
                 var heights = new double[cn];
                 for (var i = 0; i < _count; i++)
                 {
@@ -133,7 +133,7 @@ public sealed class TileLayout : VirtualizingLayout
                 var contact = _mode == TileMode.Contact;
                 var target = contact ? Math.Min(_target * 0.68, 245) : Math.Min(_target * 1.32, 430);
                 var cn = Math.Max(2, (int)Math.Round((width + gap) / (target + gap)));
-                var w = Math.Floor((width - gap * (cn - 1)) / cn);
+                var w = (width - gap * (cn - 1)) / cn;
                 var h = Math.Round(contact ? w : w * 9 / 16);
                 for (var i = 0; i < _count; i++)
                     _rects[i] = new Rect(i % cn * (w + gap), i / cn * (h + gap), w, h);

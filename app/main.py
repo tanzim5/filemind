@@ -26,6 +26,9 @@ from . import discover as discover_mod
 from . import transcribe as transcribe_mod
 from . import duplicates as duplicates_mod
 from . import moments as moments_mod
+from . import export as export_mod
+from . import search_mix
+from . import space_suggest, space_match
 
 app = FastAPI(title="Local File Brain")
 STATIC = Path(__file__).parent / "static"
@@ -646,15 +649,19 @@ def search(body: dict = Body(...)):
     limit = int(body.get("limit", 100))
     offset = int(body.get("offset", 0))
     keep = _search_filter(body)
+    words = str(body.get("text") or "").strip()[:300]
+    weight = body.get("text_weight")
     if body.get("reference_id"):
         fid = int(body["reference_id"])
         row = db.conn().execute("SELECT path,kind FROM files WHERE id=? AND status='done'", (fid,)).fetchone()
         if row is None or not Path(row["path"]).is_file():
             raise HTTPException(404, "Reference file is no longer indexed")
         try:
-            q = embedder.embed_reference(Path(row["path"]), row["kind"], str(body.get("text") or "")[:300])
+            q = embedder.embed_reference(Path(row["path"]), row["kind"], "")
         except (OSError, ValueError) as exc:
             raise HTTPException(400, str(exc)) from exc
+        if words:
+            q = search_mix.combine(q, embedder.embed_query(words), weight)
         return {"files": _rank(q, root, kinds, limit + offset, exclude_id=fid, keep=keep)[offset:]}
     if body.get("similar_to"):
         fid = int(body["similar_to"])
@@ -662,6 +669,8 @@ def search(body: dict = Body(...)):
         if not r or r["vec"] is None:
             raise HTTPException(400, "File not indexed yet")
         q = np.frombuffer(r["vec"], dtype=np.float32)
+        if words:                                      # a reference plus words: "like this, but at night"
+            q = search_mix.combine(q, embedder.embed_query(words), weight)
         return {"files": _rank(q, root, kinds, limit + offset, exclude_id=fid, keep=keep)[offset:]}
     qs = [q.strip() for q in (body.get("qs") or [body.get("q") or ""]) if q and q.strip()]
     if not qs:
@@ -802,14 +811,16 @@ async def voice_text(file: UploadFile = File(...)):
 
 @app.post("/api/search/image")
 async def search_by_image(file: UploadFile = File(...), root: int | None = None, limit: int = 100,
-                          text: str = ""):
+                          text: str = "", text_weight: float = search_mix.DEFAULT_TEXT_WEIGHT):
     tmp = extract.TMP_DIR / f"query_{int(time.time()*1000)}{Path(file.filename).suffix}"
     tmp.write_bytes(await file.read())
     try:
         kind = extract.kind_of(Path(file.filename).suffix.lower())
         if kind not in ("image", "video", "audio"):
             raise HTTPException(400, "Drop a picture, a video clip or a sound to find things that look or sound like it")
-        q = embedder.embed_reference(tmp, kind, text[:300])
+        q = embedder.embed_reference(tmp, kind, "")
+        if text.strip():
+            q = search_mix.combine(q, embedder.embed_query(text.strip()[:300]), text_weight)
     finally:
         tmp.unlink(missing_ok=True)
     return {"files": _rank(q, root, None, limit)}
@@ -1113,6 +1124,8 @@ def delete_project(pid: int):
     c = db.conn()
     c.execute("DELETE FROM project_files WHERE project_id=?", (pid,))
     c.execute("DELETE FROM smart_spaces WHERE project_id=?", (pid,))
+    _dismissals_table(c)
+    c.execute("DELETE FROM space_dismissals WHERE project_id=?", (pid,))
     c.execute("DELETE FROM projects WHERE id=?", (pid,))
     c.commit()
     return {"ok": True}
@@ -1127,6 +1140,63 @@ def project_add(pid: int, body: dict = Body(...)):
         c.execute("INSERT OR IGNORE INTO project_files VALUES(?,?)", (pid, fid))
     c.commit()
     return {"ok": True}
+
+
+def _dismissals_table(c):
+    c.execute("CREATE TABLE IF NOT EXISTS space_dismissals (project_id INTEGER NOT NULL, file_id INTEGER NOT NULL, PRIMARY KEY(project_id, file_id))")
+
+
+@app.get("/api/projects/{pid}/suggestions")
+def project_suggestions(pid: int, limit: int = 40):
+    """Files that probably belong in this space: nearest to the average of its members, not yet members, not
+    dismissed for this space, and similar enough (space_suggest.MIN_SIMILARITY). Nothing is added here."""
+    c = db.conn()
+    if c.execute("SELECT 1 FROM projects WHERE id=?", (pid,)).fetchone() is None:
+        raise HTTPException(404, "No such space")
+    _dismissals_table(c)
+    if c.execute("SELECT 1 FROM smart_spaces WHERE project_id=?", (pid,)).fetchone():
+        return {"files": []}                                   # a live space fills itself from its search
+    members = [r[0] for r in c.execute("SELECT file_id FROM project_files WHERE project_id=?", (pid,))]
+    dismissed = [r[0] for r in c.execute("SELECT file_id FROM space_dismissals WHERE project_id=?", (pid,))]
+    ids, mat = indexer.matrix()
+    found = space_suggest.suggest(ids, mat, members, dismissed, max(1, min(int(limit), 200)))
+    if not found:
+        return {"files": []}
+    rows = {r["id"]: r for r in c.execute(
+        f"SELECT * FROM files WHERE status='done' AND id IN ({','.join('?' for _ in found)})", [fid for fid, _ in found])}
+    return {"files": [_file_dict(rows[fid], score) for fid, score in found if fid in rows]}
+
+
+@app.post("/api/projects/{pid}/suggestions/dismiss")
+def project_suggestions_dismiss(pid: int, body: dict = Body(...)):
+    c = db.conn()
+    if c.execute("SELECT 1 FROM projects WHERE id=?", (pid,)).fetchone() is None:
+        raise HTTPException(404, "No such space")
+    _dismissals_table(c)
+    for fid in body.get("file_ids", []):
+        c.execute("INSERT OR IGNORE INTO space_dismissals VALUES(?,?)", (pid, int(fid)))
+    c.commit()
+    return {"ok": True}
+
+
+@app.post("/api/spaces/match")
+def spaces_match(body: dict = Body(...)):
+    """Which files fit these short descriptions ("cats", "dogs at the beach")? Read only: nothing is created here.
+    Returns every matching id (best first, at most space_match.MAX_FILES), a preview of the first few files and how many
+    fit each description."""
+    raw = body.get("descriptions")
+    texts = [t.strip() for t in raw if isinstance(t, str) and t.strip()] if isinstance(raw, list) else []
+    if not texts or len(texts) > 8 or any(len(t) > 200 for t in texts):
+        raise HTTPException(400, "Give one to eight short descriptions")
+    ids, mat = indexer.matrix()
+    found, per = space_match.match(ids, mat, [embedder.embed_query(t) for t in texts])
+    c = db.conn()
+    wanted = [fid for fid, _ in found[:12]]
+    rows = {r["id"]: r for r in c.execute(
+        f"SELECT * FROM files WHERE id IN ({','.join('?' for _ in wanted) or 'NULL'})", wanted)}
+    score = dict(found)
+    return {"file_ids": [fid for fid, _ in found], "count": len(found),
+            "per_description": per, "preview": [_file_dict(rows[f], score[f]) for f in wanted if f in rows]}
 
 
 @app.post("/api/projects/{pid}/remove")
@@ -1335,6 +1405,38 @@ def commits():
 @app.post("/api/commits/{cid}/undo")
 def commit_undo(cid: int):
     return commit_mod.undo(cid)
+
+
+# ---- Exports: new files made from library files with FFmpeg. Originals are only read. ----
+
+@app.post("/api/export")
+def export_start(body: dict = Body(...)):
+    ids = body.get("file_ids")
+    if not isinstance(ids, list) or not ids or len(ids) > 500 or any(type(i) is not int for i in ids):
+        raise HTTPException(400, "Choose files to export.")
+    try:
+        spec = export_mod.clean_spec(body)
+        return {"jobs": export_mod.submit(list(dict.fromkeys(ids)), spec, body.get("destination") or None)}
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
+
+
+@app.get("/api/export/jobs")
+def export_jobs():
+    return {"jobs": export_mod.jobs()}
+
+
+@app.post("/api/export/jobs/{job_id}/cancel")
+def export_cancel(job_id: int):
+    try:
+        return export_mod.cancel(job_id)
+    except KeyError:
+        raise HTTPException(404, "That export is no longer in the list.") from None
+
+
+@app.post("/api/export/clear")
+def export_clear():
+    return {"cleared": export_mod.clear_finished()}
 
 
 @app.middleware("http")

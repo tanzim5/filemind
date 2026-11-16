@@ -4,20 +4,20 @@
       xmlns:local="using:FileMind.Pages">
   <Grid>
     <ScrollViewer VerticalScrollBarVisibility="Hidden">
-      <StackPanel Padding="40,34,40,60" Spacing="26">
-        <Grid>
-          <StackPanel Spacing="4">
-            <TextBlock Text="All spaces" Style="{StaticResource TitleText}" FontSize="34"/>
-            <TextBlock x:Name="Summary" Style="{StaticResource SecondaryText}"/>
+      <StackPanel Padding="40,72,40,60" Spacing="28">
+        <TextBlock x:Name="YourTitle" Visibility="Collapsed" Text="Your spaces" Style="{StaticResource TitleText}" FontSize="26"/>
+        <local:WrapPanel x:Name="Cards" Spacing="26" SizeChanged="Grid_SizeChanged"/>
+
+        <!-- Groups the engine proposes from files in no space: each is a dashed stack you can keep or dismiss. Nothing is made until Keep. -->
+        <StackPanel x:Name="SuggestBox" Visibility="Collapsed" Spacing="16">
+          <StackPanel Orientation="Horizontal" Spacing="14">
+            <TextBlock Text="Suggested" Style="{StaticResource TitleText}" FontSize="26"/>
+            <TextBlock x:Name="SuggestNote" Style="{StaticResource SecondaryText}" VerticalAlignment="Bottom" Margin="0,0,0,4"/>
           </StackPanel>
-          <Button Style="{StaticResource GlassAccentButton}" HorizontalAlignment="Right" VerticalAlignment="Top" Padding="14,8" CornerRadius="6" Click="NewSpace_Click">
-            <StackPanel Orientation="Horizontal" Spacing="8"><local:LineIcon Kind="plus" Size="14"/><TextBlock Text="Create a new space" FontSize="13"/></StackPanel>
-          </Button>
-        </Grid>
-        <local:WrapPanel x:Name="Grid" Spacing="22"/>
+          <local:WrapPanel x:Name="Review" Spacing="26" SizeChanged="Grid_SizeChanged"/>
+        </StackPanel>
         <TextBlock x:Name="Note" Style="{StaticResource SecondaryText}" TextWrapping="Wrap"/>
       </StackPanel>
     </ScrollViewer>
-    <Rectangle Height="26" VerticalAlignment="Top" IsHitTestVisible="False" Fill="{StaticResource FadeTopBrush}"/>
   </Grid>
 </Page>

@@ -14,6 +14,9 @@ public sealed class WrapPanel : Panel
     /// <summary>When above zero, chips sit in equal columns that fill the width, so rows line up with no gaps.</summary>
     public int Columns { get; set; }
 
+    /// <summary>With equal columns, a short last row is stretched to the full width so no empty area is left on the right.</summary>
+    public bool StretchLastRow { get; set; }
+
     /// <summary>Flowing chips keep their natural widths but each full row is stretched to the edge, so the block reads
     /// as a tidy rectangle instead of a ragged column (a short last row keeps natural widths).</summary>
     public bool Justify { get; set; }
@@ -70,11 +73,14 @@ public sealed class WrapPanel : Panel
         if (Columns > 0)
         {
             var cell = (final.Width - Spacing * (Columns - 1)) / Columns;
-            double cy = 0, ch = 0; int i = 0;
+            double cy = 0, ch = 0; int i = 0, total = Children.Count;
             foreach (var child in Children)
             {
                 ch = Math.Max(ch, child.DesiredSize.Height);
-                child.Arrange(new Rect((i % Columns) * (cell + Spacing), cy, cell, child.DesiredSize.Height));
+                var rowStart = i - i % Columns;
+                var inRow = Math.Min(Columns, total - rowStart);
+                var w = StretchLastRow && inRow < Columns ? (final.Width - Spacing * (inRow - 1)) / inRow : cell;
+                child.Arrange(new Rect((i % Columns) * (w + Spacing), cy, w, child.DesiredSize.Height));
                 if (++i % Columns == 0) { cy += ch + Spacing; ch = 0; }
             }
             return final;

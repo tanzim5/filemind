@@ -125,6 +125,11 @@ def init():
             PRIMARY KEY(file_id, tag)
         );
         CREATE INDEX IF NOT EXISTS idx_file_tags_tag ON file_tags(tag);
+        CREATE TABLE IF NOT EXISTS space_dismissals (
+            project_id INTEGER NOT NULL,
+            file_id INTEGER NOT NULL,
+            PRIMARY KEY(project_id, file_id)
+        );
         CREATE TABLE IF NOT EXISTS moment_runs (
             file_id INTEGER PRIMARY KEY,
             size INTEGER NOT NULL,

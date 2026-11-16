@@ -4,6 +4,8 @@
   <!-- Geist (Vercel, SIL OFL) for all text; the folder form loads every weight bundled in Assets/Fonts. -->
   <FontFamily x:Key="ContentControlThemeFontFamily">ms-appx:///Assets/Fonts/#Geist</FontFamily>
   <FontFamily x:Key="AppFont">ms-appx:///Assets/Fonts/#Geist</FontFamily>
+  <!-- Instrument Serif (SIL OFL) for page titles and the search field. -->
+  <FontFamily x:Key="SerifFont">ms-appx:///Assets/Fonts/#Instrument Serif</FontFamily>
 
 
   <!-- File Mind's orange as the system accent. -->
@@ -22,11 +24,29 @@
   <SolidColorBrush x:Key="GlassFillHoverBrush" Color="#1FFFFFFF"/>
   <SolidColorBrush x:Key="GlassTextSecondaryBrush" Color="#B3FFFFFF"/>
   <SolidColorBrush x:Key="GlassTextTertiaryBrush" Color="#80FFFFFF"/>
+  <!-- Full-strength text, for icons and values that must always read (recoloured by ThemeEngine). -->
+  <SolidColorBrush x:Key="GlassTextPrimaryBrush" Color="#FFFFFFFF"/>
+  <!-- The search field: a solid fill with a clear edge (recoloured by ThemeEngine). -->
+  <SolidColorBrush x:Key="FieldFillBrush" Color="#22FFFFFF"/>
+  <SolidColorBrush x:Key="FieldBorderBrush" Color="#44FFFFFF"/>
 
   <LinearGradientBrush x:Key="GlassStrokeBrush" StartPoint="0,0" EndPoint="1,1">
     <GradientStop Color="#40FFFFFF" Offset="0"/>
     <GradientStop Color="#10FFFFFF" Offset="0.5"/>
     <GradientStop Color="#22FFFFFF" Offset="1"/>
+  </LinearGradientBrush>
+
+  <!-- Liquid glass only: a faint highlight along the inside of the top edge (transparent in frosted mode; recoloured by ThemeEngine). -->
+  <LinearGradientBrush x:Key="LiquidSheenBrush" StartPoint="0,0" EndPoint="0,1">
+    <GradientStop Color="#00FFFFFF" Offset="0"/>
+    <GradientStop Color="#00FFFFFF" Offset="0.55"/>
+  </LinearGradientBrush>
+
+  <!-- Liquid glass only: a 1 px bright-on-top edge drawn over buttons and chips (transparent in frosted mode). -->
+  <LinearGradientBrush x:Key="LiquidEdgeBrush" StartPoint="0,0" EndPoint="0,1">
+    <GradientStop Color="#00FFFFFF" Offset="0"/>
+    <GradientStop Color="#00FFFFFF" Offset="0.5"/>
+    <GradientStop Color="#00FFFFFF" Offset="1"/>
   </LinearGradientBrush>
 
   <LinearGradientBrush x:Key="TileScrimBrush" StartPoint="0,0" EndPoint="0,1">
@@ -48,10 +68,9 @@
   </Style>
 
   <Style x:Key="TitleText" TargetType="TextBlock">
-    <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
-    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="FontFamily" Value="{StaticResource SerifFont}"/>
+    <Setter Property="FontWeight" Value="Normal"/>
     <Setter Property="FontSize" Value="40"/>
-    <Setter Property="CharacterSpacing" Value="-20"/>
   </Style>
 
   <Style x:Key="SecondaryText" TargetType="TextBlock">
@@ -65,8 +84,8 @@
   <SolidColorBrush x:Key="AccentOnStrokeBrush" Color="#99FF7A45"/>
   <SolidColorBrush x:Key="GlassHighlightBrush" Color="#26FFFFFF"/>
   <SolidColorBrush x:Key="GlassHoverSoftBrush" Color="#14FFFFFF"/>
-  <LinearGradientBrush x:Key="FadeTopBrush" StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#FF17171B" Offset="0"/><GradientStop Color="#0017171B" Offset="1"/></LinearGradientBrush>
-  <LinearGradientBrush x:Key="FadeBottomBrush" StartPoint="0,1" EndPoint="0,0"><GradientStop Color="#FF17171B" Offset="0"/><GradientStop Color="#0017171B" Offset="1"/></LinearGradientBrush>
+  <!-- Frosted toolbar: blurs the tiles scrolling beneath it (recoloured by ThemeEngine). -->
+  <AcrylicBrush x:Key="ToolbarGlassBrush" TintColor="#0C0D14" TintOpacity="0.62" TintLuminosityOpacity="0.72" FallbackColor="#F20C0D14"/>
   <SolidColorBrush x:Key="AccentTintStrongBrush" Color="#80FF5A1F"/>
   <SolidColorBrush x:Key="SurfaceBrush" Color="#FF1B1B21"/>
   <SolidColorBrush x:Key="OverlayBrush" Color="#F01D1D22"/>
@@ -93,6 +112,7 @@
             <Border x:Name="Bg" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
                     BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}"/>
             <Border x:Name="Hl" Background="{StaticResource GlassHighlightBrush}" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
+            <Border BorderBrush="{StaticResource LiquidEdgeBrush}" BorderThickness="1" CornerRadius="{TemplateBinding CornerRadius}" IsHitTestVisible="False"/>
             <ContentPresenter Padding="{TemplateBinding Padding}" HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
                               VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" Foreground="{TemplateBinding Foreground}"/>
             <VisualStateManager.VisualStateGroups>
@@ -129,6 +149,7 @@
                     BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}"/>
             <Border x:Name="On" Background="{StaticResource AccentOnFillBrush}" BorderBrush="{StaticResource AccentOnStrokeBrush}" BorderThickness="1" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
             <Border x:Name="Hl" Background="{StaticResource GlassHighlightBrush}" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
+            <Border BorderBrush="{StaticResource LiquidEdgeBrush}" BorderThickness="1" CornerRadius="{TemplateBinding CornerRadius}" IsHitTestVisible="False"/>
             <ContentPresenter Padding="{TemplateBinding Padding}" HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
                               VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" Foreground="{TemplateBinding Foreground}"/>
             <VisualStateManager.VisualStateGroups>
@@ -147,10 +168,55 @@
     </Setter>
   </Style>
 
+  <!-- Boxed 30 px button for the top bars (back, forward, sort, layout, size): hairline border, radius 7. -->
+  <Style x:Key="BoxButton" TargetType="Button" BasedOn="{StaticResource GlassButton}">
+    <Setter Property="Background" Value="{StaticResource FieldFillBrush}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource FieldBorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="7"/>
+    <Setter Property="Height" Value="30"/>
+    <Setter Property="MinWidth" Value="30"/>
+    <Setter Property="Padding" Value="8,0"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+  </Style>
+  <Style x:Key="BoxAccentButton" TargetType="Button" BasedOn="{StaticResource BoxButton}">
+    <Setter Property="Background" Value="{StaticResource AccentFillBrush}"/>
+    <Setter Property="BorderBrush" Value="Transparent"/>
+    <Setter Property="Foreground" Value="White"/>
+  </Style>
+
   <Style x:Key="SectionLabel" TargetType="TextBlock">
     <Setter Property="Foreground" Value="{StaticResource GlassTextSecondaryBrush}"/>
-    <Setter Property="FontSize" Value="12.5"/>
+    <Setter Property="FontSize" Value="11.5"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+
+  <!-- Small icon button for the top bar: no border until the pointer is over it. -->
+  <Style x:Key="BarButton" TargetType="Button">
+    <Setter Property="Width" Value="28"/>
+    <Setter Property="Height" Value="28"/>
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Grid Background="Transparent">
+            <Border x:Name="Hl" Background="{StaticResource GlassHighlightBrush}" CornerRadius="{TemplateBinding CornerRadius}" Opacity="0"/>
+            <ContentPresenter x:Name="Cp" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Padding="{TemplateBinding Padding}" Foreground="{StaticResource GlassTextPrimaryBrush}"/>
+            <VisualStateManager.VisualStateGroups>
+              <VisualStateGroup x:Name="CommonStates">
+                <VisualState x:Name="Normal"/>
+                <VisualState x:Name="PointerOver"><VisualState.Setters><Setter Target="Hl.Opacity" Value="1"/></VisualState.Setters></VisualState>
+                <VisualState x:Name="Pressed"><VisualState.Setters><Setter Target="Hl.Opacity" Value="1"/><Setter Target="Cp.Opacity" Value="0.7"/></VisualState.Setters></VisualState>
+                <VisualState x:Name="Disabled"><VisualState.Setters><Setter Target="Cp.Opacity" Value="0.35"/></VisualState.Setters></VisualState>
+              </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
   </Style>
 
   <!-- Sidebar and page chrome become transparent so the acrylic window shows through. -->
@@ -165,8 +231,8 @@
     <Setter Property="HorizontalAlignment" Value="Stretch"/>
     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
     <Setter Property="Padding" Value="10,0"/>
-    <Setter Property="MinHeight" Value="38"/>
-    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="MinHeight" Value="30"/>
+    <Setter Property="CornerRadius" Value="6"/>
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ToggleButton">
@@ -194,5 +260,36 @@
   <Style x:Key="SettingRow" TargetType="Grid">
     <Setter Property="Padding" Value="14,11"/>
     <Setter Property="ColumnSpacing" Value="14"/>
+  </Style>
+
+  <!-- A row of the quick search list: no box, a soft hover, and the chosen row filled with a gentle tint of the accent. -->
+  <Style x:Key="QuickRow" TargetType="ListViewItem">
+    <Setter Property="Padding" Value="8,0"/>
+    <Setter Property="Margin" Value="0,1"/>
+    <Setter Property="MinHeight" Value="0"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ListViewItem">
+          <Grid>
+            <Border x:Name="Bg" CornerRadius="8" Background="Transparent"/>
+            <Border x:Name="Sel" CornerRadius="8" Background="{StaticResource AccentTintBrush}" Opacity="0"/>
+            <ContentPresenter Padding="{TemplateBinding Padding}" HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"/>
+            <VisualStateManager.VisualStateGroups>
+              <VisualStateGroup x:Name="CommonStates">
+                <VisualState x:Name="Normal"/>
+                <VisualState x:Name="PointerOver"><VisualState.Setters><Setter Target="Bg.Background" Value="{StaticResource GlassHoverSoftBrush}"/></VisualState.Setters></VisualState>
+                <VisualState x:Name="Pressed"><VisualState.Setters><Setter Target="Bg.Background" Value="{StaticResource GlassHoverSoftBrush}"/></VisualState.Setters></VisualState>
+                <VisualState x:Name="Selected"><VisualState.Setters><Setter Target="Sel.Opacity" Value="1"/></VisualState.Setters></VisualState>
+                <VisualState x:Name="PointerOverSelected"><VisualState.Setters><Setter Target="Sel.Opacity" Value="1"/></VisualState.Setters></VisualState>
+                <VisualState x:Name="PressedSelected"><VisualState.Setters><Setter Target="Sel.Opacity" Value="1"/></VisualState.Setters></VisualState>
+              </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
   </Style>
 </ResourceDictionary>

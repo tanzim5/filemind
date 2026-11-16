@@ -18,9 +18,11 @@ public sealed class AppSettings
     public bool WinMax { get; set; }
     public double Transparency { get; set; } = 0.6;   // 0 solid … 1 most glass
     /// <summary>Colour theme key (see ThemeEngine) and the accent colour as #RRGGBB.</summary>
-    public string Theme { get; set; } = "ink";
+    public string Theme { get; set; } = "paper";
     public string Accent { get; set; } = "#FF5A1F";
-    public double TileGap { get; set; } = 12;
+    /// <summary>Surface style: "frosted" (frosted glass, the default) or "liquid" (clearer, brighter glass with bright edges).</summary>
+    public string Surface { get; set; } = "frosted";
+    public double TileGap { get; set; } = 10;
     /// <summary>Volume the viewer starts at (0 to 1).</summary>
     public double Volume { get; set; } = 0.8;
     /// <summary>System-wide shortcut that opens the quick-search launcher.</summary>
@@ -29,6 +31,8 @@ public sealed class AppSettings
     public bool KeepRunning { get; set; } = true;
     /// <summary>Voice search: "local" (Whisper on this PC) or "windows" (Windows speech recognition).</summary>
     public string VoiceEngine { get; set; } = "local";
+    /// <summary>Where the viewer shows similar files: "below" the file (default) or "side" (the Similar tab in the side panel).</summary>
+    public string SimilarFiles { get; set; } = "below";
 
     public static AppSettings Load(AppPaths paths)
     {

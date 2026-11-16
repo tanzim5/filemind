@@ -41,11 +41,14 @@ public sealed class ApiClient(Uri baseUri) : IDisposable
     public async Task<List<FileItem>> SearchAsync(IEnumerable<string> texts, FileQuery query, int limit, int offset, CancellationToken ct = default) =>
         (await PostAsync<SearchResult>("/api/search", query.ToSearchBody(texts, limit, offset), ct)).Files;
 
-    public async Task<List<FileItem>> SimilarAsync(int id, FileQuery query, int limit = 100, CancellationToken ct = default)
+    /// <summary>Files like this one. With <paramref name="words"/> the engine mixes the file's vector with the words
+    /// ("like this, but at night"); <paramref name="textWeight"/> (0 to 1, engine default 0.5) says how much the words count.</summary>
+    public async Task<List<FileItem>> SimilarAsync(int id, FileQuery query, int limit = 100, string? words = null, double? textWeight = null, CancellationToken ct = default)
     {
         var body = query.ToSearchBody([], limit, 0);
         body.Remove("qs");
         body["similar_to"] = id;
+        if (!string.IsNullOrWhiteSpace(words)) { body["text"] = words; if (textWeight is { } w) body["text_weight"] = w; }
         return (await PostAsync<SearchResult>("/api/search", body, ct)).Files;
     }
 
@@ -94,12 +97,13 @@ public sealed class ApiClient(Uri baseUri) : IDisposable
     }
 
     /// <summary>Find files that look or sound like a picture on disk.</summary>
-    public async Task<List<FileItem>> SearchByImageAsync(string path, FileQuery query, CancellationToken ct = default)
+    public async Task<List<FileItem>> SearchByImageAsync(string path, FileQuery query, string? words = null, double? textWeight = null, CancellationToken ct = default)
     {
         using var form = new MultipartFormDataContent();
         var bytes = new ByteArrayContent(await File.ReadAllBytesAsync(path, ct));
         form.Add(bytes, "file", Path.GetFileName(path));
-        using var response = await _http.PostAsync("/api/search/image?limit=200" + (query.Root is { } r ? $"&root={r}" : ""), form, ct);
+        using var response = await _http.PostAsync("/api/search/image?limit=200" + (query.Root is { } r ? $"&root={r}" : "")
+            + (string.IsNullOrWhiteSpace(words) ? "" : "&text=" + Uri.EscapeDataString(words) + (textWeight is { } w ? "&text_weight=" + w.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")), form, ct);
         return (await ReadAsync<SearchResult>(response, ct)).Files;
     }
 
@@ -131,14 +135,34 @@ public sealed class ApiClient(Uri baseUri) : IDisposable
 
     public Task CreateProjectAsync(string name, IEnumerable<int> fileIds, CancellationToken ct = default) =>
         PostAsync<JsonElement>("/api/projects", new { name, file_ids = fileIds.ToArray() }, ct);
+    /// <summary>The engine's proposals for new spaces ("Auto-group"). Nothing is created until the caller keeps one.</summary>
+    public Task<ClusterResponse> ProposeSpacesAsync(bool unassignedOnly = true, CancellationToken ct = default) =>
+        PostAsync<ClusterResponse>("/api/cluster", new { unassigned = unassignedOnly }, ct);
+    /// <summary>Which files fit these short descriptions ("cats", "dogs at the beach"). Read only.</summary>
+    public Task<SpaceMatchResult> MatchSpacesAsync(IEnumerable<string> descriptions, CancellationToken ct = default) =>
+        PostAsync<SpaceMatchResult>("/api/spaces/match", new { descriptions = descriptions.ToArray() }, ct);
     public Task AddToProjectAsync(int project, IEnumerable<int> fileIds, CancellationToken ct = default) =>
         PostAsync<JsonElement>($"/api/projects/{project}/add", new { file_ids = fileIds.ToArray() }, ct);
+    /// <summary>Files that probably belong in a space (nearest to what it holds, not members, not dismissed). Nothing is added.</summary>
+    public async Task<List<FileItem>> GetSpaceSuggestionsAsync(int project, int limit = 12, CancellationToken ct = default) =>
+        (await GetAsync<SearchResult>($"/api/projects/{project}/suggestions?limit={limit}", ct)).Files;
+    /// <summary>"Not this one": the files are not offered for this space again.</summary>
+    public Task DismissSuggestionsAsync(int project, IEnumerable<int> fileIds, CancellationToken ct = default) =>
+        PostAsync<JsonElement>($"/api/projects/{project}/suggestions/dismiss", new { file_ids = fileIds.ToArray() }, ct);
     public Task RemoveFromProjectAsync(int project, IEnumerable<int> fileIds, CancellationToken ct = default) =>
         PostAsync<JsonElement>($"/api/projects/{project}/remove", new { file_ids = fileIds.ToArray() }, ct);
 
     /// <summary>"copy", "move" or "delete" (to the Recycle Bin) on indexed originals. The engine never overwrites.</summary>
     public Task FileActionAsync(string action, IEnumerable<int> fileIds, string? destination = null, CancellationToken ct = default) =>
         PostAsync<JsonElement>("/api/file_actions", new { action, file_ids = fileIds.ToArray(), destination }, ct);
+
+    /// <summary>Queues one export per file. The engine writes new files and never touches the originals.</summary>
+    public async Task<List<ExportJob>> StartExportAsync(IEnumerable<int> fileIds, ExportSpec spec, string? destination, CancellationToken ct = default) =>
+        (await PostAsync<ExportJobs>("/api/export", spec.ToBody(fileIds, destination), ct)).Jobs;
+    public async Task<List<ExportJob>> GetExportJobsAsync(CancellationToken ct = default) => (await GetAsync<ExportJobs>("/api/export/jobs", ct)).Jobs;
+    public Task CancelExportAsync(int id, CancellationToken ct = default) => PostAsync<JsonElement>($"/api/export/jobs/{id}/cancel", null, ct);
+    /// <summary>Forgets the finished, failed and cancelled exports.</summary>
+    public Task ClearExportsAsync(CancellationToken ct = default) => PostAsync<JsonElement>("/api/export/clear", null, ct);
 
     private async Task<T> GetAsync<T>(string url, CancellationToken ct)
     {

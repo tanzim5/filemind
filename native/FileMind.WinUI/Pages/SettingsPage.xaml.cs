@@ -24,13 +24,21 @@ public sealed partial class SettingsPage : Page
         GlassSlider.Value = St.Transparency * 100;
         ShowHotkey(); KeepSwitch.IsOn = St.KeepRunning;
         VoiceChoice.SelectedIndex = St.VoiceEngine == "windows" ? 1 : 0;
+        SimilarChoice.SelectedIndex = St.SimilarFiles == "side" ? 1 : 0;
         SizeSlider.Value = St.TileSize;
         GapSlider.Value = St.TileGap;
         NamesSwitch.IsOn = St.ShowNames;
         VolumeSlider.Value = St.Volume * 100;
-        BuildAll();
+        BuildAll(); BuildSections();
         _ready = true;
-        Labels();
+        Labels(); GlassValue.Text = $"{GlassSlider.Value:0} %";
+    }
+
+    private void Similar_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_ready) return;
+        St.SimilarFiles = SimilarChoice.SelectedIndex == 1 ? "side" : "below";
+        Save();
     }
 
     private void Voice_Changed(object sender, SelectionChangedEventArgs e)
@@ -40,7 +48,65 @@ public sealed partial class SettingsPage : Page
         Save();
     }
 
-    private void BuildAll() { BuildThemes(); BuildAccents(); BuildLayouts(); }
+    // A tile's name is always shown. The chosen tile gets the accent ring (set by the caller) and a small check in its corner.
+    private static UIElement Tile(Border frame, bool selected, Brush accent)
+    {
+        if (!selected) return frame;
+        var g = new Grid();
+        g.Children.Add(frame);
+        g.Children.Add(new Border
+        {
+            Width = 18, Height = 18, CornerRadius = new CornerRadius(9), Background = accent, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 6, 6, 0),
+            Child = new TextBlock { Text = "\uE73E", FontFamily = new FontFamily("Segoe Fluent Icons"), FontSize = 10, Foreground = new SolidColorBrush(Colors.White), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+        });
+        return g;
+    }
+
+    private static TextBlock Label(string text, bool selected) => new()
+    {
+        Text = text, FontSize = 12.5, HorizontalAlignment = HorizontalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
+        FontWeight = selected ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
+        Foreground = Ui.Brush(selected ? "GlassTextPrimaryBrush" : "GlassTextSecondaryBrush"),
+    };
+
+    // ---- Section list: chips at the top that scroll to a card; the chip of the card in view is lit ----
+    private readonly List<(string Name, FrameworkElement Card, ToggleButton Chip)> _sections = [];
+    private bool _jumping;
+
+    private void BuildSections()
+    {
+        foreach (var (name, card) in new (string, FrameworkElement)[] { ("Appearance", SecAppearance), ("Library", SecLibrary), ("Quick search", SecQuick), ("Viewer", SecViewer), ("Engine", SecEngine), ("Folders", SecFolders), ("About", SecAbout) })
+        {
+            var chip = new ToggleButton { Style = Ui.Style("GlassChip"), Padding = new Thickness(12, 5, 12, 5), CornerRadius = new CornerRadius(6), Content = new TextBlock { Text = name, FontSize = 12.5 } };
+            var c = card;
+            chip.Click += (_, _) =>
+            {
+                var y = c.TransformToVisual((UIElement)Scroller.Content).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
+                _jumping = true;
+                Scroller.ChangeView(null, Math.Max(0, y - 4), null, !Anim.On);
+                Highlight(c);
+            };
+            _sections.Add((name, card, chip)); SectionNav.Children.Add(chip);
+        }
+        Highlight(SecAppearance);
+    }
+
+    private void Highlight(FrameworkElement current) { foreach (var s in _sections) s.Chip.IsChecked = ReferenceEquals(s.Card, current); }
+
+    private void Scroller_ViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
+    {
+        if (e.IsIntermediate && _jumping) return;
+        _jumping = false;
+        if (_sections.Count == 0) return;
+        var off = Scroller.VerticalOffset;
+        FrameworkElement cur = _sections[0].Card;
+        foreach (var s in _sections)
+            if (s.Card.TransformToVisual((UIElement)Scroller.Content).TransformPoint(new Windows.Foundation.Point(0, 0)).Y <= off + 40) cur = s.Card;
+        if (Scroller.ScrollableHeight - off < 4) cur = _sections[^1].Card;
+        Highlight(cur);
+    }
+
+    private void BuildAll() { BuildThemes(); BuildSurfaces(); BuildAccents(); BuildLayouts(); }
 
     // ---- Quick search shortcut: click, then press the new combination ----
     private bool _recording;
@@ -79,9 +145,9 @@ public sealed partial class SettingsPage : Page
 
     private void Labels()
     {
-        SizeLabel.Text = $"Tile size · {St.TileSize:0}px";
-        GapLabel.Text = $"Spacing · {St.TileGap:0}px";
-        VolumeLabel.Text = $"Default volume · {St.Volume * 100:0}%";
+        SizeLabel.Text = $"{St.TileSize:0}px";
+        GapLabel.Text = $"{St.TileGap:0}px";
+        VolumeLabel.Text = $"{St.Volume * 100:0}%";
     }
 
     // ---- Appearance ----
@@ -90,7 +156,8 @@ public sealed partial class SettingsPage : Page
     {
         ThemeChips.Children.Clear();
         var accent = (SolidColorBrush)Ui.Brush("AccentBrush");
-        foreach (var p in ThemeEngine.All)
+        // The last tile follows Windows' own light or dark setting.
+        foreach (var p in ThemeEngine.All.Append(ThemeEngine.Find("system") with { Key = "system", Name = "Match Windows" }))
         {
             var selected = p.Key == St.Theme;
             var ink = p.Dark ? Windows.UI.Color.FromArgb(0x55, 255, 255, 255) : Windows.UI.Color.FromArgb(0x40, 0, 0, 0);
@@ -116,27 +183,61 @@ public sealed partial class SettingsPage : Page
                 BorderThickness = new Thickness(selected ? 2 : 1),
                 BorderBrush = selected ? accent : Ui.Brush("GlassStrokeBrush") };
             var col = new StackPanel { Spacing = 6 };
-            col.Children.Add(frame);
-            col.Children.Add(new TextBlock { Text = p.Name, FontSize = 12.5, HorizontalAlignment = HorizontalAlignment.Center,
-                FontWeight = selected ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
-                Foreground = selected ? null : Ui.Brush("GlassTextSecondaryBrush") });
+            col.Children.Add(Tile(frame, selected, accent));
+            col.Children.Add(Label(p.Name, selected));
             var btn = new Button { Content = col, Padding = new Thickness(0), Background = new SolidColorBrush(Colors.Transparent), BorderThickness = new Thickness(0) };
             AutomationProperties.SetName(btn, p.Name + " theme");
-            btn.Click += (_, _) => { St.Theme = p.Key; Save(); App.Window?.ApplyGlass(); BuildThemes(); BuildAccents(); };
+            btn.Click += (_, _) => { St.Theme = p.Key; Save(); App.Window?.ApplyGlass(); BuildThemes(); BuildSurfaces(); BuildAccents(); };
             ThemeChips.Children.Add(btn);
+        }
+    }
+
+    // Two tiles: a small picture of a floating bar in each style, so the choice is visible before it is made.
+    private void BuildSurfaces()
+    {
+        SurfaceRow.Children.Clear();
+        var accent = (SolidColorBrush)Ui.Brush("AccentBrush");
+        foreach (var (key, name) in new[] { ("frosted", "Frosted glass"), ("liquid", "Liquid glass") })
+        {
+            var selected = St.Surface == key;
+            var liquid = key == "liquid";
+            var back = new LinearGradientBrush { StartPoint = new Windows.Foundation.Point(0, 0), EndPoint = new Windows.Foundation.Point(1, 1) };
+            back.GradientStops.Add(new GradientStop { Color = Windows.UI.Color.FromArgb(255, 0x3B, 0x5B, 0xDB), Offset = 0 });
+            back.GradientStops.Add(new GradientStop { Color = Windows.UI.Color.FromArgb(255, 0xFF, 0x7A, 0x45), Offset = 1 });
+            var stroke = new LinearGradientBrush { StartPoint = new Windows.Foundation.Point(0, 0), EndPoint = liquid ? new Windows.Foundation.Point(0, 1) : new Windows.Foundation.Point(1, 1) };
+            stroke.GradientStops.Add(new GradientStop { Color = Windows.UI.Color.FromArgb(liquid ? (byte)0xF0 : (byte)0x70, 255, 255, 255), Offset = 0 });
+            stroke.GradientStops.Add(new GradientStop { Color = Windows.UI.Color.FromArgb(liquid ? (byte)0x30 : (byte)0x20, 255, 255, 255), Offset = 1 });
+            var bar = new Border { Height = 26, Width = 76, CornerRadius = new CornerRadius(liquid ? 13 : 7), BorderThickness = new Thickness(1), BorderBrush = stroke,
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(liquid ? (byte)0x30 : (byte)0x55, 255, 255, 255)),
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var dots = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            for (var i = 0; i < 3; i++) dots.Children.Add(new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0xE0, 255, 255, 255)) });
+            bar.Child = dots;
+            var pic = new Grid { Width = 128, Height = 64, Background = back };
+            pic.Children.Add(bar);
+            var frame = new Border { CornerRadius = new CornerRadius(6), Child = pic, BorderThickness = new Thickness(selected ? 2 : 1),
+                BorderBrush = selected ? accent : Ui.Brush("GlassStrokeBrush") };
+            var col = new StackPanel { Spacing = 6 };
+            col.Children.Add(Tile(frame, selected, accent));
+            col.Children.Add(Label(name, selected));
+            var btn = new Button { Content = col, Padding = new Thickness(0), Background = new SolidColorBrush(Colors.Transparent), BorderThickness = new Thickness(0) };
+            AutomationProperties.SetName(btn, name);
+            btn.Click += (_, _) => { St.Surface = key; Save(); App.Window?.ApplyGlass(); BuildSurfaces(); };
+            SurfaceRow.Children.Add(btn);
         }
     }
 
     private void BuildAccents()
     {
         AccentRow.Children.Clear();
-        foreach (var hex in ThemeEngine.Accents)
+        // Six of our own, then the accent colour Windows itself is using.
+        foreach (var hex in ThemeEngine.Accents.Append("system"))
         {
-            var c = Windows.UI.Color.FromArgb(255, Convert.ToByte(hex[1..3], 16), Convert.ToByte(hex[3..5], 16), Convert.ToByte(hex[5..7], 16));
+            var c = hex == "system" ? ThemeEngine.SystemAccent() : Windows.UI.Color.FromArgb(255, Convert.ToByte(hex[1..3], 16), Convert.ToByte(hex[3..5], 16), Convert.ToByte(hex[5..7], 16));
             var selected = string.Equals(hex, St.Accent, StringComparison.OrdinalIgnoreCase);
             var b = new Button { Width = 28, Height = 28, Padding = new Thickness(0), CornerRadius = new CornerRadius(14), Background = new SolidColorBrush(c),
                 BorderBrush = new SolidColorBrush(selected ? (ThemeEngine.Find(St.Theme).Dark ? Colors.White : Windows.UI.Color.FromArgb(255, 24, 24, 28)) : Colors.Transparent), BorderThickness = new Thickness(2.5) };
-            ToolTipService.SetToolTip(b, hex);
+            ToolTipService.SetToolTip(b, hex == "system" ? "Windows accent colour" : hex);
             b.Click += (_, _) => { St.Accent = hex; Save(); App.Window?.ApplyGlass(); BuildAccents(); };
             AccentRow.Children.Add(b);
         }
@@ -189,12 +290,13 @@ public sealed partial class SettingsPage : Page
     private void Reset_Click(object sender, RoutedEventArgs e)
     {
         var d = new AppSettings();
-        St.Theme = d.Theme; St.Accent = d.Accent; St.Transparency = d.Transparency;
-        St.Layout = d.Layout; St.TileSize = d.TileSize; St.TileGap = d.TileGap; St.ShowNames = d.ShowNames; St.Volume = d.Volume;
+        St.Theme = d.Theme; St.Surface = d.Surface; St.Accent = d.Accent; St.Transparency = d.Transparency;
+        St.Layout = d.Layout; St.TileSize = d.TileSize; St.TileGap = d.TileGap; St.ShowNames = d.ShowNames; St.Volume = d.Volume; St.SimilarFiles = d.SimilarFiles;
         Save();
         _ready = false;
         GlassSlider.Value = St.Transparency * 100;
         SizeSlider.Value = St.TileSize; GapSlider.Value = St.TileGap; NamesSwitch.IsOn = St.ShowNames; VolumeSlider.Value = St.Volume * 100;
+        SimilarChoice.SelectedIndex = St.SimilarFiles == "side" ? 1 : 0;
         BuildAll(); _ready = true; Labels();
         App.Window?.ApplyGlass(); LibraryPage.Current?.ApplyLook(); LibraryPage.Current?.ApplySections(); ViewerPage.SetDefaultVolume(St.Volume);
     }

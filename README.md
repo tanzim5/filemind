@@ -46,6 +46,7 @@ that runs on your own machine. Type what you remember ("red logo on black", "a m
 ### 🖱️ Work with your files
 - **Drag originals into other apps** (Windows desktop): Photoshop, After Effects, Explorer and more. Drag a tile, the viewer's image or video, or the **Drag file** handle. Select several tiles to drag them together.
 - **Copy a video frame** as a PNG straight from the viewer.
+- **Export.** Save part of a video or sound as its own clip (mark the start with **I** and the end with **O**), turn files into MP4, WebM, GIF, MP3, WAV, JPG, PNG or WebP, shrink them to fit under a size, pull the sound out of a video, or make a contact sheet. Exports are always new files; the original is never changed. Select several files in the Library to export them together.
 - **Audio playback and transcripts**: play and scrub a waveform right on its tile, then transcribe speech on your device in the detected language.
 - **Previews for documents too**: PDFs show their first page, text, Markdown and Word files show a text card, and each opens in a viewer.
 - **File actions**: copy or move the original, or send it to the system Trash. Copy and move never overwrite.
@@ -66,7 +67,7 @@ Nothing to install: Python, ffmpeg and everything else are inside the download. 
 
 **Quick search anywhere:** press **Ctrl+Shift+Space** for the Raycast-style launcher. Change the shortcut in Settings.
 
-**Keyboard:** in the viewer, **Space** plays or pauses, **Left/Right** skip 5 seconds (or step between pictures), **Ctrl+Left/Right** go to the previous or next file, **Up/Down** change the volume, **M** mutes, **[** and **]** change the speed, **F** fills the screen and **Esc** goes back. In the Library, **Ctrl+C** copies the selected files, **Ctrl+Shift+C** copies their paths and **Enter** opens the selected file.
+**Keyboard:** in the viewer, **Space** plays or pauses, **Left/Right** skip 5 seconds (or step between pictures), **Ctrl+Left/Right** go to the previous or next file, **Up/Down** change the volume, **M** mutes, **[** and **]** change the speed, **,** and **.** step one frame, **I** and **O** mark a clip, **E** exports, **F** fills the screen and **Esc** goes back. In the Library, **Ctrl+C** copies the selected files, **Ctrl+Shift+C** copies their paths and **Enter** opens the selected file.
 
 ➡ Get them from the **[latest release](https://github.com/tanzim5/filemind/releases/latest)**.
 
@@ -142,7 +143,7 @@ Set `FILEMIND_MODELS` to put the model elsewhere and `FILEMIND_DATA` for the ind
 
 ## Licence
 
-The EmbeddingGemma 2 weights are Apache-2.0. The Windows app bundles [FFmpeg](https://ffmpeg.org) (LGPL/GPL). Interface fonts: Geist, Inter and Instrument Serif (SIL OFL).
+The EmbeddingGemma 2 weights are Apache-2.0. The Windows app bundles [FFmpeg](https://ffmpeg.org) (LGPL/GPL). Interface fonts: Geist, Inter and Instrument Serif (SIL OFL). Sidebar icons: [Phosphor Icons](https://phosphoricons.com) (MIT).
 
 ---
 

@@ -11,7 +11,15 @@ public sealed partial class SetupPage : Page
     private bool _forceCpu;
     private string? _lastAccel;
 
-    public SetupPage() => InitializeComponent();
+    public SetupPage()
+    {
+        InitializeComponent();
+        // The deep gradient fills the window; the mark sits above the status line and breathes.
+        Stage.Children.Insert(0, Hero.Backdrop(true));
+        Centre.Children.Insert(0, Hero.Mark(112));
+        Centre.Margin = new Thickness(0, 0, 0, 40);
+        Loaded += (_, _) => { Anim.In(Centre, 400, 10); };
+    }
 
     public async Task RunAsync()
     {
@@ -26,7 +34,7 @@ public sealed partial class SetupPage : Page
                 var launch = rt.ResolveLaunch() ?? throw new InvalidOperationException(
                     "The engine folder is missing next to FileMind.exe. Unzip the whole download again and start File Mind from there.");
 
-                ShowBusy("Starting File Mind", rt.SourceLabel is null ? "Waking the engine…" : $"Waking the engine ({rt.SourceLabel})…");
+                ShowBusy("Starting the engine", rt.SourceLabel is null ? "Waking the engine…" : $"Waking the engine ({rt.SourceLabel})…");
                 await Task.Delay(300);   // let the setup page draw before the engine process is spawned
                 await Task.Run(() => rt.StartEngineAsync(launch, CancellationToken.None));
                 await EnsureModelAsync();
@@ -63,7 +71,7 @@ public sealed partial class SetupPage : Page
                 _ => m.File is { Length: > 0 } ? $"Downloading {m.File}" : "Downloading the AI model…",
             };
             _lastAccel = m.Accel;
-            Headline.Text = "Getting File Mind ready";
+            Headline.Text = "Getting the model ready";
             var runsOn = m.Accel == "cuda" ? "Runs on your NVIDIA graphics card." :
                          m.Accel == "cpu" ? $"Runs on the processor ({m.AccelReason})." : "";
             Detail.Text = $"{runsOn} This download happens once; after it, File Mind works fully offline.".Trim();
@@ -77,6 +85,7 @@ public sealed partial class SetupPage : Page
     private async Task ShowErrorAsync(string message)
     {
         Headline.Text = "That didn't work";
+        Detail.Text = "";
         Detail.Text = "";
         BusyPanel.Visibility = Visibility.Collapsed;
         ErrorText.Text = message;

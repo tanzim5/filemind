@@ -9,6 +9,7 @@ public sealed class AppPaths
     public string Runtime => Path.Combine(Root, "runtime");
     public string Logs => Path.Combine(Root, "logs");
     public string SettingsFile => Path.Combine(Root, "settings.json");
+    public string DismissedSpacesFile => Path.Combine(Root, "dismissed-spaces.json");
 
     public AppPaths(string? root = null)
     {
