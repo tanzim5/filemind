@@ -567,10 +567,16 @@ public sealed partial class MainWindow : Window
                 };
                 t.Start();
             }
-            else if (!_devPageDone && dev is "viewer" or "viewer-video")
+            else if (!_devPageDone && dev is "viewer" or "viewer-video" or "viewer-trim")
             {
                 _devPageDone = true;
-                _ = OpenDevViewerAsync(dev == "viewer-video");
+                _ = OpenDevViewerAsync(dev != "viewer");
+                if (dev == "viewer-trim")
+                {
+                    var tt = new DispatcherTimer { Interval = TimeSpan.FromSeconds(9) };
+                    tt.Tick += (_, _) => { tt.Stop(); (ContentFrame.Content as Pages.ViewerPage)?.DevTrim(); };
+                    tt.Start();
+                }
             }
         }
     }

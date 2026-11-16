@@ -4,7 +4,7 @@
       xmlns:local="using:FileMind.Pages">
   <Grid>
     <ScrollViewer x:Name="Scroll" VerticalScrollBarVisibility="Hidden" ViewChanged="Scroll_ViewChanged">
-      <StackPanel x:Name="PageStack" Padding="20,60,20,40" Spacing="0">
+      <StackPanel x:Name="PageStack" Padding="20,66,20,40" Spacing="0">
 
         <!-- stage + details; the shell's bar above carries the title and actions -->
         <Grid x:Name="StageRow" ColumnSpacing="14">
@@ -58,6 +58,7 @@
               <Border x:Name="TransportPill" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Center" Padding="8,4" CornerRadius="8" Translation="0,0,24"
                       Background="{StaticResource ToolbarGlassBrush}" BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1">
                 <Border.Shadow><ThemeShadow/></Border.Shadow>
+                <StackPanel Spacing="4">
                 <Grid ColumnSpacing="6">
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*" MinWidth="120"/><ColumnDefinition Width="Auto"/>
@@ -69,31 +70,44 @@
                   <Grid x:Name="SeekHost" Grid.Column="2" Height="28" VerticalAlignment="Center" SizeChanged="SeekHost_SizeChanged">
                     <Border x:Name="TrimRange" Visibility="Collapsed" Height="6" CornerRadius="3" HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False" Background="{StaticResource AccentTintStrongBrush}"/>
                     <Slider x:Name="SeekSlider" Minimum="0" Maximum="1000" Value="0" VerticalAlignment="Center" Foreground="{StaticResource AccentBrush}" ValueChanged="Seek_Changed"/>
+                    <!-- Two small handles on the marked range: drag them to move the clip's start and end. -->
+                    <Border x:Name="StartHandle" Visibility="Collapsed" Width="10" Height="22" CornerRadius="4" HorizontalAlignment="Left" VerticalAlignment="Center"
+                            Background="{StaticResource AccentBrush}" BorderBrush="#CCFFFFFF" BorderThickness="1.5" ToolTipService.ToolTip="Drag to move the clip start"
+                            PointerPressed="Handle_Pressed" PointerMoved="Handle_Moved" PointerReleased="Handle_Released" PointerCanceled="Handle_Released"/>
+                    <Border x:Name="EndHandle" Visibility="Collapsed" Width="10" Height="22" CornerRadius="4" HorizontalAlignment="Left" VerticalAlignment="Center"
+                            Background="{StaticResource AccentBrush}" BorderBrush="#CCFFFFFF" BorderThickness="1.5" ToolTipService.ToolTip="Drag to move the clip end"
+                            PointerPressed="Handle_Pressed" PointerMoved="Handle_Moved" PointerReleased="Handle_Released" PointerCanceled="Handle_Released"/>
                   </Grid>
                   <TextBlock x:Name="TotalText" Grid.Column="3" Text="0:00" FontSize="12" MinWidth="34" VerticalAlignment="Center" Foreground="{StaticResource GlassTextSecondaryBrush}"/>
                   <Button x:Name="SpeedButton" Grid.Column="4" Style="{StaticResource BarButton}" Width="40" Click="Speed_Click" ToolTipService.ToolTip="Playback speed" AutomationProperties.Name="Playback speed">
                     <TextBlock x:Name="SpeedText" Text="1×" FontSize="12.5"/></Button>
                   <Button x:Name="VolumeBtn" Grid.Column="5" Style="{StaticResource BarButton}" ToolTipService.ToolTip="Volume" AutomationProperties.Name="Volume"><local:LineIcon Kind="sound" Size="15"/></Button>
                   <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="0">
-                    <Button x:Name="InBtn" Style="{StaticResource BarButton}" Width="auto" MinWidth="28" Padding="6,0" Click="MarkIn_Click" ToolTipService.ToolTip="Start the clip here" AutomationProperties.Name="Mark in">
-                      <StackPanel Orientation="Horizontal" Spacing="4"><local:LineIcon Kind="markin" Size="15"/><TextBlock x:Name="InText" Visibility="Collapsed" FontSize="11.5" VerticalAlignment="Center"/></StackPanel></Button>
-                    <Button x:Name="OutBtn" Style="{StaticResource BarButton}" Width="auto" MinWidth="28" Padding="6,0" Click="MarkOut_Click" ToolTipService.ToolTip="End the clip here" AutomationProperties.Name="Mark out">
-                      <StackPanel Orientation="Horizontal" Spacing="4"><local:LineIcon Kind="markout" Size="15"/><TextBlock x:Name="OutText" Visibility="Collapsed" FontSize="11.5" VerticalAlignment="Center"/></StackPanel></Button>
-                    <Button x:Name="TrimClear" Visibility="Collapsed" Style="{StaticResource BarButton}" Width="22" Click="TrimClear_Click" ToolTipService.ToolTip="Clear the marks" AutomationProperties.Name="Clear the marks"><local:LineIcon Kind="close" Size="10"/></Button>
+                    <Button x:Name="InBtn" Style="{StaticResource BarButton}" Width="auto" MinWidth="28" Padding="8,0" Click="MarkIn_Click" ToolTipService.ToolTip="Set clip start here (I)" AutomationProperties.Name="Set clip start">
+                      <StackPanel Orientation="Horizontal" Spacing="5"><local:LineIcon Kind="markin" Size="15"/><TextBlock Text="Start" FontSize="12" VerticalAlignment="Center"/></StackPanel></Button>
+                    <Button x:Name="OutBtn" Style="{StaticResource BarButton}" Width="auto" MinWidth="28" Padding="8,0" Click="MarkOut_Click" ToolTipService.ToolTip="Set clip end here (O)" AutomationProperties.Name="Set clip end">
+                      <StackPanel Orientation="Horizontal" Spacing="5"><local:LineIcon Kind="markout" Size="15"/><TextBlock Text="End" FontSize="12" VerticalAlignment="Center"/></StackPanel></Button>
                   </StackPanel>
                   <Button Grid.Column="7" Style="{StaticResource BarButton}" Click="Full_Click" ToolTipService.ToolTip="Full screen" AutomationProperties.Name="Full screen"><local:LineIcon Kind="full" Size="15"/></Button>
                 </Grid>
+                <!-- Appears once a clip is marked: its range and length, the export, and a way to clear it. -->
+                <Grid x:Name="TrimRow" Visibility="Collapsed" ColumnSpacing="8" Padding="4,0,0,2">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <TextBlock x:Name="TrimInfo" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
+                  <Button x:Name="ExportClipBtn" Grid.Column="1" Style="{StaticResource GlassAccentButton}" Padding="12,5" CornerRadius="6" Click="Export_Click" ToolTipService.ToolTip="Export just this part (E)" AutomationProperties.Name="Export clip">
+                    <StackPanel Orientation="Horizontal" Spacing="6"><local:LineIcon Kind="export" Size="13" Foreground="White"/><TextBlock Text="Export clip" FontSize="12.5"/></StackPanel></Button>
+                  <Button x:Name="TrimClear" Grid.Column="2" Style="{StaticResource BarButton}" Width="28" Click="TrimClear_Click" ToolTipService.ToolTip="Clear the clip range" AutomationProperties.Name="Clear the clip range"><local:LineIcon Kind="close" Size="11"/></Button>
+                </Grid>
+                </StackPanel>
               </Border>
 
-              <!-- Tools: copy and save the frame, drag the frame or the file out, export. Same height and style as the transport pill. -->
+              <!-- Tools: copy and save the frame, export. Same height and style as the transport pill. -->
               <Border x:Name="ToolsPill" Grid.Column="1" Visibility="Collapsed" VerticalAlignment="Center" Padding="8,4" CornerRadius="8" Translation="0,0,24"
                       Background="{StaticResource ToolbarGlassBrush}" BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1">
                 <Border.Shadow><ThemeShadow/></Border.Shadow>
                 <StackPanel Orientation="Horizontal" Spacing="2">
                   <Button x:Name="CopyFrameBtn" Style="{StaticResource BarButton}" Click="CopyFrame_Click" ToolTipService.ToolTip="Copy frame" AutomationProperties.Name="Copy frame"><local:LineIcon Kind="copy" Size="15"/></Button>
                   <Button x:Name="SaveFrameBtn" Style="{StaticResource BarButton}" Click="SaveFrame_Click" ToolTipService.ToolTip="Save frame as a picture" AutomationProperties.Name="Save frame"><local:LineIcon Kind="download" Size="15"/></Button>
-                  <Button x:Name="DragFrameBtn" Style="{StaticResource BarButton}" CanDrag="True" DragStarting="DragFrame_Starting" ToolTipService.ToolTip="Drag this frame into another app or folder" AutomationProperties.Name="Drag frame"><local:LineIcon Kind="dragframe" Size="16"/></Button>
-                  <Button x:Name="DragFileBtn" Style="{StaticResource BarButton}" CanDrag="True" DragStarting="DragFile_Starting" ToolTipService.ToolTip="Drag the file into another app or folder" AutomationProperties.Name="Drag file"><local:LineIcon Kind="dragfile" Size="16"/></Button>
                   <Button x:Name="ExportToolBtn" Style="{StaticResource BarButton}" Click="Export_Click" ToolTipService.ToolTip="Export: convert, shrink or resize into a new file" AutomationProperties.Name="Export"><local:LineIcon Kind="export" Size="15"/></Button>
                 </StackPanel>
               </Border>

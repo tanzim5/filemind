@@ -206,6 +206,9 @@ public sealed partial class ViewerPage : Page
     // ---- Trim marks and export ----
     private double? _in, _out;
 
+    /// <summary>Screenshot helper: marks a short range on the playing clip.</summary>
+    public void DevTrim() { _in = 1; _out = 2.5; PaintTrim(); }
+
     private double Position() { try { return _player?.PlaybackSession.Position.TotalSeconds ?? 0; } catch (Exception) { return 0; } }
 
     private void MarkIn()
@@ -228,26 +231,71 @@ public sealed partial class ViewerPage : Page
 
     private void MarkRange(double from, double to) { _in = from; _out = to; PaintTrim(); }
 
-    private void PaintTrim()
-    {
-        InText.Text = _in is { } i ? Clock(i) : ""; InText.Visibility = _in is null ? Visibility.Collapsed : Visibility.Visible;
-        OutText.Text = _out is { } o ? Clock(o) : ""; OutText.Visibility = _out is null ? Visibility.Collapsed : Visibility.Visible;
-        TrimClear.Visibility = _in is null && _out is null ? Visibility.Collapsed : Visibility.Visible;
-        PaintRange();
-    }
-
-    /// <summary>The marked part, drawn on the scrubber as an accent range (the slider's thumb is inset about 10 px each side).</summary>
-    private void PaintRange()
+    private double Dur()
     {
         var d = 0.0;
         try { d = _player?.PlaybackSession.NaturalDuration.TotalSeconds ?? 0; } catch (Exception) { }
-        if (d <= 0) d = _duration;
+        return d > 0 ? d : _duration;
+    }
+
+    private void PaintTrim()
+    {
+        var any = _in is not null || _out is not null;
+        TrimRow.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+        if (any)
+        {
+            var a = _in ?? 0; var b = _out ?? Dur();
+            var len = Math.Max(0, b - a);
+            var lenText = len < 60 ? $"{len:0.#}s" : Clock(len);
+            TrimInfo.Text = $"{Clock(a)} – {(_out is null ? "end" : Clock(b))} · {lenText}";
+        }
+        PaintRange();
+    }
+
+    /// <summary>The marked part, drawn on the scrubber as an accent band with a handle at each end (the slider's thumb is inset about 10 px each side).</summary>
+    private void PaintRange()
+    {
+        var d = Dur();
         var w = SeekHost.ActualWidth - 20;
-        if (d <= 0 || w <= 0 || (_in is null && _out is null)) { TrimRange.Visibility = Visibility.Collapsed; return; }
+        if (d <= 0 || w <= 0 || (_in is null && _out is null))
+        {
+            TrimRange.Visibility = StartHandle.Visibility = EndHandle.Visibility = Visibility.Collapsed;
+            return;
+        }
         var a = Math.Clamp((_in ?? 0) / d, 0, 1); var b = Math.Clamp((_out ?? d) / d, 0, 1);
         TrimRange.Margin = new Thickness(10 + a * w, 0, 0, 0);
         TrimRange.Width = Math.Max(4, (b - a) * w);
-        TrimRange.Visibility = Visibility.Visible;
+        TrimRange.Visibility = StartHandle.Visibility = EndHandle.Visibility = Visibility.Visible;
+        StartHandle.Margin = new Thickness(10 + a * w - 5, 0, 0, 0);
+        EndHandle.Margin = new Thickness(10 + b * w - 5, 0, 0, 0);
+    }
+
+    private bool _dragging;
+
+    private void Handle_Pressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        _dragging = true;
+        ((UIElement)sender).CapturePointer(e.Pointer);
+        e.Handled = true;
+    }
+
+    private void Handle_Moved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (!_dragging) return;
+        var d = Dur(); var w = SeekHost.ActualWidth - 20;
+        if (d <= 0 || w <= 0) return;
+        var t = Math.Clamp((e.GetCurrentPoint(SeekHost).Position.X - 10) / w, 0, 1) * d;
+        if (ReferenceEquals(sender, StartHandle)) _in = Math.Clamp(t, 0, Math.Max(0, (_out ?? d) - 0.1));
+        else _out = Math.Clamp(t, (_in ?? 0) + 0.1, d);
+        PaintTrim();
+        e.Handled = true;
+    }
+
+    private void Handle_Released(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        _dragging = false;
+        ((UIElement)sender).ReleasePointerCaptures();
+        e.Handled = true;
     }
 
     private void SeekHost_SizeChanged(object sender, SizeChangedEventArgs e) => PaintRange();
@@ -313,7 +361,7 @@ public sealed partial class ViewerPage : Page
         try
         {
             App.Window?.SetImmersive(on);
-            PageStack.Padding = on ? new Thickness(0) : new Thickness(20, 60, 20, 40);
+            PageStack.Padding = on ? new Thickness(0) : new Thickness(20, 66, 20, 40);
             StageCard.CornerRadius = new CornerRadius(on ? 0 : 8); StageCard.BorderThickness = new Thickness(on ? 0 : 1);
             DetailsCard.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
             MoreSection.Visibility = on || _side ? Visibility.Collapsed : Visibility.Visible;
@@ -370,7 +418,6 @@ public sealed partial class ViewerPage : Page
         var isVideo = _item.Kind == "video";
         CopyFrameBtn.Visibility = visual ? Visibility.Visible : Visibility.Collapsed;
         SaveFrameBtn.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
-        DragFrameBtn.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
         ToolTipService.SetToolTip(CopyFrameBtn, isVideo ? "Copy frame" : "Copy image");
         FitPillRow();
         _copyFrameItem.Text = _item.Kind == "video" ? "Copy frame" : "Copy image";
@@ -786,33 +833,6 @@ public sealed partial class ViewerPage : Page
         catch (Exception ex) { App.Log("viewer-saveframe", ex, ex.Message); await Toast("Couldn't save that."); }
     }
 
-    private async void DragFrame_Starting(UIElement sender, DragStartingEventArgs e)
-    {
-        var deferral = e.GetDeferral();
-        try
-        {
-            var file = await GetFrameFileAsync();
-            if (file is null) { e.Cancel = true; return; }
-            e.Data.SetStorageItems([file]);
-            e.Data.SetBitmap(RandomAccessStreamReference.CreateFromFile(file));
-            e.Data.RequestedOperation = DataPackageOperation.Copy;
-        }
-        catch (Exception ex) { App.Log("viewer-dragframe", ex, ex.Message); e.Cancel = true; }
-        finally { deferral.Complete(); }
-    }
-
-    private async void DragFile_Starting(UIElement sender, DragStartingEventArgs e)
-    {
-        var deferral = e.GetDeferral();
-        try
-        {
-            e.Data.SetStorageItems([await StorageFile.GetFileFromPathAsync(_item.Path)]);
-            e.Data.RequestedOperation = DataPackageOperation.Copy;
-        }
-        catch (Exception ex) { App.Log("viewer-dragfile", ex, ex.Message); e.Cancel = true; }
-        finally { deferral.Complete(); }
-    }
-
     /// <summary>Video and sound: the transport pill takes the row's width (up to 900) with the tools pill after it; a picture's pills are their own size.</summary>
     private void FitPillRow()
     {
@@ -918,19 +938,32 @@ public sealed partial class ViewerPage : Page
         var show = Pill("folder", "Show in Explorer", Reveal_Click);
         show.HorizontalAlignment = HorizontalAlignment.Stretch; show.HorizontalContentAlignment = HorizontalAlignment.Center;
         Details.Children.Add(show);
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-        actions.Children.Add(IconButton("fwd", "Open with the default app", async (_, _) =>
+        // Labelled actions, two to a row: an icon alone said too little about what each one does.
+        var actions = new Grid { ColumnSpacing = 8, RowSpacing = 8 };
+        actions.ColumnDefinitions.Add(new ColumnDefinition()); actions.ColumnDefinitions.Add(new ColumnDefinition());
+        void Act(string icon, string label, string tip, RoutedEventHandler click)
+        {
+            var b = Pill(icon, label, click);
+            b.HorizontalAlignment = HorizontalAlignment.Stretch; b.HorizontalContentAlignment = HorizontalAlignment.Left;
+            b.Padding = new Thickness(11, 7, 8, 7);
+            ToolTipService.SetToolTip(b, tip);
+            var n = actions.Children.Count;
+            if (n % 2 == 0) actions.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Grid.SetRow(b, n / 2); Grid.SetColumn(b, n % 2);
+            actions.Children.Add(b);
+        }
+        Act(_item.Kind is "video" or "audio" ? "play" : "eye", "Open", "Open with the default app", async (_, _) =>
         {
             try { await Windows.System.Launcher.LaunchFileAsync(await StorageFile.GetFileFromPathAsync(_item.Path)); } catch (Exception ex) { App.Log("viewer-open", ex, ex.Message); }
-        }));
-        actions.Children.Add(IconButton("text", "Copy the file path (Ctrl+Shift+C)", (_, _) => CopyPath()));
-        actions.Children.Add(IconButton("file", "Copy the file (Ctrl+C)", async (_, _) => await CopyFileAsync()));
-        actions.Children.Add(IconButton("search", "Search with this file", (_, _) =>
+        });
+        Act("copy", "Copy path", "Copy the file path (Ctrl+Shift+C)", (_, _) => CopyPath());
+        Act("file", "Copy file", "Copy the file itself (Ctrl+C)", async (_, _) => await CopyFileAsync());
+        Act("search", "Find similar", "Search the library with this file", (_, _) =>
         {
             LibraryPage.Request = new LibraryRequest(new FileQuery(), "", null, _item.Id, _item.Name);
             App.Window?.ShowLibrary();
-        }));
-        if (_item.Kind is "video" or "audio") actions.Children.Add(IconButton("rows", "Find moments", async (_, _) => await ToggleMomentsAsync()));
+        });
+        if (_item.Kind is "video" or "audio") Act("rows", "Find moments", "Find moments inside this file", async (_, _) => await ToggleMomentsAsync());
         Details.Children.Add(actions);
         _momentsBox = new StackPanel { Spacing = 8, Visibility = Visibility.Collapsed };
         Details.Children.Add(_momentsBox);
@@ -987,18 +1020,26 @@ public sealed partial class ViewerPage : Page
             _slot.Children.Add(Header("palette", "Colors", "tap to search"));
             if (info.Colors.Count > 0)
             {
-                // Only the strip: equal cells that never move. Hover is a soft brighten and a hairline ring; a tap searches by that colour.
-                var strip = new Grid { Height = 36, ColumnSpacing = 3 };
-                for (var i = 0; i < info.Colors.Count; i++)
+                // At most five clearly different colours: near-identical ones merge into the first of them.
+                var picked = new List<string>();
+                foreach (var c in info.Colors)
+                {
+                    var hx = c.StartsWith('#') ? c : "#" + c;
+                    var rgb = Ui.Hex(hx).Color;
+                    if (picked.All(o => { var q = Ui.Hex(o).Color; return Math.Sqrt(Math.Pow(rgb.R - q.R, 2) + Math.Pow(rgb.G - q.G, 2) + Math.Pow(rgb.B - q.B, 2)) > 70; })) picked.Add(hx);
+                    if (picked.Count == 5) break;
+                }
+                // Equal rounded swatches that never move. Hover is a soft brighten; a tap searches by that colour.
+                var strip = new Grid { Height = 40, ColumnSpacing = 6 };
+                for (var i = 0; i < picked.Count; i++)
                 {
                     strip.ColumnDefinitions.Add(new ColumnDefinition());
-                    var hex = info.Colors[i].StartsWith('#') ? info.Colors[i] : "#" + info.Colors[i];
+                    var hex = picked[i];
                     var cell = new Grid { Background = new SolidColorBrush(Colors.Transparent) };
-                    var fill = new Rectangle { Fill = Ui.Hex(hex), RadiusX = 6, RadiusY = 6, Opacity = 0.9, OpacityTransition = new ScalarTransition { Duration = TimeSpan.FromMilliseconds(150) } };
-                    var ring = new Border { CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1.5), BorderBrush = new SolidColorBrush(Color.FromArgb(0xB0, 255, 255, 255)), Opacity = 0, IsHitTestVisible = false, OpacityTransition = new ScalarTransition { Duration = TimeSpan.FromMilliseconds(150) } };
-                    cell.Children.Add(fill); cell.Children.Add(ring);
-                    cell.PointerEntered += (_, _) => { fill.Opacity = 1; ring.Opacity = 1; };
-                    cell.PointerExited += (_, _) => { fill.Opacity = 0.9; ring.Opacity = 0; };
+                    var fill = new Rectangle { Fill = Ui.Hex(hex), RadiusX = 8, RadiusY = 8, Opacity = 0.92, OpacityTransition = new ScalarTransition { Duration = TimeSpan.FromMilliseconds(150) } };
+                    cell.Children.Add(fill);
+                    cell.PointerEntered += (_, _) => fill.Opacity = 1;
+                    cell.PointerExited += (_, _) => fill.Opacity = 0.92;
                     cell.Tapped += (_, _) => { LibraryPage.Request = new LibraryRequest(new FileQuery { Near = hex }, ""); App.Window?.ShowLibrary(); };
                     Grid.SetColumn(cell, i); strip.Children.Add(cell);
                 }
