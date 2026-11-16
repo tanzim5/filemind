@@ -5,13 +5,11 @@ altgraph==0.17.5
 annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.15.1
-bottle==0.13.4
 certifi==2026.7.22
 cffi==2.1.1
 charset-normalizer==3.5.2
 click==8.5.0
 cloudpickle==3.1.2
-clr_loader==0.3.1
 colorama==0.4.6
 decorator==5.3.1
 fastapi==0.143.0
@@ -48,7 +46,6 @@ pefile==2024.8.26
 pillow==12.3.0
 platformdirs==4.12.4
 pooch==1.9.0
-proxy_tools==0.1.0
 psutil==7.2.2
 pycparser==3.11
 pydantic==2.14.0
@@ -60,8 +57,6 @@ pymupdf==1.28.2
 python-docx==1.2.0
 python-dotenv==1.2.4
 python-multipart==0.0.32
-pythonnet==3.2.1
-pywebview==6.2.1
 pywin32-ctypes==0.2.3
 PyYAML==6.0.3
 regex==2026.9.29

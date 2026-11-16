@@ -90,6 +90,12 @@ public sealed class ApiClient(Uri baseUri) : IDisposable
         return (await ReadAsync<JsonElement>(response, ct)).GetProperty("text").GetString() ?? "";
     }
 
+    /// <summary>Tells the engine how hard to work while indexing: quiet, balanced or fast.</summary>
+    public async Task SetIndexSpeedAsync(string level)
+    {
+        try { using var r = await _http.PostAsJsonAsync("/api/index/speed", new { level }); } catch (Exception) { }
+    }
+
     /// <summary>Loads the local voice model ahead of the first words, so the answer comes back sooner.</summary>
     public async Task WarmVoiceAsync()
     {

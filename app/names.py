@@ -104,8 +104,8 @@ def parse(name: str) -> dict:
                 out["prompt"] = w
         if out["prompt"] and len(out["prompt"]) < 8:
             out["prompt"] = None
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"File Mind: could not read the prompt details: {e}", flush=True)
     return out
 
 

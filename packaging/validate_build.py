@@ -23,9 +23,6 @@ def validate(variant: str, dist: Path) -> None:
     with ZipFile(path) as package:
         names = set(package.namelist())
         required = set(extra) | {engine + f for f in ENGINE_FILES}
-        for asset in ("index.html", "app.js", "style.css"):
-            if not any(name.startswith(engine) and name.endswith("/app/static/" + asset) for name in names):
-                raise ValueError(f"{archive}: missing {asset}")
         missing = required - names
         if missing:
             raise ValueError(f"{archive}: missing {', '.join(sorted(missing))}")

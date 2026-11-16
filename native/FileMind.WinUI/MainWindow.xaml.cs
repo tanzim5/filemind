@@ -509,7 +509,7 @@ public sealed partial class MainWindow : Window
             var spaces = await api.GetProjectsAsync();
             SetCount("spaces", spaces.Count > 0 ? spaces.Count.ToString("N0") : "");
         }
-        catch (Exception) { }
+        catch (Exception ex) { FileMind.Core.Diag.Log("MainWindow.counts", ex); }
     }
 
     private void Quick_Click(object sender, RoutedEventArgs e) => App.Launcher?.Toggle();

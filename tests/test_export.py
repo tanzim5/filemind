@@ -225,3 +225,35 @@ class RunTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ExportCompletionTests(unittest.TestCase):
+    def test_cancellation_before_commit_removes_partial_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "output.png"
+            job = {"id": -101, "output": str(output), "kind": "image", "status": "running"}
+            def encode(current, partial):
+                partial.write_bytes(b"encoded")
+                current["status"] = "cancelling"
+            with patch.object(export, "_image", side_effect=encode):
+                export._run(job)
+            self.assertEqual(job["status"], "cancelled")
+            self.assertFalse(output.exists())
+            self.assertFalse(output.with_name(output.name + ".part").exists())
+
+    def test_publish_and_done_share_the_cancellation_lock(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "output.png"
+            job = {"id": -102, "output": str(output), "kind": "image", "status": "running"}
+            replace = export.os.replace
+            def publish(source, target):
+                acquired = export._lock.acquire(blocking=False)
+                if acquired:
+                    export._lock.release()
+                self.assertFalse(acquired, "Cancellation must not interleave with publishing")
+                replace(source, target)
+            with patch.object(export, "_image", side_effect=lambda j, p: p.write_bytes(b"encoded")), \
+                 patch.object(export.os, "replace", side_effect=publish):
+                export._run(job)
+            self.assertEqual(job["status"], "done", job.get("error"))
+            self.assertEqual(output.read_bytes(), b"encoded")

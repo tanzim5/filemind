@@ -223,7 +223,7 @@ public sealed partial class LibraryPage : Page
             _projects = await Api.GetProjectsAsync();
             _tagList = (await Api.GetTagsAsync()).Tags;
         }
-        catch (Exception) { }
+        catch (Exception ex) { FileMind.Core.Diag.Log("Library.panels", ex); }
         RebuildPanels();
     }
 
@@ -511,7 +511,7 @@ public sealed partial class LibraryPage : Page
             }
             _wasIndexing = s.Running;
         }
-        catch (Exception) { }
+        catch (Exception ex) { FileMind.Core.Diag.Log("Library.indexing-poll", ex); }
     }
 
     private bool IsPlainBrowse => _tags.Count == 0 && _similarTo == 0 && _imagePath is null;
@@ -1595,7 +1595,7 @@ public sealed partial class LibraryPage : Page
             DSpacesBox.Visibility = info.Projects.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             if (info.Dimensions is { Count: 2 } d && tile.Item.DimensionsText.Length == 0) DMeta.Text = $"{d[0]} × {d[1]} · " + DMeta.Text;
         }
-        catch (Exception) { }
+        catch (Exception ex) { FileMind.Core.Diag.Log("Library.details", ex); }
     }
 
     // ------------------------------------------------------------------ working with the original file

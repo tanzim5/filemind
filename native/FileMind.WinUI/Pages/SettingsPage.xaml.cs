@@ -41,6 +41,14 @@ public sealed partial class SettingsPage : Page
         Save();
     }
 
+    private async void Speed_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_ready || SpeedChoice.SelectedItem is not RadioButton r) return;
+        St.IndexSpeed = (string)r.Tag;
+        Save();
+        if (AppRuntime.Current.Api is { } api) await api.SetIndexSpeedAsync(St.IndexSpeed);
+    }
+
     private void Voice_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (!_ready) return;
@@ -141,7 +149,7 @@ public sealed partial class SettingsPage : Page
     }
     private void Keep_Toggled(object sender, RoutedEventArgs e) { if (!_ready) return; St.KeepRunning = KeepSwitch.IsOn; Save(); }
 
-    private void Save() { try { St.Save(AppRuntime.Current.Paths); } catch (Exception) { } }
+    private void Save() { try { St.Save(AppRuntime.Current.Paths); } catch (Exception ex) { FileMind.Core.Diag.Log("Settings.save", ex); } }
 
     private void Labels()
     {
@@ -315,6 +323,7 @@ public sealed partial class SettingsPage : Page
         GpuLine.Text = $"This PC: {gpu.Headline}. {gpu.Reason}";
 
         NvidiaRadio.IsEnabled = gpu.CudaUsable;
+        SpeedChoice.SelectedIndex = St.IndexSpeed switch { "quiet" => 0, "fast" => 2, _ => 1 };
         foreach (RadioButton r in Choice.Items)
             if ((string)r.Tag == rt.Settings.Engine) Choice.SelectedItem = r;
         if (Choice.SelectedItem is null) Choice.SelectedIndex = 0;
@@ -330,7 +339,7 @@ public sealed partial class SettingsPage : Page
             var roots = await rt.Api!.GetRootsAsync();
             Roots.ItemsSource = roots.Select(r => $"{r.Path}   ·   {r.Files:N0} files").ToList();
         }
-        catch (Exception) { }
+        catch (Exception ex) { FileMind.Core.Diag.Log("Settings.folders", ex); }
 
         About.Text = $"File Mind {typeof(SettingsPage).Assembly.GetName().Version?.ToString(3)} (native)\nData: {rt.Paths.Root}";
     }
