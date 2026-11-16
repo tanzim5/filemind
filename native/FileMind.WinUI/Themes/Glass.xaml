@@ -261,4 +261,35 @@
     <Setter Property="Padding" Value="14,11"/>
     <Setter Property="ColumnSpacing" Value="14"/>
   </Style>
+
+  <!-- A row of the quick search list: no box, a soft hover, and the chosen row filled with a gentle tint of the accent. -->
+  <Style x:Key="QuickRow" TargetType="ListViewItem">
+    <Setter Property="Padding" Value="8,0"/>
+    <Setter Property="Margin" Value="0,1"/>
+    <Setter Property="MinHeight" Value="0"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ListViewItem">
+          <Grid>
+            <Border x:Name="Bg" CornerRadius="8" Background="Transparent"/>
+            <Border x:Name="Sel" CornerRadius="8" Background="{StaticResource AccentTintBrush}" Opacity="0"/>
+            <ContentPresenter Padding="{TemplateBinding Padding}" HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"/>
+            <VisualStateManager.VisualStateGroups>
+              <VisualStateGroup x:Name="CommonStates">
+                <VisualState x:Name="Normal"/>
+                <VisualState x:Name="PointerOver"><VisualState.Setters><Setter Target="Bg.Background" Value="{StaticResource GlassHoverSoftBrush}"/></VisualState.Setters></VisualState>
+                <VisualState x:Name="Pressed"><VisualState.Setters><Setter Target="Bg.Background" Value="{StaticResource GlassHoverSoftBrush}"/></VisualState.Setters></VisualState>
+                <VisualState x:Name="Selected"><VisualState.Setters><Setter Target="Sel.Opacity" Value="1"/></VisualState.Setters></VisualState>
+                <VisualState x:Name="PointerOverSelected"><VisualState.Setters><Setter Target="Sel.Opacity" Value="1"/></VisualState.Setters></VisualState>
+                <VisualState x:Name="PressedSelected"><VisualState.Setters><Setter Target="Sel.Opacity" Value="1"/></VisualState.Setters></VisualState>
+              </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
 </ResourceDictionary>

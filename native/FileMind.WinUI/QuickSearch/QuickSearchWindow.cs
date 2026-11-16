@@ -33,7 +33,9 @@ public sealed class QuickSearchWindow : Window
     private readonly SpeechInput _speech = new();
     private CancellationTokenSource? _searchCts;
     private string _lastQuery = "";
-    private bool _listening, _shown;
+    private bool _listening, _shown, _activated, _liquidBackdrop;
+    private long _shownAt;
+    private readonly Border _frame;
 
     public IntPtr Hwnd { get; }
 
@@ -42,15 +44,15 @@ public sealed class QuickSearchWindow : Window
     // A keycap like Raycast's: a small filled square with the key on it.
     private static Border Key(string text) => new()
     {
-        Background = Res("GlassFillStrongBrush"), CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 2, 6, 2), MinWidth = 22,
+        Background = Res("GlassFillStrongBrush"), CornerRadius = new CornerRadius(5), Padding = new Thickness(7, 2, 7, 2), MinWidth = 22,
         VerticalAlignment = VerticalAlignment.Center,
-        Child = new TextBlock { Text = text, FontSize = 11.5, HorizontalAlignment = HorizontalAlignment.Center, Foreground = Res("GlassTextSecondaryBrush") },
+        Child = new TextBlock { Text = text, FontSize = 11.5, HorizontalAlignment = HorizontalAlignment.Center, Foreground = Res("GlassTextPrimaryBrush") },
     };
 
     private static TextBlock Label(string text, bool strong = false)
     {
         var t = new TextBlock { Text = text, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center };
-        if (strong) t.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold; else t.Foreground = Res("GlassTextSecondaryBrush");
+        if (strong) { t.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold; t.Foreground = Res("GlassTextPrimaryBrush"); } else t.Foreground = Res("GlassTextSecondaryBrush");
         return t;
     }
 
@@ -112,11 +114,12 @@ public sealed class QuickSearchWindow : Window
         _divider = new Border { Height = 1, Background = Res("DividerBrush"), Visibility = Visibility.Collapsed };
 
         // ---- body: results on the left, preview and details on the right
-        _list = new ListView { SelectionMode = ListViewSelectionMode.Single, IsItemClickEnabled = true, Padding = new Thickness(8, 6, 8, 8) };
+        _list = new ListView { SelectionMode = ListViewSelectionMode.Single, IsItemClickEnabled = true, Padding = new Thickness(8, 6, 8, 8), ItemContainerStyle = Ui.Style("QuickRow") };
+        ScrollViewer.SetVerticalScrollBarVisibility(_list, ScrollBarVisibility.Hidden);
         _list.ItemClick += (_, e) => Open((e.ClickedItem as FrameworkElement)?.Tag as FileItem, reveal: false);
         _list.SelectionChanged += (_, _) => ShowPreview(Selected);
 
-        _preview = new Border { Height = 220, CornerRadius = new CornerRadius(8), Background = Res("GlassFillBrush"), Margin = new Thickness(0, 0, 0, 16) };
+        _preview = new Border { Height = 220, CornerRadius = new CornerRadius(10), Background = Res("GlassFillBrush"), Margin = new Thickness(0, 0, 0, 16) };
         _info = new StackPanel();
         var details = new StackPanel();
         details.Children.Add(_preview);
@@ -141,12 +144,12 @@ public sealed class QuickSearchWindow : Window
         brand.Children.Add(new Image { Width = 16, Height = 16, Source = new BitmapImage(new Uri(Path.Combine(AppContext.BaseDirectory, "Assets", "icon.png"))) });
         brand.Children.Add(_status);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
-        actions.Children.Add(Label("Open", strong: true)); actions.Children.Add(Key("↵"));
+        actions.Children.Add(Key("Enter")); actions.Children.Add(Label("Open"));
         actions.Children.Add(Bar());
-        actions.Children.Add(Label("Show in folder")); actions.Children.Add(Key("Ctrl")); actions.Children.Add(Key("↵"));
+        actions.Children.Add(Key("Ctrl+Shift+C")); actions.Children.Add(Label("Copy path"));
         actions.Children.Add(Bar());
-        actions.Children.Add(Label("Copy path")); actions.Children.Add(Key("Ctrl")); actions.Children.Add(Key("Shift")); actions.Children.Add(Key("C"));
-        _footer = new Grid { Padding = new Thickness(16, 9, 14, 9), Visibility = Visibility.Collapsed, Background = Res("GlassFillBrush") };
+        actions.Children.Add(Key("Esc")); actions.Children.Add(Label("Close"));
+        _footer = new Grid { Padding = new Thickness(16, 10, 14, 10), Visibility = Visibility.Collapsed, BorderBrush = Res("DividerBrush"), BorderThickness = new Thickness(0, 1, 0, 0) };
         _footer.ColumnDefinitions.Add(new ColumnDefinition());
         _footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         _footer.Children.Add(brand);
@@ -161,16 +164,49 @@ public sealed class QuickSearchWindow : Window
         Grid.SetRow(_divider, 1); root.Children.Add(_divider);
         Grid.SetRow(_body, 2); root.Children.Add(_body);
         Grid.SetRow(_footer, 3); root.Children.Add(_footer);
-        root.RequestedTheme = ThemeEngine.Find(AppRuntime.Current.Settings.Theme).Dark ? ElementTheme.Dark : ElementTheme.Light;
-        Content = root;
+        // The window wears the app's surface: opaque for frosted, translucent over acrylic for liquid, with a hairline.
+        _frame = new Border { Child = root, BorderThickness = new Thickness(1), BorderBrush = Res("GlassStrokeBrush") };
+        ApplyTheme();
+        Content = _frame;
 
         _debounce.Tick += async (_, _) => { _debounce.Stop(); await SearchAsync(_box.Text); };
         _speech.Hypothesis += text => DispatcherQueue.TryEnqueue(() => { if (_listening) _box.Text = text; });
-        Activated += (_, e) => { if (e.WindowActivationState == WindowActivationState.Deactivated && _shown && !_listening) HideLauncher(); };
+        // It closes on Esc, on opening a result, on the hotkey again, or when you really click away. A deactivation right after it
+        // appears, or one that Windows reverses a moment later, is not a click away: it is ignored.
+        Activated += (_, e) =>
+        {
+            if (e.WindowActivationState != WindowActivationState.Deactivated) { _activated = true; return; }
+            if (!_shown || _listening || !_activated) return;
+            if (Environment.TickCount64 - _shownAt < 900) { Activate(); return; }
+            var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+            t.Tick += (_, _) =>
+            {
+                t.Stop();
+                if (_shown && !_listening && !IsOurs(GetForegroundWindow())) HideLauncher();
+            };
+            t.Start();
+        };
         AppWindow.Closing += (_, e) => { e.Cancel = true; HideLauncher(); };
     }
 
     public void DevQuery(string text) { _box.Text = text; }
+
+    private bool IsOurs(IntPtr h) => h == Hwnd || (h != IntPtr.Zero && GetAncestor(h, 2) == Hwnd);
+
+    /// <summary>Takes the colours and surface of the app's theme: dark or light, the accent through the shared brushes, and
+    /// the frosted or liquid surface setting.</summary>
+    private void ApplyTheme()
+    {
+        var p = ThemeEngine.Find(AppRuntime.Current.Settings.Theme);
+        _frame.RequestedTheme = p.Dark ? ElementTheme.Dark : ElementTheme.Light;
+        _frame.Background = Res(ThemeEngine.Liquid ? "OverlayBrush" : "SurfaceBrush");
+        var liquid = ThemeEngine.Liquid;
+        if (liquid != _liquidBackdrop || SystemBackdrop is null && liquid)
+        {
+            _liquidBackdrop = liquid;
+            SystemBackdrop = liquid ? new DesktopAcrylicBackdrop() : null;
+        }
+    }
 
     private string KindFilter => (_kind.SelectedItem as ComboBoxItem)?.Tag as string ?? "all";
 
@@ -178,14 +214,15 @@ public sealed class QuickSearchWindow : Window
     public void Toggle()
     {
         if (_shown) { HideLauncher(); return; }
+        ApplyTheme();
         var area = DisplayArea.GetFromPoint(CursorPos(), DisplayAreaFallback.Primary).WorkArea;
         var scale = GetDpiForWindow(Hwnd) / 96.0;
         int w = (int)(Width_ * scale), h = (int)((_list.Items.Count > 0 ? ExpandedHeight : CollapsedHeight) * scale);
         AppWindow.MoveAndResize(new RectInt32(area.X + (area.Width - w) / 2, area.Y + area.Height / 5, w, h));
+        _shown = true; _activated = false; _shownAt = Environment.TickCount64;
         AppWindow.Show();
         Activate();
         SetForegroundWindow(Hwnd);
-        _shown = true;
         _box.Focus(FocusState.Programmatic);
         _box.SelectAll();
     }
@@ -224,7 +261,7 @@ public sealed class QuickSearchWindow : Window
             _list.ItemsSource = files.Select(BuildRow).ToList();
             if (files.Count > 0) _list.SelectedIndex = 0; else ShowPreview(null);
             Resize(true);
-            _status.Text = files.Count == 0 ? "Nothing matches. Try describing it differently." : $"{files.Count} results";
+            _status.Text = files.Count == 0 ? "Nothing matches. Try describing it differently." : "";
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -388,4 +425,6 @@ public sealed class QuickSearchWindow : Window
     [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool GetCursorPos(out POINT p);
     [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hwnd);
     [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hwnd);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
 }
