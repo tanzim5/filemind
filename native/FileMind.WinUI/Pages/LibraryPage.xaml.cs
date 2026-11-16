@@ -136,7 +136,7 @@ public sealed partial class LibraryPage : Page
 
     // The toolbar band floats over the tiles, so everything beneath starts just below it, however tall it gets
     // (active filter chips can wrap onto more lines).
-    private double _bandH = 82;
+    private double _bandH = 88;
 
     /// <summary>Tiles start below the toolbar band and, when it shows, the suggestions strip.</summary>
     private void UpdateInsets()
@@ -153,7 +153,7 @@ public sealed partial class LibraryPage : Page
         var h = Math.Ceiling(e.NewSize.Height + TopBand.Margin.Top);
         _bandH = h;
         UpdateInsets();
-        Detail.Margin = new Thickness(0, h + 4, 0, 16);
+        Detail.Margin = new Thickness(16, h + 4, 0, 16);
         Toast.Margin = new Thickness(0, h + 8, 0, 0);
     }
 

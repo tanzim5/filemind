@@ -37,7 +37,7 @@
 
   <Grid x:Name="Host" AllowDrop="True" DragOver="Host_DragOver" Drop="Host_Drop">
     <!-- Filters | tiles | inspector. The tiles fill the page and scroll under the toolbar and off the bottom edge. -->
-    <Grid x:Name="BodyGrid" ColumnSpacing="16" Padding="32,0,32,0">
+    <Grid x:Name="BodyGrid" ColumnSpacing="0" Padding="12,0,12,0">
       <Grid.ColumnDefinitions>
         <ColumnDefinition x:Name="FilterColumn" Width="0"/>
         <ColumnDefinition Width="*"/>
@@ -133,12 +133,12 @@
       <!-- Tiles -->
       <Grid Grid.Column="1">
         <ScrollViewer x:Name="TileScroll" ViewChanged="TileScroll_ViewChanged" VerticalScrollBarVisibility="Hidden" Padding="0">
-          <ItemsRepeater x:Name="TileRepeater" Margin="0,82,0,24" ItemTemplate="{StaticResource TileTemplate}" Layout="{StaticResource TileLayoutInstance}"/>
+          <ItemsRepeater x:Name="TileRepeater" Margin="0,88,0,24" ItemTemplate="{StaticResource TileTemplate}" Layout="{StaticResource TileLayoutInstance}"/>
         </ScrollViewer>
 
 
         <!-- A space that is open offers files that probably belong in it. Nothing is added until you press the tick. -->
-        <Border x:Name="SuggestStrip" Visibility="Collapsed" VerticalAlignment="Top" Margin="0,82,0,0" Padding="12,8,12,10"
+        <Border x:Name="SuggestStrip" Visibility="Collapsed" VerticalAlignment="Top" Margin="0,88,0,0" Padding="12,8,12,10"
                 Style="{StaticResource GlassCard}" SizeChanged="SuggestStrip_SizeChanged">
           <StackPanel Spacing="8">
             <Grid ColumnSpacing="10">
@@ -201,13 +201,13 @@
 
         <!-- A short message that fades by itself -->
         <Border x:Name="Toast" Visibility="Collapsed" Style="{StaticResource GlassCard}" CornerRadius="8" Padding="18,10"
-                HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,90,0,0" Background="{StaticResource OverlayBrush}">
+                HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,96,0,0" Background="{StaticResource OverlayBrush}">
           <TextBlock x:Name="ToastText" FontSize="13"/>
         </Border>
       </Grid>
 
       <!-- Inspector -->
-      <Border x:Name="Detail" Grid.Column="2" Style="{StaticResource GlassCard}" Visibility="Collapsed" Padding="0" Margin="0,82,0,16">
+      <Border x:Name="Detail" Grid.Column="2" Style="{StaticResource GlassCard}" Visibility="Collapsed" Padding="0" Margin="16,88,0,16">
         <ScrollViewer VerticalScrollBarVisibility="Hidden">
           <StackPanel Spacing="14" Padding="18">
             <Border CornerRadius="6" Height="250" Background="{StaticResource GlassFillBrush}">
@@ -249,7 +249,7 @@
     <!-- The Library's own top-bar row: the search pill stretches to fill, the tools follow it. MainWindow takes it while the Library shows. -->
     <Grid x:Name="ToolbarRow" ColumnSpacing="10" VerticalAlignment="Center" HorizontalAlignment="Stretch">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*" MaxWidth="900" MinWidth="200"/>
+        <ColumnDefinition Width="*" MinWidth="200"/>
         <ColumnDefinition Width="Auto"/>
       </Grid.ColumnDefinitions>
 
@@ -314,7 +314,7 @@
     </Grid>
 
     <!-- Row 2 of the bar: the page title with its counts, the active filters, and indexing progress. -->
-    <Border x:Name="TopBand" VerticalAlignment="Top" Margin="0,48,0,0" MinHeight="36" Background="{StaticResource ToolbarGlassBrush}" Padding="32,0,32,0" SizeChanged="TopBand_SizeChanged">
+    <Border x:Name="TopBand" VerticalAlignment="Top" Margin="0,54,0,0" MinHeight="36" Background="{StaticResource ToolbarGlassBrush}" Padding="12,0,12,0" SizeChanged="TopBand_SizeChanged">
       <Grid ColumnSpacing="14" MinHeight="36">
         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <TextBlock x:Name="PageTitle" Text="Library" Style="{StaticResource TitleText}" FontSize="24" VerticalAlignment="Center" Margin="0,0,0,3"/>

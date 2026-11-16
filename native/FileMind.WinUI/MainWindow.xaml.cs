@@ -87,6 +87,7 @@ public sealed partial class MainWindow : Window
     {
         if (ReferenceEquals(ActionsHost.Content, actions)) return;
         ActionsHost.Content = actions;
+        ActionsHost.Margin = actions is null ? new Thickness(-10, 0, 0, 0) : new Thickness(0);   // an empty actions slot must not widen the gap to the window buttons
         QueueTitleRegions();
     }
 

@@ -6,7 +6,7 @@
   <Grid x:Name="Root" RequestedTheme="Dark">
     <!-- The strip you drag the window by. It has no fill, so it never takes a click from the controls drawn over it;
          MainWindow.UpdateTitleRegions tells Windows which parts of it are buttons and boxes. -->
-    <Grid x:Name="TitleBar" Height="48" VerticalAlignment="Top"/>
+    <Grid x:Name="TitleBar" Height="54" VerticalAlignment="Top"/>
 
     <Grid x:Name="Shell" Visibility="Collapsed">
       <Grid.ColumnDefinitions>
@@ -20,8 +20,8 @@
         <Frame x:Name="ContentFrame"/>
         <!-- The permanent top bar: back and forward, the page title, the page's own actions, and room for the window buttons.
              It is frosted, so a page scrolling beneath it stays readable. -->
-        <Border x:Name="TopBar" Height="48" VerticalAlignment="Top" Background="{StaticResource ToolbarGlassBrush}">
-          <Grid Padding="14,0,0,0" ColumnSpacing="10">
+        <Border x:Name="TopBar" Height="54" VerticalAlignment="Top" Background="{StaticResource ToolbarGlassBrush}">
+          <Grid Padding="14,5,0,0" ColumnSpacing="10">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="136"/>
             </Grid.ColumnDefinitions>
@@ -37,13 +37,13 @@
               <TextBlock x:Name="TitleText" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="560" VerticalAlignment="Center"/>
               <TextBlock x:Name="TitleNote" Style="{StaticResource SecondaryText}" FontSize="12" VerticalAlignment="Center"/>
             </StackPanel>
-            <ContentControl x:Name="ActionsHost" Grid.Column="2" VerticalAlignment="Center" HorizontalContentAlignment="Right" IsTabStop="False"/>
+            <ContentControl x:Name="ActionsHost" Grid.Column="2" Margin="-10,0,0,0" VerticalAlignment="Center" HorizontalContentAlignment="Right" IsTabStop="False"/>
           </Grid>
         </Border>
       </Grid>
 
       <!-- The sidebar is the window's own frosted glass, top to bottom: destinations, filters, settings. -->
-      <Grid x:Name="RailCard" Padding="10,12,10,8">
+      <Grid x:Name="RailCard" Padding="10,18,10,8">
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto"/>
           <RowDefinition Height="*"/>
@@ -86,7 +86,7 @@
 
       <!-- Settings slide in from the right, below the window buttons -->
       <Grid x:Name="SettingsScrim" Grid.ColumnSpan="2" Visibility="Collapsed" Background="{StaticResource ScrimBrush}" Tapped="SettingsScrim_Tapped">
-        <Border x:Name="SettingsPanel" HorizontalAlignment="Right" Width="520" Margin="0,48,0,0" CornerRadius="8,0,0,0" Background="{StaticResource OverlayBrush}"
+        <Border x:Name="SettingsPanel" HorizontalAlignment="Right" Width="520" Margin="0,54,0,0" CornerRadius="8,0,0,0" Background="{StaticResource OverlayBrush}"
                 BorderBrush="{StaticResource GlassStrokeBrush}" BorderThickness="1,1,0,0" Tapped="SettingsPanel_Tapped">
           <Grid>
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
