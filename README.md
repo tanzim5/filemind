@@ -14,7 +14,7 @@
   <a href="#features">Features</a> &nbsp;·&nbsp;
   <a href="#get-started">Get started</a> &nbsp;·&nbsp;
   <a href="#privacy">Privacy</a> &nbsp;·&nbsp;
-  <a href="#run-from-source">Run from source</a> &nbsp;·&nbsp;
+  <a href="#build-and-run-from-source">Build from source</a> &nbsp;·&nbsp;
   <a href="https://x.com/tanzim31">@tanzim31</a>
 </p>
 
@@ -23,11 +23,14 @@ File Mind reads a folder — Downloads, Pictures, a project drive — and unders
 and sounds using Google's [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2), a multimodal AI model
 that runs on your own machine. Type what you remember ("red logo on black", "a man running at night") and it finds it.
 
+<p align="center"><img src="docs/library.png" alt="The Library: a foldable sidebar with spaces, sources and refine filters beside a wall of photos and videos" width="100%"></p>
+<p align="center"><img src="docs/discover.png" alt="Discover: themes found in your own library" width="100%"></p>
+
 ## Features
 
 ### 🔎 Find anything
 - **Search in plain language.** Stack several searches as tags to narrow down.
-- **Search by voice.** Your voice stays on your computer. In the main window the recording itself is understood by the model; the quick-search launcher turns it into text with a local Whisper model (downloaded on first use) and stops listening when you pause. Settings can switch the launcher to Windows speech recognition instead, which shows words as you speak but may send audio to Microsoft when Windows' *Online speech recognition* setting is on.
+- **Search by voice.** Press the microphone and speak. A Whisper model on this PC turns your voice into text (it downloads once) and stops listening when you pause. Settings can switch to Windows speech recognition instead.
 - **Search with a reference.** Open any image, video or audio file and choose *Search with this file*, optionally adding words.
 - **Find by details.** "4K videos of motorcycles", "vertical clips under 30 seconds", "images larger than 20 MB": media details become exact filters, the rest searches by meaning.
 - **Find moments.** Search inside videos and sounds and open the result at the matching time.
@@ -35,6 +38,7 @@ that runs on your own machine. Type what you remember ("red logo on black", "a m
 - **Automatic tags and colours** on every file. Filter by colour, type, source tool, date or size.
 - **Quick search from anywhere.** Press **Ctrl+Shift+Space** for a launcher with results, a preview and file details.
 - **Favourites and your own tags.** Star files, make coloured tags, and filter by them.
+- **A sidebar you can fold.** Click the heading of Tags, Spaces, Sources, Refine or any filter group to fold it away; File Mind remembers. Spaces shows five at first, with the rest one click away.
 
 ### 🧭 Explore your library
 - **Discover** visual themes (architecture, products, illustrations…) or start from a suggested question.
@@ -42,12 +46,13 @@ that runs on your own machine. Type what you remember ("red logo on black", "a m
 - **Review duplicates**: byte-identical copies and visually similar matches. Nothing is deleted for you.
 
 ### 🖱️ Work with your files
-- **Drag originals into other apps** (Windows desktop): Photoshop, After Effects, Explorer and more. Drag a tile, the viewer's image or video, or the **Drag file** handle. Select several tiles to drag them together.
+- **Right-click a tile** in the Library for a menu: open, show in folder, copy the file or its path, favourite, find similar, add to a space, delete. Over several ticked files it acts on all of them. Right-click in the viewer for copy, show in Explorer, export and previous or next file.
+- **Drag originals into other apps**: Photoshop, After Effects, Explorer and more. Drag a tile, or select several and drag them together.
 - **Copy a video frame** as a PNG straight from the viewer.
 - **Export.** Save part of a video or sound as its own clip (mark the start with **I** and the end with **O**), turn files into MP4, WebM, GIF, MP3, WAV, JPG, PNG or WebP, shrink them to fit under a size, pull the sound out of a video, or make a contact sheet. Exports are always new files; the original is never changed. Select several files in the Library to export them together.
 - **Audio playback and transcripts**: play and scrub a waveform right on its tile, then transcribe speech on your device in the detected language.
 - **Previews for documents too**: PDFs show their first page, text, Markdown and Word files show a text card, and each opens in a viewer.
-- **File actions**: copy or move the original, or send it to the system Trash. Copy and move never overwrite.
+- **File actions**: copy or move the original, or send it to the Recycle Bin. Copy and move never overwrite.
 - **Preview renames** before anything on disk changes; commits can be undone.
 
 ### 🎨 Make it yours
@@ -65,7 +70,7 @@ Nothing to install: Python, ffmpeg and everything else are inside the download. 
 
 **Quick search anywhere:** press **Ctrl+Shift+Space** for the Raycast-style launcher. Change the shortcut in Settings.
 
-**Keyboard:** in the viewer, **Space** plays or pauses, **Left/Right** skip 5 seconds (or step between pictures), **Ctrl+Left/Right** go to the previous or next file, **Up/Down** change the volume, **M** mutes, **[** and **]** change the speed, **,** and **.** step one frame, **I** and **O** mark a clip, **E** exports, **F** fills the screen and **Esc** goes back. In the Library, **Ctrl+C** copies the selected files, **Ctrl+Shift+C** copies their paths and **Enter** opens the selected file.
+**Keyboard:** in the viewer, **Space** plays or pauses, **Left/Right** skip 5 seconds (or step between pictures), **Ctrl+Left/Right** go to the previous or next file, **Up/Down** change the volume, **M** mutes, **[** and **]** change the speed, **,** and **.** step one frame, **I** and **O** mark a clip, **E** exports, **F** fills the screen and **Esc** goes back. In the Library, right-click a tile for its menu, **Ctrl+C** copies the selected files, **Ctrl+Shift+C** copies their paths and **Enter** opens the selected file.
 
 ➡ Get them from the **[latest release](https://github.com/tanzim5/filemind/releases/latest)**.
 
@@ -87,7 +92,7 @@ Nothing to install: Python, ffmpeg and everything else are inside the download. 
 
 - Everything runs on your computer. Your files, the index and every search stay there.
 - File Mind's own network use is downloading models from Hugging Face (and PyTorch on first run). Voice search is local unless you choose Windows speech recognition in Settings: see *Search by voice* above. The speech model (~148 MB) downloads only if you choose **Transcribe audio**.
-- Indexing only reads your folders. Staged renames and moves happen when you press commit and can be undone. Right-click Copy, Move and Move to Trash act immediately; deletion uses the system Trash.
+- Indexing only reads your folders. Staged renames and moves happen when you press commit and can be undone. Copy, Move and Delete act immediately; deleted files go to the Recycle Bin.
 - The index lives in a `data` folder next to the app. Delete it to forget everything.
 
 ## Build and run from source

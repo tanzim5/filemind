@@ -85,6 +85,30 @@ public sealed partial class ViewerPage : Page
         menu.Items.Add(copyFile); menu.Items.Add(copyPath); menu.Items.Add(_copyFrameItem);
         menu.Closed += (_, _) => Focus(FocusState.Programmatic);
         MoreBar.Flyout = menu;
+        StageCard.RightTapped += (_, e) =>
+        {
+            e.Handled = true;
+            var ctx = new MenuFlyout();
+            MenuFlyoutItem Entry(string text, string glyph, Action run, string? keys = null)
+            {
+                var m = new MenuFlyoutItem { Text = text, Icon = new FontIcon { Glyph = glyph } };
+                if (keys is not null) m.KeyboardAcceleratorTextOverride = keys;
+                m.Click += (_, _) => run();
+                ctx.Items.Add(m);
+                return m;
+            }
+            Entry("Copy file", "", () => _ = CopyFileAsync(), "Ctrl+C");
+            Entry("Copy path", "", CopyPath, "Ctrl+Shift+C");
+            if (_copyFrameItem.Visibility == Visibility.Visible) Entry("Copy frame", "", () => CopyFrame_Click(this, new RoutedEventArgs()));
+            ctx.Items.Add(new MenuFlyoutSeparator());
+            Entry("Show in Explorer", "", () => Reveal_Click(this, new RoutedEventArgs()));
+            Entry("Export", "", () => Export_Click(this, new RoutedEventArgs()));
+            ctx.Items.Add(new MenuFlyoutSeparator());
+            Entry("Previous file", "", () => Prev_Click(this, new RoutedEventArgs()), "Ctrl+←");
+            Entry("Next file", "", () => Next_Click(this, new RoutedEventArgs()), "Ctrl+→");
+            ctx.Closed += (_, _) => Focus(FocusState.Programmatic);
+            ctx.ShowAt(StageCard, e.GetPosition(StageCard));
+        };
         _actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
         _actions.Children.Add(RevealButton); _actions.Children.Add(ExportBar); _actions.Children.Add(MoreBar);
 
