@@ -62,6 +62,7 @@ public sealed partial class ViewerPage : Page
     {
         InitializeComponent();
         ApplySurface();
+        AddHandler(UIElement.PointerWheelChangedEvent, new PointerEventHandler(Page_Wheel), true);
         DragHelper.Attach(StageHost, () => _item.Path, null);          // drag the picture, clip or track itself out of the viewer
         var esc = new KeyboardAccelerator { Key = Windows.System.VirtualKey.Escape };
         esc.Invoked += (_, e) => { if (_full) SetFull(false); else GoBack(); e.Handled = true; };
@@ -194,6 +195,7 @@ public sealed partial class ViewerPage : Page
             case (Windows.System.VirtualKey)190 when !ctrl && _item.Kind == "video": StepFrame(1); break;    // .
             case (Windows.System.VirtualKey)219 when media: StepSpeed(-1); break;   // [
             case (Windows.System.VirtualKey)221 when media: StepSpeed(1); break;    // ]
+            case Windows.System.VirtualKey.C when ctrl && _moreSel.Count > 0: _ = CopyFilesAsync(_similar.Where(x => _moreSel.Contains(x.Id)).ToList(), Down(Windows.System.VirtualKey.Shift)); break;
             case Windows.System.VirtualKey.C when ctrl && Down(Windows.System.VirtualKey.Shift): CopyPath(); break;
             case Windows.System.VirtualKey.C when ctrl: _ = CopyFileAsync(); break;
             case (Windows.System.VirtualKey)187 when _item.Kind is "image" or "video": SetZoom(_zoom * 1.25); break;   // +
@@ -405,6 +407,22 @@ public sealed partial class ViewerPage : Page
         StageCard.Height = DetailsCard.Height = v;
     }
 
+    private long _wheelAt;
+
+    /// <summary>In full screen the mouse wheel goes to the previous or next picture (zoomed in, it still pans; Ctrl+wheel zooms).</summary>
+    private void Page_Wheel(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_full || Down(Windows.System.VirtualKey.Control) || _item.Kind is not ("image" or "video")) return;
+        if (_imageScroller is not null && _zoom > 1.01) return;
+        var delta = e.GetCurrentPoint(this).Properties.MouseWheelDelta;
+        if (delta == 0) return;
+        e.Handled = true;
+        var now = Environment.TickCount64;
+        if (now - _wheelAt < 280) return;                              // one wheel notch, one picture
+        _wheelAt = now;
+        if (delta > 0) Prev_Click(this, new RoutedEventArgs()); else Next_Click(this, new RoutedEventArgs());
+    }
+
     private void CopyPath()
     {
         var d = new DataPackage(); d.SetText(_item.Path); Clipboard.SetContent(d);
@@ -599,8 +617,35 @@ public sealed partial class ViewerPage : Page
             Content = frame,
         };
         sv.SizeChanged += (_, a) => { frame.Width = a.NewSize.Width; frame.Height = a.NewSize.Height; };
-        sv.ViewChanged += (_, _) => { _zoom = sv.ZoomFactor; ZoomText.Text = $"{Math.Round(_zoom * 100)}%"; };
-        sv.DoubleTapped += (_, _) => SetZoom(Math.Abs(_zoom - 1) < 0.01 ? 2 : 1);
+        // Zoomed out the picture can be dragged out to other apps; zoomed in, dragging moves the picture instead.
+        sv.ViewChanged += (_, _) => { _zoom = sv.ZoomFactor; ZoomText.Text = $"{Math.Round(_zoom * 100)}%"; StageHost.CanDrag = _zoom <= 1.01; };
+        long clickAt = 0; Windows.Foundation.Point clickPoint = default, panFrom = default; var panning = false;
+        sv.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, e) =>
+        {
+            var pt = e.GetCurrentPoint(sv);
+            if (!pt.Properties.IsLeftButtonPressed) return;
+            var now = Environment.TickCount64; var p = pt.Position;
+            if (now - clickAt < 350 && Math.Abs(p.X - clickPoint.X) < 8 && Math.Abs(p.Y - clickPoint.Y) < 8)
+            {
+                clickAt = 0;                                           // double click: zoom in on that spot, or back out
+                if (sv.ZoomFactor > 1.01f) sv.ChangeView(0, 0, 1f);
+                else sv.ChangeView(p.X * 1.5, p.Y * 1.5, 2.5f);
+                return;
+            }
+            clickAt = now; clickPoint = p;
+            if (sv.ZoomFactor > 1.01f) { panning = true; panFrom = p; sv.CapturePointer(e.Pointer); }
+        }), true);
+        sv.AddHandler(UIElement.PointerMovedEvent, new PointerEventHandler((_, e) =>
+        {
+            if (!panning) return;
+            var p = e.GetCurrentPoint(sv).Position;
+            sv.ChangeView(sv.HorizontalOffset - (p.X - panFrom.X), sv.VerticalOffset - (p.Y - panFrom.Y), null, true);
+            panFrom = p;
+        }), true);
+        void StopPan(PointerRoutedEventArgs e) { if (!panning) return; panning = false; sv.ReleasePointerCapture(e.Pointer); }
+        sv.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler((_, e) => StopPan(e)), true);
+        sv.AddHandler(UIElement.PointerCanceledEvent, new PointerEventHandler((_, e) => StopPan(e)), true);
+        StageHost.CanDrag = true;
         _imageScroller = sv;
         MediaHost.Children.Add(sv);
     }
@@ -1310,6 +1355,7 @@ public sealed partial class ViewerPage : Page
     private async Task LoadSimilarAsync(CancellationToken ct)
     {
         More.Children.Clear();
+        _moreSel.Clear(); _moreRing.Clear(); _moreTile.Clear();
         _similar = []; _shown = 0;
         MoreNote.Text = SideNote.Text = "";
         try
@@ -1367,15 +1413,144 @@ public sealed partial class ViewerPage : Page
             tile.PointerEntered += (_, _) => tile.Opacity = 0.85;
             tile.PointerExited += (_, _) => tile.Opacity = 1;
         }
+        var ring = new Border { CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(3), BorderBrush = new SolidColorBrush(Colors.Transparent), IsHitTestVisible = false };
+        tile.Children.Add(ring);
+        _moreRing[f.Id] = ring; _moreTile[f.Id] = tile; PaintMore(f.Id);
+        tile.RightTapped += (_, e) => { e.Handled = true; _ = ShowMoreMenuAsync(f, tile, e.GetPosition(tile)); };
         // Following a similar file replaces what is open: Back always returns to the Library in one step.
+        // Once something is picked (or with Ctrl or Shift held) a click picks and unpicks instead.
         tile.Tapped += (_, _) =>
         {
+            if (_moreSel.Count > 0 || Down(Windows.System.VirtualKey.Control) || Down(Windows.System.VirtualKey.Shift)) { ToggleMore(f.Id); return; }
             var list = _similar.ToList();
             var at = list.FindIndex(x => x.Id == f.Id);
             if (at < 0) return;
             _siblings = list; Show(at);
         };
         return tile;
+    }
+
+    // ---- picking several of the similar files, and the right-click menu on them ----
+    private readonly HashSet<int> _moreSel = [];
+    private readonly Dictionary<int, Border> _moreRing = [];
+    private readonly Dictionary<int, UIElement> _moreTile = [];
+    private List<ProjectEntry>? _projects;
+
+    private void PaintMore(int id)
+    {
+        if (_moreRing.TryGetValue(id, out var ring))
+            ring.BorderBrush = _moreSel.Contains(id) ? Ui.Brush("AccentBrush") : new SolidColorBrush(Colors.Transparent);
+    }
+
+    private void ToggleMore(int id) { if (!_moreSel.Remove(id)) _moreSel.Add(id); PaintMore(id); }
+
+    private void SetMoreSelection(IEnumerable<int> ids)
+    {
+        var old = _moreSel.ToList();
+        _moreSel.Clear();
+        foreach (var id in ids) _moreSel.Add(id);
+        foreach (var id in old.Concat(_moreSel)) PaintMore(id);
+    }
+
+    private async Task CopyFilesAsync(List<FileItem> items, bool paths)
+    {
+        if (items.Count == 0) return;
+        try
+        {
+            var d = new DataPackage { RequestedOperation = DataPackageOperation.Copy };
+            if (paths) d.SetText(string.Join(Environment.NewLine, items.Select(i => i.Path)));
+            else
+            {
+                var files = new List<IStorageItem>();
+                foreach (var i in items.Where(i => File.Exists(i.Path))) files.Add(await StorageFile.GetFileFromPathAsync(i.Path));
+                if (files.Count == 0) { await Toast("Those files have moved."); return; }
+                d.SetStorageItems(files);
+            }
+            Clipboard.SetContent(d);
+            try { Clipboard.Flush(); } catch (Exception) { }
+            await Toast(paths ? (items.Count == 1 ? "Path copied" : $"Copied {items.Count:N0} paths") : (items.Count == 1 ? "Copied. Paste it anywhere." : $"Copied {items.Count:N0} files"));
+        }
+        catch (Exception ex) { App.Log("viewer-copyfiles", ex, ex.Message); await Toast("Couldn't copy that."); }
+    }
+
+    private async Task ShowMoreMenuAsync(FileItem f, FrameworkElement anchor, Windows.Foundation.Point at)
+    {
+        var many = _moreSel.Contains(f.Id) && _moreSel.Count > 1;
+        var picked = many ? _similar.Where(x => _moreSel.Contains(x.Id)).ToList() : [f];
+        var ids = picked.Select(x => x.Id).ToList();
+        try { _projects ??= await Api.GetProjectsAsync(); } catch (Exception ex) { App.Log("viewer-projects", ex, null); _projects = []; }
+
+        var menu = new MenuFlyout();
+        void Item(string text, string glyph, Action run, string? keys = null)
+        {
+            var m = new MenuFlyoutItem { Text = text, Icon = new FontIcon { Glyph = glyph } };
+            if (keys is not null) m.KeyboardAcceleratorTextOverride = keys;
+            m.Click += (_, _) => run();
+            menu.Items.Add(m);
+        }
+        if (!many)
+        {
+            Item("Open", "\uE8A7", () => { var list = _similar.ToList(); var i = list.FindIndex(x => x.Id == f.Id); if (i >= 0) { _siblings = list; Show(i); } });
+            Item("Show in folder", "\uE838", () =>
+            {
+                if (!File.Exists(f.Path)) { _ = Toast("That file has moved."); return; }
+                Process.Start(new ProcessStartInfo("explorer.exe") { Arguments = $"/select,\"{f.Path}\"", UseShellExecute = false });
+            });
+            menu.Items.Add(new MenuFlyoutSeparator());
+        }
+        Item(_moreSel.Contains(f.Id) ? "Deselect" : "Select", "\uE73A", () => ToggleMore(f.Id));
+        Item($"Select all {_similar.Count:N0}", "\uE8B3", () => SetMoreSelection(_similar.Select(x => x.Id)));
+        if (_moreSel.Count > 0) Item("Clear selection", "\uE711", () => SetMoreSelection([]));
+        menu.Items.Add(new MenuFlyoutSeparator());
+        Item(many ? $"Copy {picked.Count:N0} files" : "Copy file", "\uE8C8", () => _ = CopyFilesAsync(picked, false), "Ctrl+C");
+        Item(many ? "Copy paths" : "Copy path", "\uE71B", () => _ = CopyFilesAsync(picked, true), "Ctrl+Shift+C");
+        menu.Items.Add(new MenuFlyoutSeparator());
+        var fav = picked.All(x => x.IsFavourite);
+        Item(fav ? "Remove from Favourites" : "Add to Favourites", fav ? "\uE735" : "\uE734", async () =>
+        {
+            try
+            {
+                await Api.TagFilesAsync(ids, fav ? null : [TagInfo.Favourite], fav ? [TagInfo.Favourite] : null);
+                foreach (var x in picked) { x.Tags.RemoveAll(t => string.Equals(t, TagInfo.Favourite, StringComparison.OrdinalIgnoreCase)); if (!fav) x.Tags.Add(TagInfo.Favourite); }
+                await Toast(fav ? "Removed from Favourites" : "Added to Favourites");
+            }
+            catch (Exception ex) { App.Log("viewer-fav", ex, ex.Message); await Toast("Couldn't change that."); }
+        });
+        if (_projects is { Count: > 0 })
+        {
+            var sub = new MenuFlyoutSubItem { Text = "Add to space", Icon = new FontIcon { Glyph = "\uE710" } };
+            foreach (var p in _projects)
+            {
+                var pid = p.Id; var name = p.Name;
+                var s = new MenuFlyoutItem { Text = name };
+                s.Click += async (_, _) =>
+                {
+                    try { await Api.AddToProjectAsync(pid, ids); await Toast($"Added to “{name}”"); }
+                    catch (Exception ex) { App.Log("viewer-space", ex, ex.Message); await Toast("Couldn't add that."); }
+                };
+                sub.Items.Add(s);
+            }
+            menu.Items.Add(sub);
+        }
+        menu.Items.Add(new MenuFlyoutSeparator());
+        Item(many ? $"Delete {picked.Count:N0} files" : "Delete", "\uE74D", async () =>
+        {
+            if (!await Dialogs.ShowAsync(XamlRoot, $"Delete {picked.Count:N0} file{(picked.Count == 1 ? "" : "s")}?", Dialogs.Text("They go to the Recycle Bin, so you can still get them back."), "Delete", "Cancel", enterConfirms: false)) return;
+            try
+            {
+                await Api.FileActionAsync("delete", ids);
+                foreach (var id in ids)
+                {
+                    if (_moreTile.Remove(id, out var t)) More.Children.Remove(t);
+                    _moreRing.Remove(id); _moreSel.Remove(id);
+                }
+                _similar.RemoveAll(x => ids.Contains(x.Id));
+                await Toast("Moved to the Recycle Bin");
+            }
+            catch (Exception ex) { App.Log("viewer-delete", ex, ex.Message); await Toast("Couldn't delete that."); }
+        }, "Del");
+        menu.Closed += (_, _) => Focus(FocusState.Programmatic);
+        menu.ShowAt(anchor, at);
     }
 
     private void OpenAsResults_Click(object sender, RoutedEventArgs e)
