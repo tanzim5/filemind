@@ -71,6 +71,15 @@ def _ensure_model(fid):
                 _jobs[fid] = {"status": "downloading", "progress": round((index + 1) / len(missing), 2)}
 
 
+def _gpu() -> bool:
+    """Speech models use the NVIDIA GPU whenever it works; otherwise the CPU."""
+    try:
+        import torch
+        return embedder._cuda_works(torch)
+    except Exception:
+        return False
+
+
 def _run(fid, path, cache):
     global _model
     try:
@@ -80,7 +89,9 @@ def _run(fid, path, cache):
                 _jobs[fid] = {"status": "transcribing"}
             if _model is None:
                 from faster_whisper import WhisperModel
-                _model = WhisperModel(str(MODEL_DIR), device="cpu", compute_type="int8", local_files_only=True)
+                cuda = _gpu()
+                _model = WhisperModel(str(MODEL_DIR), device="cuda" if cuda else "cpu",
+                                      compute_type="float16" if cuda else "int8", local_files_only=True)
             segments, info = _model.transcribe(path, beam_size=5, vad_filter=True, task="transcribe")
             lines = [{"start": round(segment.start, 2), "end": round(segment.end, 2), "text": segment.text.strip()}
                      for segment in segments if segment.text.strip()]
@@ -153,7 +164,7 @@ def _load_dictation():
     if _dictation is None:
         _ensure_dictation()
         from faster_whisper import WhisperModel
-        cuda = embedder.DEVICE != "CPU"
+        cuda = _gpu()
         _dictation = WhisperModel(str(DICTATION_DIR), device="cuda" if cuda else "cpu",
                                   compute_type="float16" if cuda else "int8", local_files_only=True)
 
