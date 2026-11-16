@@ -155,7 +155,7 @@ public sealed partial class SettingsPage : Page
     private void BuildThemes()
     {
         ThemeChips.Children.Clear();
-        var accent = (SolidColorBrush)Ui.Brush("AccentBrush");
+        var accent = (SolidColorBrush)Ui.Brush("AccentBrush")!;
         // The last tile follows Windows' own light or dark setting.
         foreach (var p in ThemeEngine.All.Append(ThemeEngine.Find("system") with { Key = "system", Name = "Match Windows" }))
         {
@@ -196,7 +196,7 @@ public sealed partial class SettingsPage : Page
     private void BuildSurfaces()
     {
         SurfaceRow.Children.Clear();
-        var accent = (SolidColorBrush)Ui.Brush("AccentBrush");
+        var accent = (SolidColorBrush)Ui.Brush("AccentBrush")!;
         foreach (var (key, name) in new[] { ("frosted", "Frosted glass"), ("liquid", "Liquid glass") })
         {
             var selected = St.Surface == key;

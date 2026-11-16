@@ -44,7 +44,6 @@ class TranscriptionTests(unittest.TestCase):
             def __init__(self, *args, **kwargs):
                 self.kwargs = kwargs
             def transcribe(self, path, **kwargs):
-                self_path = path
                 return [SimpleNamespace(start=1.2, end=2.3, text=" Hello world ")], SimpleNamespace(language="en")
         module = SimpleNamespace(WhisperModel=Model)
         with patch.object(transcribe, "_ensure_model"), patch.dict(sys.modules, {"faster_whisper": module}):
