@@ -33,6 +33,8 @@ public sealed class AppSettings
     public string VoiceEngine { get; set; } = "local";
     /// <summary>How hard indexing works the PC: "quiet" (one helper, gentle on fans), "balanced" or "fast".</summary>
     public string IndexSpeed { get; set; } = "balanced";
+    /// <summary>Sidebar sections the person folded away (by key, e.g. "spaces" or "refine:Shape").</summary>
+    public List<string> Collapsed { get; set; } = [];
     /// <summary>Where the viewer shows similar files: "below" the file (default) or "side" (the Similar tab in the side panel).</summary>
     public string SimilarFiles { get; set; } = "below";
 

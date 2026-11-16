@@ -7,7 +7,7 @@
 
     <DataTemplate x:Key="TileTemplate" x:DataType="local:TileVm">
       <Grid CornerRadius="8" Background="{StaticResource GlassFillBrush}" CanDrag="True" Tag="{x:Bind}"
-            DragStarting="Tile_DragStarting" Tapped="Tile_Tapped"
+            DragStarting="Tile_DragStarting" Tapped="Tile_Tapped" RightTapped="Tile_RightTapped"
             PointerEntered="Tile_PointerEntered" PointerExited="Tile_PointerExited">
         <Image Source="{x:Bind Thumb}" Stretch="UniformToFill" Visibility="{x:Bind ThumbVisible}"/>
         <local:LineIcon Kind="{x:Bind IconKind}" Size="38" Opacity="0.5" Visibility="{x:Bind GlyphVisible}" HorizontalAlignment="Center" VerticalAlignment="Center"/>

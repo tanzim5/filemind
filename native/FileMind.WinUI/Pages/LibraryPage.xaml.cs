@@ -67,16 +67,44 @@ public sealed partial class LibraryPage : Page
     public static LibraryPage? Current { get; private set; }
 
     /// <summary>Puts the sidebar sections in the order chosen in Settings and hides those switched off.</summary>
-    // One deliberate order, most useful first: what kind of file, your own tags, your spaces, the hard facts (Refine),
-    // where it came from, how it looks, and finally the folders.
+    // One deliberate order, most useful first: what kind of file, your own tags, your spaces, where it came from,
+    // the hard facts (Refine), how it looks, and finally the folders.
     public void ApplySections()
     {
         SectionStack.Children.Clear();
-        foreach (var sec in new UIElement[] { SecTypes, SecTags, SecSpaces, SecDetails, SecSources, SecColours, SecMoods, SecFolders })
+        foreach (var sec in new UIElement[] { SecTypes, SecTags, SecSpaces, SecSources, SecDetails, SecColours, SecMoods, SecFolders })
         {
             sec.Visibility = Visibility.Visible;
             SectionStack.Children.Add(sec);
         }
+    }
+
+    private static bool IsFolded(string key) => AppRuntime.Current.Settings.Collapsed.Contains(key);
+
+    private static void SetFolded(string key, bool folded)
+    {
+        var s = AppRuntime.Current.Settings;
+        s.Collapsed.Remove(key);
+        if (folded) s.Collapsed.Add(key);
+        try { s.Save(AppRuntime.Current.Paths); } catch (Exception ex) { App.Log("fold", ex, null); }
+    }
+
+    /// <summary>Clicking a heading's text folds or unfolds what is under it. The choice is remembered.</summary>
+    private static void Foldable(FrameworkElement hit, string key, Action<bool> apply)
+    {
+        apply(IsFolded(key));
+        hit.Tapped += (_, e) => { var f = !IsFolded(key); SetFolded(key, f); apply(f); e.Handled = true; };
+    }
+
+    /// <summary>Makes a sidebar section foldable: everything under its heading moves into one body that can be hidden.</summary>
+    private static void MakeCollapsible(StackPanel sec, string key)
+    {
+        var body = new StackPanel { Spacing = sec.Spacing };
+        while (sec.Children.Count > 1) { var c = sec.Children[1]; sec.Children.RemoveAt(1); body.Children.Add(c); }
+        sec.Children.Add(body);
+        var first = (FrameworkElement)sec.Children[0];
+        var label = first as TextBlock ?? ((Grid)first).Children.OfType<TextBlock>().First();
+        Foldable(label, key, folded => body.Visibility = folded ? Visibility.Collapsed : Visibility.Visible);
     }
 
     /// <summary>Frosted or liquid look for the floating pieces: the search pill, the selection bar and the toast.</summary>
@@ -88,6 +116,9 @@ public sealed partial class LibraryPage : Page
     public LibraryPage()
     {
         InitializeComponent();
+        foreach (var (sec, key) in new (StackPanel, string)[] { (SecTags, "tags"), (SecSpaces, "spaces"), (SecSources, "sources"), (SecDetails, "refine"),
+                                                               (SecColours, "colours"), (SecMoods, "moods"), (SecFolders, "folders") })
+            MakeCollapsible(sec, key);
         TileRepeater.ElementPrepared += (_, a) => Anim.In(a.Element, 160);
         Current = this;
         KeyboardAcceleratorPlacementMode = Microsoft.UI.Xaml.Input.KeyboardAcceleratorPlacementMode.Hidden;
@@ -900,6 +931,8 @@ public sealed partial class LibraryPage : Page
         return new SolidColorBrush(Color.FromArgb(Convert.ToByte(hex[..2], 16), Convert.ToByte(hex[2..4], 16), Convert.ToByte(hex[4..6], 16), Convert.ToByte(hex[6..8], 16)));
     }
 
+    private bool _spacesAll;
+
     private void RebuildPanels()
     {
         _syncing = true;
@@ -958,10 +991,19 @@ public sealed partial class LibraryPage : Page
             SourceChips.ItemsSource = srcChips;
 
             SpaceList.Children.Clear();
-            foreach (var p in _projects)
+            var hiddenSpaces = 0;
+            var shownSpaces = _projects.Select((p, i) => (p, i)).Where(x => _spacesAll || x.i < 5 || x.p.Id == _q.Project).Select(x => x.p).ToList();
+            hiddenSpaces = _projects.Count - shownSpaces.Count;
+            foreach (var p in shownSpaces)
             {
                 var sp = p;
                 SpaceList.Children.Add(SpaceRow(sp.Name, SpaceRing(sp.Id), sp.Count.ToString("N0"), _q.Project == sp.Id, () => GoAsync(() => { _q.Project = _q.Project == sp.Id ? null : sp.Id; _title = ""; })));
+            }
+            if (hiddenSpaces > 0 || (_spacesAll && _projects.Count > 5))
+            {
+                var more = new HyperlinkButton { Padding = new Thickness(8, 2, 8, 2), FontSize = 12, Content = _spacesAll ? "Show fewer" : $"Show {hiddenSpaces:N0} more" };
+                more.Click += (_, _) => { _spacesAll = !_spacesAll; RebuildPanels(); };
+                SpaceList.Children.Add(more);
             }
             SpaceList.Children.Add(SpaceRow("Unsorted", null, null, _q.Unassigned, () => GoAsync(() => { _q.Unassigned = !_q.Unassigned; _title = ""; })));
 
@@ -1239,7 +1281,7 @@ public sealed partial class LibraryPage : Page
         if (gen != _refineGen) return;
 
         RefineGroups.Children.Clear();
-        foreach (var group in r.Facets.GroupBy(f => f.Group))
+        foreach (var group in r.Facets.GroupBy(f => f.Group).OrderBy(g => g.Key == "Date" ? 0 : 1))
         {
             var shown = group.Where(f => FacetOn(f.Key) || (f.Count > 0 && f.Count < r.Total)).ToList();
             if (shown.Count == 0) continue;
@@ -1256,7 +1298,7 @@ public sealed partial class LibraryPage : Page
             head.Children.Add(new Border { Width = 7, Height = 7, CornerRadius = new CornerRadius(4), Background = Brush(hint), VerticalAlignment = VerticalAlignment.Center });
             head.Children.Add(new TextBlock { Text = group.Key, FontSize = 11.5, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Ui.Brush("GlassTextSecondaryBrush"), VerticalAlignment = VerticalAlignment.Center });
             var block = new StackPanel { Spacing = 8 };
-            block.Children.Add(head); block.Children.Add(wrap);
+            head.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent); Foldable(head, "refine:" + group.Key, f => wrap.Visibility = f ? Visibility.Collapsed : Visibility.Visible); block.Children.Add(head); block.Children.Add(wrap);
             RefineGroups.Children.Add(block);
         }
         RefineEmpty.Visibility = RefineGroups.Children.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -1448,6 +1490,60 @@ public sealed partial class LibraryPage : Page
 
     private void Tile_PointerEntered(object sender, PointerRoutedEventArgs e) { if (Vm(sender) is { } t) t.Hover = true; }
     private void Tile_PointerExited(object sender, PointerRoutedEventArgs e) { if (Vm(sender) is { } t) t.Hover = false; }
+
+    /// <summary>Right-click a tile: the usual things to do with it. Over a ticked tile the menu acts on every ticked file.</summary>
+    private void Tile_RightTapped(object sender, RightTappedRoutedEventArgs e)
+    {
+        if (Vm(sender) is not { } tile) return;
+        e.Handled = true;
+        var many = tile.Checked && _sel.Count > 1;
+        var items = many ? SelectedItems() : [tile.Item];
+        var ids = items.Select(i => i.Id).ToList();
+        var menu = new MenuFlyout();
+        MenuFlyoutItem Item(string text, string glyph, Action run, string? keys = null)
+        {
+            var m = new MenuFlyoutItem { Text = text, Icon = new FontIcon { Glyph = glyph } };
+            if (keys is not null) m.KeyboardAcceleratorTextOverride = keys;
+            m.Click += (_, _) => run();
+            menu.Items.Add(m);
+            return m;
+        }
+        if (!many)
+        {
+            Item("Open", "", () => Frame.Navigate(typeof(ViewerPage), new ViewerRequest(tile.Item, _tiles.Select(t => t.Item).ToList())), "Enter");
+            Item("Show in folder", "", () =>
+            {
+                if (!File.Exists(tile.Item.Path)) { ShowToast("That file has moved."); return; }
+                Process.Start(new ProcessStartInfo("explorer.exe") { Arguments = $"/select,\"{tile.Item.Path}\"", UseShellExecute = false });
+            });
+            menu.Items.Add(new MenuFlyoutSeparator());
+        }
+        Item(many ? $"Copy {items.Count:N0} files" : "Copy file", "", () => _ = CopyItemsAsync(items, false), "Ctrl+C");
+        Item(many ? "Copy paths" : "Copy path", "", () => _ = CopyItemsAsync(items, true), "Ctrl+Shift+C");
+        menu.Items.Add(new MenuFlyoutSeparator());
+        var fav = items.All(i => i.IsFavourite);
+        Item(fav ? "Remove from Favourites" : "Add to Favourites", fav ? "" : "", () => _ = fav ? ApplyTagsAsync(ids, null, TagInfo.Favourite) : ApplyTagsAsync(ids, TagInfo.Favourite, null));
+        if (!many) Item("Find similar", "", () => _ = GoAsync(() => { _similarTo = tile.Item.Id; _similarName = tile.Name; _tags.Clear(); _imagePath = null; _title = ""; }));
+        if (_projects.Count > 0)
+        {
+            var sub = new MenuFlyoutSubItem { Text = "Add to space", Icon = new FontIcon { Glyph = "" } };
+            foreach (var p in _projects)
+            {
+                var pid = p.Id;
+                var s = new MenuFlyoutItem { Text = p.Name };
+                s.Click += async (_, _) =>
+                {
+                    try { await Api.AddToProjectAsync(pid, ids); ShowToast($"Added to “{p.Name}”."); await RefreshFacetsAsync(); }
+                    catch (Exception ex) { ShowToast(ex.Message); }
+                };
+                sub.Items.Add(s);
+            }
+            menu.Items.Add(sub);
+        }
+        menu.Items.Add(new MenuFlyoutSeparator());
+        Item(many ? $"Delete {items.Count:N0} files" : "Delete", "", () => _ = DeleteIdsAsync(ids), "Del");
+        menu.ShowAt((FrameworkElement)sender, e.GetPosition((FrameworkElement)sender));
+    }
 
     private void Tile_Tapped(object sender, TappedRoutedEventArgs e)
     {
@@ -1661,6 +1757,11 @@ public sealed partial class LibraryPage : Page
     {
         var items = _tiles.Where(t => t.Checked).Select(t => t.Item).ToList();
         if (items.Count == 0 && _focused is not null) items.Add(_focused.Item);
+        await CopyItemsAsync(items, paths);
+    }
+
+    private async Task CopyItemsAsync(List<FileItem> items, bool paths)
+    {
         if (items.Count == 0) return;
         try
         {
@@ -1808,13 +1909,15 @@ public sealed partial class LibraryPage : Page
 
     private async void Delete_Click(object sender, RoutedEventArgs e) => await DeleteSelectedAsync();
 
-    private async Task DeleteSelectedAsync()
+    private Task DeleteSelectedAsync() => DeleteIdsAsync(_sel.ToList());
+
+    private async Task DeleteIdsAsync(List<int> ids)
     {
-        if (_sel.Count == 0) return;
-        if (!await AskAsync($"Delete {_sel.Count:N0} file{(_sel.Count == 1 ? "" : "s")}?", "They go to the Recycle Bin, so you can still get them back.", "Delete")) return;
+        if (ids.Count == 0) return;
+        if (!await AskAsync($"Delete {ids.Count:N0} file{(ids.Count == 1 ? "" : "s")}?", "They go to the Recycle Bin, so you can still get them back.", "Delete")) return;
         try
         {
-            await Api.FileActionAsync("delete", _sel);
+            await Api.FileActionAsync("delete", ids);
             ClearSelection();
             await RefreshFacetsAsync();
             await ReloadAsync();
