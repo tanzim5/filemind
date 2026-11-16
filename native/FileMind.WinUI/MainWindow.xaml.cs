@@ -41,6 +41,7 @@ public sealed partial class MainWindow : Window
             else if (pp.IsXButton2Pressed) { e.Handled = true; _ = GoForwardAnyAsync(); }
         }), true);
         Root.SizeChanged += (_, _) => QueueTitleRegions();
+        Pages.Anim.HookPress(Root);
         // Follow Windows when it changes between light and dark or gets a new accent colour.
         _ui.ColorValuesChanged += (_, _) => DispatcherQueue.TryEnqueue(() =>
         {
@@ -50,6 +51,7 @@ public sealed partial class MainWindow : Window
         ContentFrame.Navigated += (_, e) =>
         {
             SyncRail(e.SourcePageType);
+            Pages.Anim.In(e.Content as UIElement, 150, 10);
             SetActions(null);              // the new page puts its own buttons in the bar once it has loaded
             SetCenter(null);
             SyncNav();
@@ -294,12 +296,14 @@ public sealed partial class MainWindow : Window
             SetupFrame.Visibility = Visibility.Visible;
             SetupFrame.Navigate(typeof(Pages.SetupPage));
             await ((Pages.SetupPage)SetupFrame.Content).RunAsync();
-            SetupFrame.Visibility = Visibility.Collapsed;
-            SetupFrame.Content = null;
+            if (Environment.GetEnvironmentVariable("FILEMIND_DEV_PAGE") == "opening") await Task.Delay(60000);   // screenshot helper: hold the opening screen
             Shell.Visibility = Visibility.Visible;
             QueueTitleRegions();
             // The Library is created first, even when something else is shown, so its filters already sit in the sidebar.
             Select("library");
+            // The opening screen fades away over the Library (about a quarter of a second); nothing waits for it.
+            var opening = SetupFrame;
+            Pages.Anim.Out(opening, 250, () => { opening.Visibility = Visibility.Collapsed; opening.Content = null; });
             if (!_watch.IsEnabled) { _watch.Tick += async (_, _) => await WatchEngineAsync(); _watch.Start(); }
         }
         catch (Exception ex) { App.Log("boot", ex, ex.Message); }
@@ -551,6 +555,14 @@ public sealed partial class MainWindow : Window
                     if (dev == "new-space") { ContentFrame.Navigate(typeof(Pages.SpacesPage)); var t2 = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) }; t2.Tick += (_, _) => { t2.Stop(); (ContentFrame.Content as Pages.SpacesPage)?.DevNewSpace(); }; t2.Start(); }
                     else { if (dev == "quick") App.Launcher?.DevQuery("drum"); App.Launcher?.Toggle(); }
                 };
+                t.Start();
+            }
+            else if (!_devPageDone && dev is "settings" or "first-run")
+            {
+                // Screenshot helper: opens the Settings panel, or shows the first-run screen over the Library.
+                _devPageDone = true;
+                var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(9) };
+                t.Tick += (_, _) => { t.Stop(); if (dev == "settings") OpenSettings(); else Pages.LibraryPage.Current?.DevFirstRun(); };
                 t.Start();
             }
             else if (!_devPageDone && dev == "library-ref")

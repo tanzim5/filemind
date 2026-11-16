@@ -88,6 +88,7 @@ public sealed partial class LibraryPage : Page
     public LibraryPage()
     {
         InitializeComponent();
+        TileRepeater.ElementPrepared += (_, a) => Anim.In(a.Element, 160);
         Current = this;
         KeyboardAcceleratorPlacementMode = Microsoft.UI.Xaml.Input.KeyboardAcceleratorPlacementMode.Hidden;
         ApplySections();
@@ -238,7 +239,7 @@ public sealed partial class LibraryPage : Page
         _lastChecked = -1;
         _imageHits = [];
         SetFocus(null);
-        EmptyCard.Visibility = Visibility.Collapsed;
+        EmptyCard.Visibility = FirstRun.Visibility = Visibility.Collapsed;
         RebuildPanels();
         _ = RefreshSuggestionsAsync(_cts.Token);
         await LoadMoreAsync(_cts.Token);
@@ -440,7 +441,7 @@ public sealed partial class LibraryPage : Page
 
     private void ShowEmptyIfNeeded()
     {
-        if (_tiles.Count > 0) { EmptyCard.Visibility = Visibility.Collapsed; return; }
+        if (_tiles.Count > 0) { EmptyCard.Visibility = FirstRun.Visibility = Visibility.Collapsed; return; }
         if (_roots.Count == 0) ShowEmpty("Add a folder to begin", "Choose a folder of photos, videos or sounds. File Mind reads it on this PC and nothing is uploaded.", true);
         else if (_wasIndexing) ShowEmpty("Reading your files…", "Files appear here as soon as they have been read.", false);
         else if (_tags.Count > 0 || _similarTo > 0 || _imagePath is not null) ShowEmpty("Nothing matched", "Try describing it differently, or loosen a filter.", false);
@@ -449,10 +450,36 @@ public sealed partial class LibraryPage : Page
 
     private void ShowEmpty(string title, string body, bool offerAdd)
     {
+        if (offerAdd) { ShowFirstRun(title, body); return; }
+        FirstRun.Visibility = Visibility.Collapsed;
         EmptyTitle.Text = title;
         EmptyBody.Text = body;
-        EmptyAction.Visibility = offerAdd ? Visibility.Visible : Visibility.Collapsed;
+        EmptyAction.Visibility = Visibility.Collapsed;
         EmptyCard.Visibility = Visibility.Visible;
+    }
+
+    public void DevFirstRun() { TileRepeater.Visibility = Visibility.Collapsed; ShowFirstRun("Add a folder to begin", "Choose a folder of photos, videos or sounds. File Mind reads it on this PC and nothing is uploaded."); }
+
+    /// <summary>Nothing added yet: the same deep gradient and breathing mark as the opening screen, one round button.</summary>
+    private void ShowFirstRun(string title, string body)
+    {
+        EmptyCard.Visibility = Visibility.Collapsed;
+        if (FirstRun.Children.Count == 0 || FirstRun.Tag is not string t || t != FileMind.ThemeEngine.Find(AppRuntime.Current.Settings.Theme).Key + AppRuntime.Current.Settings.Accent)
+        {
+            FirstRun.Children.Clear();
+            FirstRun.Tag = FileMind.ThemeEngine.Find(AppRuntime.Current.Settings.Theme).Key + AppRuntime.Current.Settings.Accent;
+            FirstRun.Children.Add(Hero.Backdrop(false));
+            var col = new StackPanel { Spacing = 14, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Width = 460, Margin = new Thickness(0, 0, 0, 30) };
+            col.Children.Add(Hero.Mark(104));
+            col.Children.Add(new TextBlock { Text = title, Style = Ui.Style("TitleText"), FontSize = 34, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center });
+            col.Children.Add(new TextBlock { Text = body, Style = Ui.Style("SecondaryText"), FontSize = 14, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap });
+            var go = Hero.RoundButton("Add a folder");
+            go.Margin = new Thickness(0, 18, 0, 0);
+            go.Click += AddFolder_Click;
+            col.Children.Add(go);
+            FirstRun.Children.Add(col);
+        }
+        if (FirstRun.Visibility != Visibility.Visible) { FirstRun.Visibility = Visibility.Visible; Anim.In(FirstRun, 300, 8); }
     }
 
     private void ShowToast(string text)
@@ -1473,7 +1500,9 @@ public sealed partial class LibraryPage : Page
     {
         var any = _sel.Count > 0;
         foreach (var t in _tiles) t.AnyChecked = any;
+        var barWasHidden = ActionBar.Visibility != Visibility.Visible;
         ActionBar.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+        if (any && barWasHidden) Anim.In(ActionBar, 180, 18);
         if (any) SyncFavButton();
         SelCount.Text = $"{_sel.Count:N0} selected";
         RemoveFromSpaceBtn.Visibility = _q.Project is not null ? Visibility.Visible : Visibility.Collapsed;

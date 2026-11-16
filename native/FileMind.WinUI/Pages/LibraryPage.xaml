@@ -159,6 +159,7 @@
           </StackPanel>
         </Border>
 
+        <Grid x:Name="FirstRun" Visibility="Collapsed"/>
         <Border x:Name="EmptyCard" Visibility="Collapsed" Style="{StaticResource GlassCard}" MaxWidth="460"
                 HorizontalAlignment="Center" VerticalAlignment="Center" Padding="32">
           <StackPanel Spacing="12">

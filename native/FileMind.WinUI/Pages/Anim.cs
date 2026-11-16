@@ -47,6 +47,24 @@ internal static class Anim
         catch (Exception) { }
     }
 
+    /// <summary>Fades an element out, then runs <paramref name="done"/> (at once when animations are off).</summary>
+    public static void Out(UIElement e, int ms, Action done)
+    {
+        if (!On) { done(); return; }
+        try
+        {
+            var v = ElementCompositionPreview.GetElementVisual(e);
+            var c = v.Compositor;
+            var a = c.CreateScalarKeyFrameAnimation();
+            a.InsertKeyFrame(1, 0, Ease(c)); a.Duration = TimeSpan.FromMilliseconds(ms);
+            var batch = c.CreateScopedBatch(CompositionBatchTypes.Animation);
+            v.StartAnimation("Opacity", a);
+            batch.End();
+            batch.Completed += (_, _) => e.DispatcherQueue.TryEnqueue(() => { done(); v.Opacity = 1; });
+        }
+        catch (Exception) { done(); }
+    }
+
     private static void Scale(UIElement e, float to, int ms)
     {
         try

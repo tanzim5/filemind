@@ -30,7 +30,7 @@
             <StackPanel Spacing="8"><TextBlock Text="Accent colour"/><StackPanel x:Name="AccentRow" Orientation="Horizontal" Spacing="10"/></StackPanel>
             <Grid ColumnSpacing="16">
               <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="44"/></Grid.ColumnDefinitions>
-              <StackPanel Spacing="2"><TextBlock Text="Transparency"/><TextBlock Text="Lower is more see-through, showing your desktop through the glass." Style="{StaticResource Helper}"/></StackPanel>
+              <StackPanel Spacing="2"><TextBlock Text="Transparency"/><TextBlock Text="Lower shows more of your desktop." Style="{StaticResource Helper}"/></StackPanel>
               <Slider x:Name="GlassSlider" Grid.Column="1" Width="220" VerticalAlignment="Center" Minimum="0" Maximum="100" StepFrequency="5" ValueChanged="Glass_Changed"/>
               <TextBlock x:Name="GlassValue" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource SecondaryText}"/>
             </Grid>
