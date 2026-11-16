@@ -13,7 +13,6 @@ from send2trash import send2trash
 import numpy as np
 from fastapi import Body, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 
 from . import colors as colors_mod
 from . import names as names_mod
@@ -31,7 +30,6 @@ from . import search_mix
 from . import space_suggest, space_match
 
 app = FastAPI(title="Local File Brain")
-STATIC = Path(__file__).parent / "static"
 
 
 @app.on_event("startup")
@@ -484,8 +482,6 @@ def _warm_dims():
 
 
 def _warm_ideas():
-    if os.environ.get("FILEMIND_LAZY_START") == "1":
-        return                       # login startup stays lean until a search or indexing needs the model
     if not embedder.ready():          # first run: the model is fetched from the app, then this runs
         return
     try:
@@ -784,6 +780,15 @@ def voice_model_prepare():
     return transcribe_mod.prepare_dictation()
 
 
+@app.post("/api/index/speed")
+def index_speed(body: dict = Body(...)):
+    """How hard indexing works the PC: quiet, balanced or fast. Takes effect immediately, even mid-run."""
+    try:
+        return {"level": indexer.set_speed(str(body.get("level", "")))}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 @app.post("/api/voice/warm")
 def voice_warm():
     """Loads the voice model in the background while the person is still speaking."""
@@ -896,8 +901,8 @@ def info(fid: int):
                 rgb = [tuple(pal[i * 3:i * 3 + 3]) for n, i in q.getcolors() if n > 40]      # ignore specks
                 rgb.sort(key=lambda c: 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2])  # dark to light
                 colors = ["#%02x%02x%02x" % c for c in rgb]
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"File Mind: could not read the colours of file {fid}: {e}", flush=True)
     projs = [{"id": p["id"], "name": p["name"]} for p in c.execute(
         "SELECT p.* FROM projects p JOIN project_files pf ON pf.project_id=p.id WHERE pf.file_id=?", (fid,))]
     for p in c.execute("SELECT p.id,p.name FROM projects p JOIN smart_spaces s ON s.project_id=p.id"):
@@ -977,8 +982,8 @@ def wave(fid: int):
             pk = np.array([b.max() for b in bins])
             pk = (pk / (pk.max() or 1)) ** 0.6          # gentle curve so quiet parts stay visible
             peaks = [round(float(max(0.06, x)), 3) for x in pk]
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"File Mind: no waveform for file {fid}: {e}", flush=True)
     out = {"peaks": peaks, "duration": dur}
     cf.write_text(json.dumps(out))
     return out
@@ -1448,4 +1453,3 @@ async def _revalidate_ui(request, call_next):
     return resp
 
 
-app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")

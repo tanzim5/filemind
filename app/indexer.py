@@ -25,6 +25,22 @@ state = {
     "phase": "idle", "total": 0, "done": 0, "errors": 0, "current": "", "started": 0.0,
     "message": "", "device": "", "rate": 0.0, "eta": 0,   # seconds per file, seconds left (estimates)
 }
+PREP_WORKERS = {"quiet": 1, "balanced": 3, "fast": 4}    # files decoded at the same time (the CPU side of indexing)
+_speed = os.environ.get("FILEMIND_INDEX_SPEED", "balanced")
+
+
+def speed() -> str:
+    return _speed if _speed in PREP_WORKERS else "balanced"
+
+
+def set_speed(level: str) -> str:
+    global _speed
+    if level not in PREP_WORKERS:
+        raise ValueError("level must be quiet, balanced or fast")
+    _speed = level
+    return _speed
+
+
 COMMIT_SECONDS = 4.0                          # newly read files become searchable at least this often
 _thread: threading.Thread | None = None
 
@@ -145,10 +161,10 @@ def _run(root_id: int, root: str):
 
         ahead = collections.deque()
         nxt = 0
-        pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix="prep")
+        pool = ThreadPoolExecutor(max_workers=max(PREP_WORKERS.values()), thread_name_prefix="prep")
         try:
             while (nxt < len(pending) or ahead) and not state["stop"]:
-                while nxt < len(pending) and len(ahead) < 16:
+                while nxt < len(pending) and len(ahead) < 16 and sum(not f.done() for _, f in ahead) < PREP_WORKERS[speed()]:
                     ahead.append((pending[nxt], pool.submit(work, pending[nxt])))
                     nxt += 1
                 # take the next file, plus the images right behind it (up to 8): they go through the model together
@@ -203,6 +219,8 @@ def _run(root_id: int, root: str):
                         c.execute("UPDATE files SET vec=?, embed_mode=?, thumb=?, dom=?, pal=?, status='done', error=NULL WHERE id=?",
                                   (vec.astype(np.float32).tobytes(), mode, thumb, dom, pal, r["id"]))
                     state["done"] += 1
+                if speed() == "quiet":
+                    time.sleep(0.25)                      # rests the GPU between files so the fans can slow down
                 now = time.time()
                 if state["done"]:
                     state["rate"] = round((now - t_begin) / state["done"], 2)

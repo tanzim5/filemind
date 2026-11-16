@@ -116,6 +116,11 @@
               <RadioButton Tag="cpu" Content="CPU"/>
             </RadioButtons>
             <TextBlock x:Name="ChoiceNote" Style="{StaticResource Helper}"/>
+            <RadioButtons x:Name="SpeedChoice" Header="Indexing speed" SelectionChanged="Speed_Changed">
+              <RadioButton Tag="quiet" Content="Quiet (slower, gentle on fans)"/>
+              <RadioButton Tag="balanced" Content="Balanced"/>
+              <RadioButton Tag="fast" Content="Fast (uses the most CPU)"/>
+            </RadioButtons>
             <Button x:Name="Apply" Content="Apply and restart the engine" Click="Apply_Click" Style="{StaticResource GlassAccentButton}" HorizontalAlignment="Left"/>
           </StackPanel>
         </Border>

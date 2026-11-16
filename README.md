@@ -18,8 +18,6 @@
   <a href="https://x.com/tanzim31">@tanzim31</a>
 </p>
 
-<p align="center"><img src="docs/library-0.6.png" alt="The File Mind Windows app: library with tags, favourites and counted Refine filters" width="100%"></p>
-<p align="center"><img src="docs/duplicates-0.6.png" alt="Duplicates: find exact copies and look-alikes, remove to the Recycle Bin" width="100%"></p>
 
 File Mind reads a folder — Downloads, Pictures, a project drive — and understands **what is in** your photos, videos
 and sounds using Google's [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2), a multimodal AI model
@@ -92,53 +90,38 @@ Nothing to install: Python, ffmpeg and everything else are inside the download. 
 - Indexing only reads your folders. Staged renames and moves happen when you press commit and can be undone. Right-click Copy, Move and Move to Trash act immediately; deletion uses the system Trash.
 - The index lives in a `data` folder next to the app. Delete it to forget everything.
 
-## Run from source
+## Build and run from source
 
-Any computer with Python can run File Mind from this repository: the same app, in its own window or your browser.
+File Mind is a native Windows app (WinUI 3, .NET 9) that starts a local Python engine (FastAPI) for the AI work.
 
-**You need:** Python 3.10–3.13 (**3.12 recommended**; 3.14 is too new for some AI libraries), about 8 GB RAM and 6 GB disk, and **ffmpeg** for videos, sounds and voice search. On a Mac: Apple Silicon and macOS 14+.
-
-| System | Install ffmpeg |
-|---|---|
-| macOS | `brew install ffmpeg` |
-| Debian / Ubuntu / Mint | `sudo apt install ffmpeg python3-venv` |
-| Fedora | `sudo dnf install ffmpeg` ([RPM Fusion](https://rpmfusion.org/Configuration)) |
-| Arch | `sudo pacman -S ffmpeg` |
-| Windows | `winget install Gyan.FFmpeg` |
+**You need:** Windows 10/11, the .NET 9 SDK, Python 3.12, and **ffmpeg** (`winget install Gyan.FFmpeg`) for videos, sounds and voice search.
 
 ```bash
 git clone https://github.com/tanzim5/filemind.git
 cd filemind
-./run.sh          # Windows: run.bat
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+# NVIDIA card: replace the CPU PyTorch with the CUDA build
+.venv\Scripts\python.exe -m pip install --force-reinstall --no-deps torch==2.11.0+cu128 torchvision==0.26.0+cu128 --index-url https://download.pytorch.org/whl/cu128
+cd native
+dotnet build FileMind.WinUI -c Release -p:Platform=x64
 ```
 
-The first run creates a private `.venv`, installs packages (a few minutes), opens File Mind and downloads the model once. Later runs start in seconds. Add `--browser` to use your web browser; on Linux it always does. `./run.sh` picks Python 3.12 automatically (or set `PYTHON=python3.12`).
+Run `native\FileMind.WinUIind\Release
+et9.0-windows10.0.22621.0\win-x64\FileMind.exe`. Next to a source checkout it starts `filemind.py` from `.venv` by itself. The first run downloads the model once.
+
+Tests: `.venv\Scripts\python.exe -m unittest discover -s tests` and `dotnet test native/FileMind.Core.Tests`.
 
 <details>
-<summary><b>Dragging files out, audio transcription and other details</b></summary>
-
-**Dragging files out.** For original-file drops into Photoshop, After Effects, Explorer and other desktop apps, launch the Windows desktop window with `run.bat` (without `--browser`). The destination decides which formats it accepts. The original file path is sent in the Windows file-drop format, including MP4 video. Browser mode offers a download drag where supported but can't provide a native file drop to editors such as After Effects. macOS/Linux native export isn't supported yet. **Copy frame** works in the Windows desktop viewer; elsewhere the browser may offer a download instead.
+<summary><b>Audio transcription and other details</b></summary>
 
 **Audio transcription.** EmbeddingGemma 2 understands audio for search without turning speech into text. The optional **Transcribe audio** action uses a separate multilingual speech model for a copyable, timestamped transcript. Its first use downloads the model; later runs are offline. Music and sound effects may have no usable transcript.
 
-**Manual setup**
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate              # Windows: .venv\Scripts\activate
-# Linux without an NVIDIA GPU: install the much smaller CPU-only PyTorch first
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-pip install -r requirements.txt
-python filemind.py                     # or: python -m uvicorn app.main:app --port 8765
-```
-
 Set `FILEMIND_MODELS` to put the model elsewhere and `FILEMIND_DATA` for the index. You can also place model files in `models/embeddinggemma-2/` yourself.
 
-**Speed.** With an NVIDIA GPU and CUDA PyTorch, indexing is much faster. Everything else runs on the CPU: search is instant, reading a new library takes a few seconds per photo.
+**Speed.** An NVIDIA GPU is used automatically when it works (Settings → Engine shows what runs where). Preparing files (decoding, thumbnails, video frames) always uses the CPU; Settings → Library → Indexing speed trades speed for a quieter PC.
 
-**Linux.** "Browse…" uses `zenity` or `kdialog` if installed; otherwise paste the folder path. "Show in folder" opens your file manager.
-
-**Building the apps.** See `packaging/build_windows.py`. GitHub Actions builds the single Windows download for every `v*` tag, checks the archive's contents and smoke-tests the engine. You can also run the **Release builds** workflow manually; to publish from a manual run, give it an existing `v*` tag in `release_tag`. NVIDIA first-run CUDA download and GPU use need testing on an NVIDIA PC.
+**Building the app.** See `packaging/build_windows.py`. GitHub Actions builds the Windows download for every `v*` tag, checks the archive's contents and smoke-tests the engine. You can also run the **Release builds** workflow manually; to publish from a manual run, give it an existing `v*` tag.
 </details>
 
 ## Licence

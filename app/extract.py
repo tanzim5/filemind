@@ -200,8 +200,8 @@ def video_frames(path: Path, n: int = VIDEO_FRAMES) -> list[str]:
                 ["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{t:.2f}", "-i", str(path),
                  "-frames:v", "1", "-vf", "scale=-2:448", str(f)],
                 capture_output=True, timeout=60)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"File Mind: could not grab a frame from {path.name}: {e}", flush=True)
         return str(f) if f.exists() else None
 
     with ThreadPoolExecutor(max_workers=min(4, n)) as ex:

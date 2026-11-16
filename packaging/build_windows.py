@@ -23,7 +23,7 @@ DIST = ROOT / "dist"
 OUT = DIST / "engine"
 
 COLLECT_ALL = ["transformers", "sentence_transformers", "tokenizers", "safetensors", "huggingface_hub",
-               "accelerate", "librosa", "soundfile", "uvicorn", "webview", "faster_whisper", "ctranslate2", "av", "onnxruntime"]
+               "accelerate", "librosa", "soundfile", "uvicorn", "faster_whisper", "ctranslate2", "av", "onnxruntime"]
 METADATA = ["numpy", "tqdm", "regex", "requests", "packaging", "filelock", "pyyaml", "pillow", "scipy",
             "scikit-learn"]
 EXCLUDE = ["tkinter", "matplotlib", "IPython", "jupyter", "notebook", "pytest",
@@ -75,7 +75,6 @@ def main():
     cmd = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--onedir", "--windowed",
            "--name", "FileMind", "--distpath", str(OUT), "--workpath", str(work),
            "--specpath", str(work), "--icon", str(ROOT / "packaging" / "filemind.ico"),
-           "--add-data", f"{ROOT / 'app' / 'static'};app/static",
            "--add-binary", f"{ff / 'ffmpeg.exe'};ffmpeg", "--add-binary", f"{ff / 'ffprobe.exe'};ffmpeg",
            "--add-data", f"{ROOT / 'packaging' / 'runtime-windows.json'};.",
            "--hidden-import", "app.main", "--collect-submodules", "app",

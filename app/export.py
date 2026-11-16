@@ -383,15 +383,16 @@ def _run(job: dict):
                 with _lock:
                     job["progress"] = 0.0
                 _ffmpeg(job, build_command(job["spec"], Path(job["source"]), part, job["format"], job["kind"], facts, rate), seconds)
+        # Commit is one transition: cancellation either wins before this lock,
+        # or observes a completed job afterwards. Never acknowledge cancellation
+        # and then publish an output anyway.
         with _lock:
-            cancelled = job["status"] == "cancelling"
-        if cancelled:
-            raise InterruptedError()
-        if not part.is_file() or part.stat().st_size == 0:
-            raise RuntimeError("FFmpeg made an empty file")
-        final = free_path(out.parent, out.name)       # the name may have been taken while this was encoding
-        os.replace(part, final)
-        with _lock:
+            if job["status"] == "cancelling":
+                raise InterruptedError()
+            if not part.is_file() or part.stat().st_size == 0:
+                raise RuntimeError("FFmpeg made an empty file")
+            final = free_path(out.parent, out.name)
+            os.replace(part, final)
             job.update(status="done", progress=1.0, output=str(final), name=final.name)
     except InterruptedError:
         part.unlink(missing_ok=True)

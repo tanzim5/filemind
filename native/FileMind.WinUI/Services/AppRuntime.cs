@@ -22,6 +22,7 @@ public sealed class AppRuntime
     private AppRuntime()
     {
         Settings = AppSettings.Load(Paths);
+        try { Directory.CreateDirectory(Paths.Logs); Diag.LogFile = Path.Combine(Paths.Logs, "app.log"); } catch (Exception) { }
         Http.DefaultRequestHeaders.UserAgent.ParseAdd("FileMind-Native");
     }
 
@@ -59,6 +60,7 @@ public sealed class AppRuntime
         await Host.StartAsync(launch, Paths, TimeSpan.FromMinutes(3), ct);
         Api?.Dispose();
         Api = new ApiClient(Host.BaseUri);
+        _ = Api.SetIndexSpeedAsync(Settings.IndexSpeed);
     }
 
     public void Shutdown()
