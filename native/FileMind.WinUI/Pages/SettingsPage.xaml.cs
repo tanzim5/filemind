@@ -29,9 +29,9 @@ public sealed partial class SettingsPage : Page
         GapSlider.Value = St.TileGap;
         NamesSwitch.IsOn = St.ShowNames;
         VolumeSlider.Value = St.Volume * 100;
-        BuildAll();
+        BuildAll(); BuildSections();
         _ready = true;
-        Labels();
+        Labels(); GlassValue.Text = $"{GlassSlider.Value:0} %";
     }
 
     private void Similar_Changed(object sender, SelectionChangedEventArgs e)
@@ -46,6 +46,64 @@ public sealed partial class SettingsPage : Page
         if (!_ready) return;
         St.VoiceEngine = VoiceChoice.SelectedIndex == 1 ? "windows" : "local";
         Save();
+    }
+
+    // A tile's name is always shown. The chosen tile gets the accent ring (set by the caller) and a small check in its corner.
+    private static UIElement Tile(Border frame, bool selected, Brush accent)
+    {
+        if (!selected) return frame;
+        var g = new Grid();
+        g.Children.Add(frame);
+        g.Children.Add(new Border
+        {
+            Width = 18, Height = 18, CornerRadius = new CornerRadius(9), Background = accent, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 6, 6, 0),
+            Child = new TextBlock { Text = "\uE73E", FontFamily = new FontFamily("Segoe Fluent Icons"), FontSize = 10, Foreground = new SolidColorBrush(Colors.White), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+        });
+        return g;
+    }
+
+    private static TextBlock Label(string text, bool selected) => new()
+    {
+        Text = text, FontSize = 12.5, HorizontalAlignment = HorizontalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
+        FontWeight = selected ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
+        Foreground = Ui.Brush(selected ? "GlassTextPrimaryBrush" : "GlassTextSecondaryBrush"),
+    };
+
+    // ---- Section list: chips at the top that scroll to a card; the chip of the card in view is lit ----
+    private readonly List<(string Name, FrameworkElement Card, ToggleButton Chip)> _sections = [];
+    private bool _jumping;
+
+    private void BuildSections()
+    {
+        foreach (var (name, card) in new (string, FrameworkElement)[] { ("Appearance", SecAppearance), ("Library", SecLibrary), ("Quick search", SecQuick), ("Viewer", SecViewer), ("Engine", SecEngine), ("Folders", SecFolders), ("About", SecAbout) })
+        {
+            var chip = new ToggleButton { Style = Ui.Style("GlassChip"), Padding = new Thickness(12, 5, 12, 5), CornerRadius = new CornerRadius(6), Content = new TextBlock { Text = name, FontSize = 12.5 } };
+            var c = card;
+            chip.Click += (_, _) =>
+            {
+                var y = c.TransformToVisual((UIElement)Scroller.Content).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
+                _jumping = true;
+                Scroller.ChangeView(null, Math.Max(0, y - 4), null, !Anim.On);
+                Highlight(c);
+            };
+            _sections.Add((name, card, chip)); SectionNav.Children.Add(chip);
+        }
+        Highlight(SecAppearance);
+    }
+
+    private void Highlight(FrameworkElement current) { foreach (var s in _sections) s.Chip.IsChecked = ReferenceEquals(s.Card, current); }
+
+    private void Scroller_ViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
+    {
+        if (e.IsIntermediate && _jumping) return;
+        _jumping = false;
+        if (_sections.Count == 0) return;
+        var off = Scroller.VerticalOffset;
+        FrameworkElement cur = _sections[0].Card;
+        foreach (var s in _sections)
+            if (s.Card.TransformToVisual((UIElement)Scroller.Content).TransformPoint(new Windows.Foundation.Point(0, 0)).Y <= off + 40) cur = s.Card;
+        if (Scroller.ScrollableHeight - off < 4) cur = _sections[^1].Card;
+        Highlight(cur);
     }
 
     private void BuildAll() { BuildThemes(); BuildSurfaces(); BuildAccents(); BuildLayouts(); }
@@ -87,9 +145,9 @@ public sealed partial class SettingsPage : Page
 
     private void Labels()
     {
-        SizeLabel.Text = $"Tile size · {St.TileSize:0}px";
-        GapLabel.Text = $"Spacing · {St.TileGap:0}px";
-        VolumeLabel.Text = $"Default volume · {St.Volume * 100:0}%";
+        SizeLabel.Text = $"{St.TileSize:0}px";
+        GapLabel.Text = $"{St.TileGap:0}px";
+        VolumeLabel.Text = $"{St.Volume * 100:0}%";
     }
 
     // ---- Appearance ----
@@ -125,10 +183,8 @@ public sealed partial class SettingsPage : Page
                 BorderThickness = new Thickness(selected ? 2 : 1),
                 BorderBrush = selected ? accent : Ui.Brush("GlassStrokeBrush") };
             var col = new StackPanel { Spacing = 6 };
-            col.Children.Add(frame);
-            col.Children.Add(new TextBlock { Text = p.Name, FontSize = 12.5, HorizontalAlignment = HorizontalAlignment.Center,
-                FontWeight = selected ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
-                Foreground = selected ? null : Ui.Brush("GlassTextSecondaryBrush") });
+            col.Children.Add(Tile(frame, selected, accent));
+            col.Children.Add(Label(p.Name, selected));
             var btn = new Button { Content = col, Padding = new Thickness(0), Background = new SolidColorBrush(Colors.Transparent), BorderThickness = new Thickness(0) };
             AutomationProperties.SetName(btn, p.Name + " theme");
             btn.Click += (_, _) => { St.Theme = p.Key; Save(); App.Window?.ApplyGlass(); BuildThemes(); BuildSurfaces(); BuildAccents(); };
@@ -162,10 +218,8 @@ public sealed partial class SettingsPage : Page
             var frame = new Border { CornerRadius = new CornerRadius(6), Child = pic, BorderThickness = new Thickness(selected ? 2 : 1),
                 BorderBrush = selected ? accent : Ui.Brush("GlassStrokeBrush") };
             var col = new StackPanel { Spacing = 6 };
-            col.Children.Add(frame);
-            col.Children.Add(new TextBlock { Text = name, FontSize = 12.5, HorizontalAlignment = HorizontalAlignment.Center,
-                FontWeight = selected ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
-                Foreground = selected ? null : Ui.Brush("GlassTextSecondaryBrush") });
+            col.Children.Add(Tile(frame, selected, accent));
+            col.Children.Add(Label(name, selected));
             var btn = new Button { Content = col, Padding = new Thickness(0), Background = new SolidColorBrush(Colors.Transparent), BorderThickness = new Thickness(0) };
             AutomationProperties.SetName(btn, name);
             btn.Click += (_, _) => { St.Surface = key; Save(); App.Window?.ApplyGlass(); BuildSurfaces(); };
