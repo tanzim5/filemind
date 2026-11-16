@@ -8,7 +8,7 @@ from app import autostart
 
 class AutostartTests(unittest.TestCase):
     def test_mac_login_agent_and_background_choice_are_opt_in(self):
-        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
+        with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
             with patch.object(autostart.sys, "platform", "darwin"), \
                  patch.object(autostart.Path, "home", return_value=home), \

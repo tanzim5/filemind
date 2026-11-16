@@ -11,3 +11,4 @@ dist/
 .claude/
 .venv_backup/
 core/target/
+tests/tmp*/

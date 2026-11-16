@@ -13,7 +13,7 @@ from pathlib import Path
 
 class BackgroundLauncherTests(unittest.TestCase):
     def test_background_server_can_be_reused_and_stopped_privately(self):
-        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
+        with tempfile.TemporaryDirectory() as directory:
             with socket.socket() as sock:
                 sock.bind(("127.0.0.1", 0))
                 port = sock.getsockname()[1]
