@@ -10,9 +10,17 @@ public sealed class EngineException(string message, int status) : Exception(mess
 }
 
 /// <summary>Typed client for the engine's local HTTP API.</summary>
-public sealed class ApiClient(Uri baseUri) : IDisposable
+public sealed class ApiClient(Uri baseUri, string token = "") : IDisposable
 {
-    private readonly HttpClient _http = new() { BaseAddress = baseUri, Timeout = TimeSpan.FromMinutes(2) };
+    // The token proves to the engine that a request comes from this app and not from a web page.
+    private readonly HttpClient _http = Make(baseUri, token);
+
+    private static HttpClient Make(Uri baseUri, string token)
+    {
+        var http = new HttpClient { BaseAddress = baseUri, Timeout = TimeSpan.FromMinutes(2) };
+        if (token.Length > 0) http.DefaultRequestHeaders.Add("X-FileMind-Token", token);
+        return http;
+    }
 
     public Uri BaseUri => baseUri;
     public Uri ThumbUri(int id) => new(baseUri, $"/api/thumb/{id}");
@@ -137,7 +145,9 @@ public sealed class ApiClient(Uri baseUri) : IDisposable
         if (!response.IsSuccessStatusCode) throw new EngineException(await ReadErrorAsync(response), (int)response.StatusCode);
     }
     public Task<DiscoverResponse> GetDiscoverAsync(CancellationToken ct = default) => GetAsync<DiscoverResponse>("/api/discover", ct);
-    public Task<DuplicatesResponse> GetDuplicatesAsync(CancellationToken ct = default) => GetAsync<DuplicatesResponse>("/api/duplicates", ct);
+    /// <summary>The last duplicate scan (instant). <paramref name="rescan"/> compares the library again.</summary>
+    public Task<DuplicatesResponse> GetDuplicatesAsync(bool rescan = false, bool cachedOnly = false, CancellationToken ct = default) =>
+        GetAsync<DuplicatesResponse>(rescan ? "/api/duplicates?rescan=true" : cachedOnly ? "/api/duplicates?cached_only=true" : "/api/duplicates", ct);
 
     public Task CreateProjectAsync(string name, IEnumerable<int> fileIds, CancellationToken ct = default) =>
         PostAsync<JsonElement>("/api/projects", new { name, file_ids = fileIds.ToArray() }, ct);

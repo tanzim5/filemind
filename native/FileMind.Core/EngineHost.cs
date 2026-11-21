@@ -49,6 +49,8 @@ public sealed class EngineHost : IDisposable
     private Process? _process;
     private IntPtr _job;
     private StreamWriter? _log;
+    /// <summary>Random per run; the engine refuses requests that change anything without it.</summary>
+    public string Token { get; } = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16));
     public Uri BaseUri { get; private set; } = new("http://127.0.0.1:0");
     public bool IsRunning => _process is { HasExited: false };
     public string? ExitMessage { get; private set; }
@@ -59,7 +61,9 @@ public sealed class EngineHost : IDisposable
         var port = FreePort();
         BaseUri = new Uri($"http://127.0.0.1:{port}");
         Directory.CreateDirectory(paths.Logs);
-        _log = new StreamWriter(Path.Combine(paths.Logs, "engine.log"), true) { AutoFlush = true };
+        var logPath = Path.Combine(paths.Logs, "engine.log");
+        try { if (File.Exists(logPath) && new FileInfo(logPath).Length > 5_000_000) File.Move(logPath, logPath + ".1", true); } catch { }
+        _log = new StreamWriter(logPath, true) { AutoFlush = true };
         _log.WriteLine($"--- {DateTime.Now:u} starting {launch.Label}: {launch.FileName}");
 
         var info = new ProcessStartInfo(launch.FileName)
@@ -74,6 +78,7 @@ public sealed class EngineHost : IDisposable
         foreach (var a in new[] { "--no-window", "--port", port.ToString() }) info.ArgumentList.Add(a);
         foreach (var (k, v) in launch.Env) info.Environment[k] = v;
         info.Environment["PYTHONUTF8"] = "1";
+        info.Environment["FILEMIND_TOKEN"] = Token;
 
         _process = Process.Start(info) ?? throw new InvalidOperationException("The engine could not be started.");
         _process.OutputDataReceived += (_, e) => { if (e.Data is not null) _log?.WriteLine(e.Data); };
@@ -92,7 +97,7 @@ public sealed class EngineHost : IDisposable
                 ExitMessage = $"The engine stopped on startup (exit code {_process.ExitCode}). See {Path.Combine(paths.Logs, "engine.log")}.";
                 throw new InvalidOperationException(ExitMessage);
             }
-            try { if ((await http.GetAsync(new Uri(BaseUri, "/api/model"), ct)).IsSuccessStatusCode) return; }
+            try { if ((await http.GetAsync(new Uri(BaseUri, "/api/health"), ct)).IsSuccessStatusCode) return; }
             catch (HttpRequestException) { }
             catch (TaskCanceledException) when (!ct.IsCancellationRequested) { }
             await Task.Delay(250, ct);

@@ -137,5 +137,22 @@ def init():
             status TEXT NOT NULL,
             error TEXT
         );
+        CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+        INSERT OR IGNORE INTO meta(key, value) VALUES ('index_gen', '0');
+        CREATE TABLE IF NOT EXISTS dup_cache (id INTEGER PRIMARY KEY CHECK (id = 1), gen INTEGER, created REAL, result TEXT);
+        CREATE INDEX IF NOT EXISTS idx_files_status_mtime ON files(status, mtime);
+        CREATE INDEX IF NOT EXISTS idx_files_root_status ON files(root_id, status);
+        CREATE INDEX IF NOT EXISTS idx_files_kind_status ON files(kind, status);
+        -- Any change to what is indexed bumps a counter, so cached results (duplicates) know when they are out of date.
+        CREATE TRIGGER IF NOT EXISTS files_gen_ins AFTER INSERT ON files
+            BEGIN UPDATE meta SET value = value + 1 WHERE key = 'index_gen'; END;
+        CREATE TRIGGER IF NOT EXISTS files_gen_del AFTER DELETE ON files
+            BEGIN UPDATE meta SET value = value + 1 WHERE key = 'index_gen'; END;
+        CREATE TRIGGER IF NOT EXISTS files_gen_upd AFTER UPDATE OF path, size, mtime, thumb, status ON files
+            BEGIN UPDATE meta SET value = value + 1 WHERE key = 'index_gen'; END;
     """)
+    # Cached fingerprints, reused while the file is unchanged (hash_key = "size:mtime").
+    for name, sql_type in (("sha256", "BLOB"), ("hash_key", "TEXT"), ("dh", "TEXT")):
+        if name not in cols:
+            conn().execute(f"ALTER TABLE files ADD COLUMN {name} {sql_type}")
     conn().commit()

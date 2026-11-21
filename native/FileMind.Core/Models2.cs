@@ -83,6 +83,10 @@ public sealed class DuplicatesResponse
     [JsonPropertyName("visual")] public List<List<FileItem>> Visual { get; set; } = [];
     [JsonPropertyName("total_exact")] public int TotalExact { get; set; }
     [JsonPropertyName("total_visual")] public int TotalVisual { get; set; }
+    /// <summary>True when the library changed since this scan was made.</summary>
+    [JsonPropertyName("stale")] public bool Stale { get; set; }
+    /// <summary>When the scan was made (Unix seconds).</summary>
+    [JsonPropertyName("scanned")] public double Scanned { get; set; }
 }
 
 public sealed class ProjectRef

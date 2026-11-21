@@ -23,8 +23,30 @@ def _dhash(path):
     return bits, width / max(height, 1)
 
 
+def _file_digest(row):
+    """SHA-256 of a file, reused from the index while the file is unchanged (same size and modified time)."""
+    key = f"{row['size']}:{row['mtime']}"
+    if row["sha256"] is not None and row["hash_key"] == key:
+        return bytes(row["sha256"])
+    digest = _digest(row["path"])
+    c = db.conn()
+    c.execute("UPDATE files SET sha256=?, hash_key=? WHERE id=?", (digest, key, row["id"]))
+    return digest
+
+
+def _thumb_hash(row):
+    """dHash of a thumbnail, remembered per thumbnail file."""
+    cached = row["dh"]
+    if cached and cached.split("|")[0] == row["thumb"]:
+        _, bits, ratio = cached.split("|")
+        return int(bits, 16), float(ratio)
+    bits, ratio = _dhash(extract.THUMB_DIR / row["thumb"])
+    db.conn().execute("UPDATE files SET dh=? WHERE id=?", (f"{row['thumb']}|{bits:x}|{ratio}", row["id"]))
+    return bits, ratio
+
+
 def groups(limit=60, focus=None):
-    rows = db.conn().execute("SELECT id,path,size,kind,thumb FROM files WHERE status='done' ORDER BY mtime DESC").fetchall()
+    rows = db.conn().execute("SELECT id,path,size,mtime,kind,thumb,sha256,hash_key,dh FROM files WHERE status='done' ORDER BY mtime DESC").fetchall()
     if focus is not None:
         chosen = next((row for row in rows if row["id"] == focus), None)
         if chosen is None:
@@ -62,7 +84,7 @@ def groups(limit=60, focus=None):
         by_hash = defaultdict(list)
         for row in candidates:
             try:
-                by_hash[_digest(row["path"])].append(row["id"])
+                by_hash[_file_digest(row)].append(row["id"])
             except OSError:
                 continue
         for ids in by_hash.values():
@@ -74,7 +96,7 @@ def groups(limit=60, focus=None):
         if row["id"] in exact_ids or row["kind"] not in ("image", "video") or not row["thumb"]:
             continue
         try:
-            bits, ratio = _dhash(extract.THUMB_DIR / row["thumb"])
+            bits, ratio = _thumb_hash(row)
             visual.append((row["id"], bits, ratio))
         except OSError:
             continue
@@ -96,6 +118,7 @@ def groups(limit=60, focus=None):
     for fid in parent:
         by_root[find(fid)].append(fid)
     near = [ids for ids in by_root.values() if len(ids) > 1]
+    db.conn().commit()
     exact.sort(key=len, reverse=True)
     near.sort(key=len, reverse=True)
     return {"exact": exact[:limit], "visual": near[:limit],

@@ -59,7 +59,7 @@ public sealed class AppRuntime
     {
         await Host.StartAsync(launch, Paths, TimeSpan.FromMinutes(3), ct);
         Api?.Dispose();
-        Api = new ApiClient(Host.BaseUri);
+        Api = new ApiClient(Host.BaseUri, Host.Token);
         _ = Api.SetIndexSpeedAsync(Settings.IndexSpeed);
     }
 

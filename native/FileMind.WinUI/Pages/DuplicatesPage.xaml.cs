@@ -30,11 +30,30 @@ public sealed partial class DuplicatesPage : Page
         Loaded += (_, _) =>
         {
             App.Window?.SetTitle("Duplicates"); App.Window?.SetActions(RescanBtn);
-            if (_cached is not null) Show(_cached);
+            if (_cached is not null) { Show(_cached); return; }
+            _ = ShowSavedAsync();
         };
     }
 
     private async void Scan_Click(object sender, RoutedEventArgs e) => await ScanAsync();
+
+    /// <summary>The engine keeps the last scan, so coming back (even after a restart) shows it without comparing anything.</summary>
+    private async Task ShowSavedAsync()
+    {
+        try
+        {
+            var saved = await Api.GetDuplicatesAsync(cachedOnly: true);
+            if (saved.Scanned > 0) { _cached = saved; Show(saved); }
+        }
+        catch (Exception ex) { App.Log("duplicates", ex, ex.Message); }
+    }
+
+    private static string Ago(double unix)
+    {
+        var span = DateTime.UtcNow - DateTimeOffset.FromUnixTimeSeconds((long)unix).UtcDateTime;
+        return span.TotalMinutes < 1 ? "just now" : span.TotalHours < 1 ? $"{(int)span.TotalMinutes} min ago"
+             : span.TotalDays < 1 ? $"{(int)span.TotalHours} h ago" : $"{(int)span.TotalDays} d ago";
+    }
 
     private async Task ScanAsync()
     {
@@ -44,7 +63,7 @@ public sealed partial class DuplicatesPage : Page
         HeroIcon.Glyph = "duplicates"; HeroIcon.Tone = "duplicates";
         HeroTitle.Text = "Comparing your files…";
         HeroBody.Text = "Large libraries take a minute: every file that shares its size with another is read and fingerprinted.";
-        try { _cached = await Api.GetDuplicatesAsync(); Show(_cached); }
+        try { _cached = await Api.GetDuplicatesAsync(rescan: true); Show(_cached); }
         catch (Exception ex)
         {
             App.Log("duplicates", ex, ex.Message);
@@ -71,7 +90,8 @@ public sealed partial class DuplicatesPage : Page
             Summary.Text = "Nothing to clean up.";
             return;
         }
-        Summary.Text = waste > 0 ? $"Extra exact copies take up {Size(waste)} you could get back." : "Copies and near-copies across your folders. Nothing is removed until you choose.";
+        var note = d.Scanned > 0 ? $"   ·   Scanned {Ago(d.Scanned)}" + (d.Stale ? ". Your library has changed since, so scan again." : "") : "";
+        Summary.Text = (waste > 0 ? $"Extra exact copies take up {Size(waste)} you could get back." : "Copies and near-copies across your folders. Nothing is removed until you choose.") + note;
         Hero.Visibility = Visibility.Collapsed; Scroll.Visibility = Visibility.Visible; Bar.Visibility = Visibility.Visible;
         if (_tab == "exact" && d.Exact.Count == 0) _tab = "visual";
         Render();

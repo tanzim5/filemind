@@ -20,7 +20,7 @@ AUDIO = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac", ".opus", ".wma"}
 CODE = {".py", ".js", ".ts", ".tsx", ".jsx", ".html", ".css", ".json", ".yaml", ".yml",
         ".toml", ".sql", ".sh", ".bat", ".ps1", ".c", ".cpp", ".h", ".cs", ".java",
         ".go", ".rs", ".php", ".rb", ".xml", ".ini", ".cfg", ".ipynb"}
-TEXT = {".txt", ".md", ".csv", ".log", ".rtf", ".srt", ".vtt", ".tsv"}
+TEXT = {".txt", ".csv", ".log", ".rtf", ".srt", ".vtt", ".tsv"}
 DOC = {".pdf", ".docx"}
 
 MAX_TEXT_CHARS = 6000          # ~1.5k tokens, well inside the 8k window

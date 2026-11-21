@@ -50,41 +50,30 @@ public sealed partial class SettingsPage : Page
         if (AppRuntime.Current.Api is { } api) await api.SetIndexSpeedAsync(St.IndexSpeed);
     }
 
-    // ---- the order of the Library's sidebar sections ----
+    // ---- the order of the Library's sidebar sections: drag a row to move it ----
     private void BuildOrder()
     {
-        OrderList.Children.Clear();
-        var keys = LibraryPage.OrderedSectionKeys();
-        for (var i = 0; i < keys.Count; i++)
+        OrderList.Items.Clear();
+        foreach (var key in LibraryPage.OrderedSectionKeys())
         {
-            var at = i;
-            var name = LibraryPage.SidebarSections.First(s => s.Key == keys[i]).Name;
-            var row = new Grid { ColumnSpacing = 6, Padding = new Thickness(12, 4, 6, 4), CornerRadius = new CornerRadius(6), Background = Ui.Brush("GlassFillBrush") };
+            var name = LibraryPage.SidebarSections.First(s => s.Key == key).Name;
+            var row = new Grid { ColumnSpacing = 12, Padding = new Thickness(6, 8, 6, 8), Tag = key };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.Children.Add(new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center });
-            Button Arrow(string icon, string tip, int by, int col)
-            {
-                var b = new Button { Style = Ui.Style("GlassButton"), Padding = new Thickness(9, 6, 9, 6), Content = new LineIcon { Kind = icon, Size = 13 }, IsEnabled = at + by >= 0 && at + by < keys.Count };
-                ToolTipService.SetToolTip(b, tip);
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(b, tip + " " + name);
-                b.Click += (_, _) => MoveSection(at, at + by);
-                Grid.SetColumn(b, col); row.Children.Add(b);
-                return b;
-            }
-            Arrow("chevup", "Move up", -1, 1);
-            Arrow("chevdown", "Move down", 1, 2);
-            OrderList.Children.Add(row);
+            row.Children.Add(new TextBlock { Text = "\uE76F", FontFamily = new FontFamily("Segoe Fluent Icons"), FontSize = 14, VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Brush("GlassTextTertiaryBrush") });
+            var label = new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center };
+            Grid.SetColumn(label, 1); row.Children.Add(label);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(row, name);
+            OrderList.Items.Add(row);
         }
     }
 
-    private void MoveSection(int from, int to)
+    private void Order_DragCompleted(ListViewBase sender, DragItemsCompletedEventArgs args)
     {
-        var keys = LibraryPage.OrderedSectionKeys();
-        var k = keys[from]; keys.RemoveAt(from); keys.Insert(to, k);
+        var keys = OrderList.Items.OfType<FrameworkElement>().Select(r => (string)r.Tag).ToList();
+        if (keys.SequenceEqual(LibraryPage.OrderedSectionKeys())) return;
         St.SidebarOrder = keys;
-        Save(); BuildOrder(); LibraryPage.Current?.ApplySections();
+        Save(); LibraryPage.Current?.ApplySections();
     }
 
     private void OrderReset_Click(object sender, RoutedEventArgs e)
