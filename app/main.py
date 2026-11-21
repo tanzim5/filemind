@@ -869,8 +869,29 @@ def stats():
 
 
 @app.get("/api/duplicates")
-def duplicate_candidates(focus: int | None = None):
+def duplicate_candidates(focus: int | None = None, rescan: bool = False, cached_only: bool = False):
+    """The last scan is kept in the index: opening the page costs nothing. rescan=true (or a library that changed
+    since) recomputes, and files that have not changed reuse their stored fingerprints."""
+    c = db.conn()
+    gen = int(c.execute("SELECT value FROM meta WHERE key='index_gen'").fetchone()[0])
+    cached = None if focus is not None else c.execute("SELECT gen, created, result FROM dup_cache WHERE id=1").fetchone()
+    if cached and not rescan:
+        out = _dup_payload(json.loads(cached["result"]))
+        out.update(stale=cached["gen"] != gen, scanned=cached["created"], cached=True)
+        return out
+    if cached_only:
+        return {"exact": [], "visual": [], "total_exact": 0, "total_visual": 0, "stale": False, "scanned": 0, "cached": True}
     result = duplicates_mod.groups(focus=focus)
+    if focus is None:
+        c.execute("INSERT OR REPLACE INTO dup_cache(id, gen, created, result) VALUES (1, ?, ?, ?)",
+                  (gen, time.time(), json.dumps(result)))
+        c.commit()
+    out = _dup_payload(result)
+    out.update(stale=False, scanned=time.time(), cached=False)
+    return out
+
+
+def _dup_payload(result):
     ids = {fid for category in ("exact", "visual") for group in result[category] for fid in group}
     c = db.conn()
     rows = {r["id"]: _file_dict(r) for r in c.execute(
@@ -1052,10 +1073,7 @@ def file_actions(body: dict = Body(...)):
                 send2trash(r["path"])
             except OSError as exc:
                 raise HTTPException(500, f"Moved {done} files to Trash; the next file failed: {exc}") from exc
-            c.execute("DELETE FROM project_files WHERE file_id=?", (r["id"],))
-            c.execute("DELETE FROM proposed_names WHERE file_id=?", (r["id"],))
-            c.execute("DELETE FROM files WHERE id=?", (r["id"],))
-            c.commit()
+            _drop_files(c, "id=?", (r["id"],))      # the row, its tags, moments, names and thumbnail
             done += 1
         return {"done": done, "action": action}
     destination = Path(str(body.get("destination") or "")).expanduser()
@@ -1472,12 +1490,24 @@ def export_clear():
     return {"cleared": export_mod.clear_finished()}
 
 
+_TOKEN = os.environ.get("FILEMIND_TOKEN", "")
+_HOSTS = {"127.0.0.1", "localhost", "[::1]", "testserver"}
+
+
 @app.middleware("http")
-async def _revalidate_ui(request, call_next):
-    """The UI files change with updates: make the browser check for a newer copy instead of reusing a stale one."""
-    resp = await call_next(request)
-    if not request.url.path.startswith("/api/"):
-        resp.headers["Cache-Control"] = "no-cache"
-    return resp
+async def _guard(request, call_next):
+    """The engine is for the app on this PC only. A web page you visit must not be able to drive it:
+    requests need a local Host name (blocks DNS tricks) and, for anything that changes data, the token the app started us with."""
+    from fastapi.responses import JSONResponse
+    if request.headers.get("host", "").rsplit(":", 1)[0] not in _HOSTS and request.headers.get("host", "") not in _HOSTS:
+        return JSONResponse({"detail": "Not allowed."}, status_code=400)
+    if _TOKEN and request.method not in ("GET", "HEAD", "OPTIONS") and request.headers.get("x-filemind-token") != _TOKEN:
+        return JSONResponse({"detail": "Not allowed."}, status_code=403)
+    return await call_next(request)
+
+
+@app.get("/api/health")
+def health():
+    return {"ok": True}
 
 

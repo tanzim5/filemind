@@ -542,34 +542,121 @@ public sealed partial class ViewerPage : Page
         }
     }
 
-    /// <summary>PDF pages drawn by Windows itself, one under another, a few at a time so a long file opens at once.</summary>
+    /// <summary>PDF pages drawn by Windows itself, as whole pages in one continuous scroll. Every page has a placeholder of its
+    /// true shape (A4 stays A4), and only the pages near the window are rendered, so a 500-page file opens at once.</summary>
     private async void BuildPdf()
     {
-        var pages = new StackPanel { Spacing = 14, HorizontalAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(16, 6, 16, 18) };
-        var sv = new ScrollViewer { Content = pages, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, HorizontalAlignment = HorizontalAlignment.Stretch };
-        MediaHost.Children.Add(sv);
+        var pages = new StackPanel { Spacing = 16, HorizontalAlignment = HorizontalAlignment.Center, Padding = new Thickness(0, 16, 0, 24) };
+        var sv = new ScrollViewer { Content = pages, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalAlignment = HorizontalAlignment.Stretch, Background = Ui.Brush("GlassFillBrush") };
+        var counter = new TextBlock { FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center };
+        var mode = new Button { Style = Ui.Style("GlassButton"), Padding = new Thickness(10, 5, 10, 5), Content = new TextBlock { Text = "Whole page", FontSize = 12.5 } };
+        var pill = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Padding = new Thickness(14, 4, 6, 4), CornerRadius = new CornerRadius(8), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 14), Background = Ui.Brush("GlassFillBrush"), BorderBrush = Ui.Brush("GlassStrokeBrush"), BorderThickness = new Thickness(1) };
+        pill.Children.Add(counter); pill.Children.Add(mode);
+        var host = new Grid(); host.Children.Add(sv); host.Children.Add(pill);
+        MediaHost.Children.Add(host);
         var ct = _cts.Token;
         try
         {
             var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(_item.Path);
             var doc = await Windows.Data.Pdf.PdfDocument.LoadFromFileAsync(file);
-            var count = (int)Math.Min(doc.PageCount, 40);
-            for (var i = 0; i < count && !ct.IsCancellationRequested; i++)
+            var n = (int)doc.PageCount;
+            // The true shape of every page, so the scroll bar and the page counter are right from the start.
+            var aspect = await Task.Run(() =>
             {
-                using var page = doc.GetPage((uint)i);
-                using var ms = new Windows.Storage.Streams.InMemoryRandomAccessStream();
-                var w = 1100.0;
-                await page.RenderToStreamAsync(ms, new Windows.Data.Pdf.PdfPageRenderOptions { DestinationWidth = (uint)w, DestinationHeight = (uint)(w * page.Size.Height / Math.Max(page.Size.Width, 1)), BackgroundColor = Colors.White });
-                var bmp = new BitmapImage();
-                await bmp.SetSourceAsync(ms);
-                if (ct.IsCancellationRequested) return;
-                pages.Children.Add(new Border
+                var a = new double[n]; var last = 1.414;
+                for (var i = 0; i < n; i++)
                 {
-                    MaxWidth = 880, HorizontalAlignment = HorizontalAlignment.Center, Background = new SolidColorBrush(Colors.White), CornerRadius = new CornerRadius(2),
-                    Child = new Image { Source = bmp, Stretch = Stretch.Uniform }
-                });
+                    try { using var p = doc.GetPage((uint)i); last = p.Size.Height / Math.Max(p.Size.Width, 1); } catch { }
+                    a[i] = last;
+                }
+                return a;
+            }, ct);
+            if (ct.IsCancellationRequested) return;
+
+            var cells = new Border[n]; var drawn = new bool[n]; var wide = true;
+            var gate = new SemaphoreSlim(1, 1); var epoch = 0;
+            for (var i = 0; i < n; i++)
+            {
+                cells[i] = new Border { Background = new SolidColorBrush(Colors.White), HorizontalAlignment = HorizontalAlignment.Center };
+                pages.Children.Add(cells[i]);
             }
-            if (doc.PageCount > count) pages.Children.Add(new TextBlock { Text = $"Showing the first {count} of {doc.PageCount} pages.", FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center, Foreground = Ui.Brush("GlassTextTertiaryBrush") });
+
+            double CellWidth(int i)
+            {
+                var vw = Math.Max(sv.ViewportWidth - 40, 200); var vh = Math.Max(sv.ViewportHeight - 40, 200);
+                var w = wide ? Math.Min(vw, 1100) : Math.Min(vw, vh / aspect[i]);       // fit the width, or fit the whole page in the window
+                return Math.Max(w * _pdfZoom, 120);
+            }
+
+            void Clear(int i) { if (cells[i].Child is Image im) im.Source = null; cells[i].Child = null; drawn[i] = false; }
+
+            void Layout()
+            {
+                epoch++;
+                for (var i = 0; i < n; i++)
+                {
+                    var w = CellWidth(i);
+                    cells[i].Width = w; cells[i].Height = w * aspect[i];
+                    if (drawn[i]) Clear(i);
+                }
+                _ = Refresh();
+            }
+
+            async Task Draw(int i)
+            {
+                var my = epoch;
+                await gate.WaitAsync();
+                try
+                {
+                    if (ct.IsCancellationRequested || my != epoch || drawn[i]) return;
+                    using var page = doc.GetPage((uint)i);
+                    using var ms = new Windows.Storage.Streams.InMemoryRandomAccessStream();
+                    var scale = XamlRoot?.RasterizationScale ?? 1.0;
+                    var px = (uint)Math.Min(2400, Math.Max(200, cells[i].Width * scale));
+                    await page.RenderToStreamAsync(ms, new Windows.Data.Pdf.PdfPageRenderOptions { DestinationWidth = px, DestinationHeight = (uint)(px * aspect[i]), BackgroundColor = Colors.White });
+                    var bmp = new BitmapImage(); await bmp.SetSourceAsync(ms);
+                    if (ct.IsCancellationRequested || my != epoch) return;
+                    cells[i].Child = new Image { Source = bmp, Stretch = Stretch.Uniform }; drawn[i] = true;
+                }
+                finally { gate.Release(); }
+            }
+
+            async Task Refresh()
+            {
+                if (ct.IsCancellationRequested) return;
+                var vh = sv.ViewportHeight; var first = -1;
+                for (var i = 0; i < n; i++)
+                {
+                    var top = cells[i].TransformToVisual(sv).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
+                    var bottom = top + cells[i].Height;
+                    if (first < 0 && bottom > vh * 0.3) first = i;
+                    var near = bottom > -vh && top < vh * 2;                   // a screen above and below
+                    var far = bottom < -vh * 3 || top > vh * 4;
+                    if (far && drawn[i]) Clear(i);
+                    else if (near && !drawn[i]) await Draw(i);
+                }
+                counter.Text = $"Page {Math.Max(first, 0) + 1} of {n}";
+            }
+
+            var debounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+            debounce.Tick += (_, _) => { debounce.Stop(); Layout(); };
+            sv.SizeChanged += (_, _) => { debounce.Stop(); debounce.Start(); };
+            sv.ViewChanged += (_, e) => { if (!e.IsIntermediate) _ = Refresh(); };
+            sv.AddHandler(UIElement.PointerWheelChangedEvent, new PointerEventHandler((_, e) =>
+            {
+                if (!e.KeyModifiers.HasFlag(Windows.System.VirtualKeyModifiers.Control)) return;      // Ctrl + wheel zooms the pages
+                var d = e.GetCurrentPoint(sv).Properties.MouseWheelDelta;
+                _pdfZoom = Math.Clamp(_pdfZoom * (d > 0 ? 1.15 : 1 / 1.15), 0.5, 3); ZoomText.Text = $"{Math.Round(_pdfZoom * 100)}%";
+                debounce.Stop(); debounce.Start(); e.Handled = true;
+            }), true);
+            mode.Click += (_, _) =>
+            {
+                wide = !wide; _pdfZoom = 1; ZoomText.Text = "100%";
+                ((TextBlock)mode.Content).Text = wide ? "Whole page" : "Fit width";
+                Layout(); sv.ChangeView(0, 0, null, true);
+            };
+            sv.Loaded += (_, _) => Layout();
+            if (sv.IsLoaded) Layout();
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -578,8 +665,9 @@ public sealed partial class ViewerPage : Page
             if (!ct.IsCancellationRequested) ShowStageMessage("This PDF can't be shown here. Use Open to view it in its own app.");
         }
     }
+    private double _pdfZoom = 1;
 
-    /// <summary>The start of a text, Markdown or code file, selectable, in a quiet page-like panel.</summary>
+    /// <summary>The start of a text or code file, selectable, in a quiet page-like panel.</summary>
     private async void BuildText()
     {
         var box = new TextBlock { FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 13, LineHeight = 21, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };

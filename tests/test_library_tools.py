@@ -21,7 +21,7 @@ class LibraryToolTests(unittest.TestCase):
         self.conn.row_factory = sqlite3.Row
         self.addCleanup(self.conn.close)
         self.conn.executescript(db.SCHEMA)
-        self.conn.executescript("ALTER TABLE files ADD COLUMN dom TEXT; ALTER TABLE files ADD COLUMN pal TEXT; ALTER TABLE files ADD COLUMN snippet TEXT;")
+        self.conn.executescript("ALTER TABLE files ADD COLUMN dom TEXT; ALTER TABLE files ADD COLUMN pal TEXT; ALTER TABLE files ADD COLUMN snippet TEXT; ALTER TABLE files ADD COLUMN sha256 BLOB; ALTER TABLE files ADD COLUMN hash_key TEXT; ALTER TABLE files ADD COLUMN dh TEXT;")
         self.conn.executescript("""
             CREATE TABLE smart_spaces(project_id INTEGER PRIMARY KEY, spec TEXT, query_vec BLOB);
             CREATE TABLE moments(file_id INTEGER, start REAL, end REAL, vec BLOB, size INTEGER, mtime REAL);

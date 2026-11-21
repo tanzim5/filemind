@@ -16,6 +16,9 @@ BUNDLE = Path(getattr(sys, "_MEIPASS", HOME))
 os.environ.setdefault("FILEMIND_DATA", str(HOME / "data"))
 if sys.stdout is None or sys.stderr is None or (FROZEN and not sys.stdout.isatty()):   # windowed exe: log to a file
     Path(os.environ["FILEMIND_DATA"]).mkdir(parents=True, exist_ok=True)
+    _log = Path(os.environ["FILEMIND_DATA"]) / "filemind.log"
+    if _log.exists() and _log.stat().st_size > 5_000_000:             # keep the log from growing forever
+        _log.replace(_log.with_suffix(".log.1"))
     sys.stdout = sys.stderr = open(Path(os.environ["FILEMIND_DATA"]) / "filemind.log", "a", encoding="utf-8", buffering=1)
     print(f"--- File Mind started {time.ctime()}")
 os.environ.setdefault("FILEMIND_MODELS", str(HOME / "models"))
