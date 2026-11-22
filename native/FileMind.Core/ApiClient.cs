@@ -152,6 +152,13 @@ public sealed class ApiClient(Uri baseUri, string token = "") : IDisposable
     public Task<FileDetails> GetInfoAsync(int id, CancellationToken ct = default) => GetAsync<FileDetails>($"/api/info/{id}", ct);
     public async Task<List<IdeaEntry>> GetIdeasAsync(int n = 36, CancellationToken ct = default) => (await GetAsync<IdeasResponse>($"/api/ideas?n={n}", ct)).Ideas;
     public Task<WaveData> GetWaveAsync(int id, CancellationToken ct = default) => GetAsync<WaveData>($"/api/wave/{id}", ct);
+    /// <summary>Moments inside videos and sounds that match these words (only those already analysed).</summary>
+    public async Task<List<MomentHit>> SearchMomentsAsync(string text, int limit = 12, CancellationToken ct = default) =>
+        (await PostAsync<MomentHits>("/api/moments/search", new { q = text, limit }, ct)).Moments;
+    public Task<MomentQueue> QueueMomentsAsync(bool all, IEnumerable<int>? ids = null, CancellationToken ct = default) =>
+        PostAsync<MomentQueue>("/api/moments/queue", new { all, ids = ids?.ToArray() ?? [] }, ct);
+    public Task<MomentQueue> GetMomentQueueAsync(CancellationToken ct = default) => GetAsync<MomentQueue>("/api/moments/queue", ct);
+    public Uri MomentFrameUri(int id, double seconds) => new(baseUri, $"/api/moments/{id}/frame?t={seconds.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
     public Task<MomentState> GetMomentsAsync(int id, CancellationToken ct = default) => GetAsync<MomentState>($"/api/moments/{id}", ct);
     public Task<MomentState> StartMomentsAsync(int id, CancellationToken ct = default) => PostAsync<MomentState>($"/api/moments/{id}", null, ct);
     public async Task SetProposedNameAsync(int id, string name, CancellationToken ct = default)

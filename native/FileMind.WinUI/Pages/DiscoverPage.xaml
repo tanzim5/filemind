@@ -11,6 +11,16 @@
           <local:WrapPanel x:Name="Themes" Spacing="20" SizeChanged="Themes_SizeChanged"/>
         </StackPanel>
 
+        <StackPanel x:Name="MomentsBox" Spacing="12">
+          <TextBlock Text="Moments inside videos" Style="{StaticResource TitleText}" FontSize="26"/>
+          <TextBlock Style="{StaticResource SecondaryText}" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                     Text="Let File Mind look through your videos and sounds in the background (one at a time, only while it is not reading folders). After that, a search shows the exact moments that match, and one click opens the clip right there, ready to export."/>
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <Button x:Name="MomentsBtn" Content="Look through all videos and sounds" Style="{StaticResource GlassAccentButton}" Click="Moments_Click"/>
+            <TextBlock x:Name="MomentsStatus" Style="{StaticResource SecondaryText}" VerticalAlignment="Center"/>
+          </StackPanel>
+        </StackPanel>
+
         <StackPanel x:Name="ThoughtsBox" Spacing="16" Visibility="Collapsed">
           <TextBlock Text="Try a search" Style="{StaticResource TitleText}" FontSize="26"/>
           <local:WrapPanel x:Name="Thoughts" Spacing="10"/>

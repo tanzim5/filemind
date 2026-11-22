@@ -1,6 +1,8 @@
 """Optional, on-demand time-stamped media index. Ordinary library indexing stays unchanged."""
+import collections
 import subprocess
 import threading
+import time
 from pathlib import Path
 
 import numpy as np
@@ -105,6 +107,83 @@ def _analyze(fid, row):
     finally:
         with _lock:
             _jobs[fid]["running"] = False
+
+
+# ---- analysing many videos in the background, one at a time, politely ----
+_queue: collections.deque = collections.deque()
+_worker = None
+_qstats = {"total": 0, "done": 0, "current": None}
+
+
+def queue(ids=None, all_media=False) -> dict:
+    """Adds videos (and sounds) to the background analysis. Files already analysed, or already waiting, are skipped."""
+    global _worker
+    c = db.conn()
+    if all_media:
+        ids = [r["id"] for r in c.execute("SELECT id FROM files WHERE status='done' AND kind IN ('video','audio') AND seq_json IS NULL ORDER BY mtime DESC, id")]
+    added = 0
+    with _lock:
+        waiting = {fid for fid, _ in _queue}
+        for fid in ids or []:
+            if fid in waiting:
+                continue
+            row = c.execute("SELECT id,path,name,kind,size,mtime FROM files WHERE id=? AND status='done' "
+                            "AND kind IN ('video','audio') AND seq_json IS NULL", (fid,)).fetchone()
+            if row is None:
+                continue
+            run = c.execute("SELECT status FROM moment_runs WHERE file_id=? AND size=? AND mtime=?", (fid, row["size"], row["mtime"])).fetchone()
+            if run and run["status"] == "ready":
+                continue
+            _queue.append((fid, dict(row)))
+            added += 1
+        _qstats["total"] += added
+        if added and (_worker is None or not _worker.is_alive()):
+            _worker = threading.Thread(target=_work, daemon=True, name="moments-queue")
+            _worker.start()
+    return queue_status()
+
+
+def queue_status() -> dict:
+    with _lock:
+        return {"pending": len(_queue), "total": _qstats["total"], "done": _qstats["done"], "current": _qstats["current"],
+                "running": bool(_queue) or _qstats["current"] is not None}
+
+
+def _work():
+    from . import indexer
+    while True:
+        with _lock:
+            if not _queue:
+                _qstats.update(total=0, done=0, current=None)       # idle: the next batch starts its count again
+                return
+            fid, row = _queue.popleft()
+            _qstats["current"] = row["name"]
+            _jobs[fid] = {"running": True, "total": 0}
+        while indexer.state.get("running"):                         # reading folders comes first
+            time.sleep(2)
+        try:
+            _analyze(fid, row)
+        except Exception:
+            pass
+        with _lock:
+            _qstats["done"] += 1
+            _qstats["current"] = None
+
+
+FRAME_DIR = db.DATA_DIR / "momentframes"
+
+
+def frame_at(fid: int, t: float) -> Path | None:
+    """One picture from a video at a moment, made on request and kept (small)."""
+    row = _file(fid)
+    if row["kind"] != "video":
+        return None
+    FRAME_DIR.mkdir(parents=True, exist_ok=True)
+    out = FRAME_DIR / f"{fid}_{int(max(t, 0))}.jpg"
+    if not out.exists():
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{max(t, 0):.2f}", "-i", str(row["path"]),
+                        "-frames:v", "1", "-vf", "scale=-2:300", str(out)], capture_output=True, timeout=60)
+    return out if out.exists() else None
 
 
 def search(query, limit=40):

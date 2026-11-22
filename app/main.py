@@ -1056,7 +1056,36 @@ def _dup_payload(result):
 
 @app.post("/api/moments/search")
 def search_moments(body: dict = Body(...)):
-    return {"moments": moments_mod.search(body.get("q", ""), int(body.get("limit", 40)))}
+    hits = moments_mod.search(body.get("q", ""), int(body.get("limit", 40)))
+    c = db.conn()
+    for h in hits:                                  # the apps need the whole file to open it at that moment
+        row = c.execute("SELECT * FROM files WHERE id=?", (h["file_id"],)).fetchone()
+        if row is not None:
+            h["file"] = _file_dict(row)
+    return {"moments": [h for h in hits if "file" in h]}
+
+
+@app.post("/api/moments/queue")
+def moments_queue(body: dict = Body(...)):
+    """{ids} or {all: true}: analyse these videos in the background so searches can find moments inside them."""
+    ids = [int(i) for i in body.get("ids") or []][:5000]
+    return moments_mod.queue(ids, bool(body.get("all")))
+
+
+@app.get("/api/moments/queue")
+def moments_queue_status():
+    return moments_mod.queue_status()
+
+
+@app.get("/api/moments/{fid}/frame")
+def moment_frame(fid: int, t: float = 0):
+    try:
+        out = moments_mod.frame_at(fid, t)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if out is None:
+        raise HTTPException(404, "No picture for that moment.")
+    return FileResponse(out, media_type="image/jpeg")
 
 
 @app.get("/api/moments/{fid}")

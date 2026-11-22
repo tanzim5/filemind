@@ -136,6 +136,20 @@
 
 
         <!-- A space that is open offers files that probably belong in it. Nothing is added until you press the tick. -->
+        <!-- Moments inside videos and sounds that match a search: tap one to open the clip at that moment -->
+        <Border x:Name="MomentStrip" Visibility="Collapsed" VerticalAlignment="Top" Margin="0,88,0,0" Padding="12,8,12,10"
+                Style="{StaticResource GlassCard}" SizeChanged="SuggestStrip_SizeChanged">
+          <StackPanel Spacing="8">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="Moments in your videos" Style="{StaticResource SectionLabel}"/>
+              <TextBlock x:Name="MomentNote" FontSize="11.5" Foreground="{StaticResource GlassTextTertiaryBrush}"/>
+            </StackPanel>
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Auto" VerticalScrollMode="Disabled">
+              <StackPanel x:Name="MomentRow" Orientation="Horizontal" Spacing="10" Padding="0,0,0,6"/>
+            </ScrollViewer>
+          </StackPanel>
+        </Border>
+
         <Border x:Name="SuggestStrip" Visibility="Collapsed" VerticalAlignment="Top" Margin="0,88,0,0" Padding="12,8,12,10"
                 Style="{StaticResource GlassCard}" SizeChanged="SuggestStrip_SizeChanged">
           <StackPanel Spacing="8">

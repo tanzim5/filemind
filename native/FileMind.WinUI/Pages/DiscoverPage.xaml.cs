@@ -22,7 +22,8 @@ public sealed partial class DiscoverPage : Page
         InitializeComponent();
         KeyboardAcceleratorPlacementMode = Microsoft.UI.Xaml.Input.KeyboardAcceleratorPlacementMode.Hidden;
         Loaded += async (_, _) => { App.Window?.SetTitle("Discover"); App.Window?.SetActions(null); await LoadAsync(); };
-        Unloaded += (_, _) => _cts.Cancel();
+        Unloaded += (_, _) => { _cts.Cancel(); _momentTimer?.Stop(); };
+        Loaded += async (_, _) => { try { ShowMomentQueue(await Api.GetMomentQueueAsync()); } catch (Exception) { } };
     }
 
     private async Task LoadAsync()
@@ -46,6 +47,37 @@ public sealed partial class DiscoverPage : Page
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { App.Log("discover", ex, ex.Message); Note.Text = "Couldn't read your library just now."; }
+    }
+
+    private DispatcherTimer? _momentTimer;
+
+    private async void Moments_Click(object sender, RoutedEventArgs e)
+    {
+        MomentsBtn.IsEnabled = false;
+        try { ShowMomentQueue(await Api.QueueMomentsAsync(true)); }
+        catch (Exception ex) { App.Log("moments-queue", ex, ex.Message); MomentsStatus.Text = "Couldn't start. " + ex.Message; MomentsBtn.IsEnabled = true; }
+    }
+
+    private void ShowMomentQueue(MomentQueue q)
+    {
+        if (q.Running)
+        {
+            MomentsBtn.IsEnabled = false;
+            MomentsStatus.Text = $"Looking through {q.Done:N0} of {q.Total:N0}" + (q.Current is { Length: > 0 } c ? $" · {c}" : "");
+            _momentTimer ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+            _momentTimer.Tick -= MomentTick; _momentTimer.Tick += MomentTick; _momentTimer.Start();
+        }
+        else
+        {
+            _momentTimer?.Stop();
+            MomentsBtn.IsEnabled = true;
+            MomentsStatus.Text = q.Total > 0 || q.Done > 0 ? "Done. Search for something and the moments will show above the results." : "";
+        }
+    }
+
+    private async void MomentTick(object? sender, object e)
+    {
+        try { ShowMomentQueue(await Api.GetMomentQueueAsync(_cts.Token)); } catch (Exception) { _momentTimer?.Stop(); }
     }
 
     private static void Open(LibraryRequest request)
