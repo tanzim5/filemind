@@ -32,12 +32,12 @@ public sealed partial class DiscoverPage : Page
             // The ones with pictures first: a chip with faces is worth more than a bare phrase.
             _ideas = (await Api.GetIdeasAsync(36, _cts.Token)).OrderByDescending(i => i.Top.Count > 0).ToList();
             DrawSuggestions();
-            for (var tries = 0; tries < 24 && !_cts.IsCancellationRequested; tries++)
+            for (var tries = 0; tries < 72 && !_cts.IsCancellationRequested; tries++)
             {
                 var d = await Api.GetDiscoverAsync(_cts.Token);
                 DrawThemes(d.Groups);
                 if (!d.Building) break;
-                Note.Text = "Still looking through your library for more themes…";
+                Note.Text = "Updating themes in the background…";
                 await Task.Delay(2500, _cts.Token);
             }
             Note.Text = "";
@@ -85,8 +85,8 @@ public sealed partial class DiscoverPage : Page
         text.Children.Add(new TextBlock { Text = $"{g.Count:N0}", FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
         card.Children.Add(text);
         card.Tapped += (_, _) => Open(new LibraryRequest(new FileQuery { Discover = g.Key }, g.Title));
-        card.PointerEntered += (_, _) => card.Opacity = 0.85;
-        card.PointerExited += (_, _) => card.Opacity = 1;
+        card.PointerEntered += (_, _) => { card.Opacity = 0.92; Glow.On(card, 6, false); };
+        card.PointerExited += (_, _) => { card.Opacity = 1; Glow.Off(card, false); };
         return card;
     }
 

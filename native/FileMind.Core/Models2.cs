@@ -77,10 +77,19 @@ public sealed class DiscoverResponse
     [JsonPropertyName("building")] public bool Building { get; set; }
 }
 
+public sealed class DupPick
+{
+    [JsonPropertyName("best")] public int Best { get; set; }
+    [JsonPropertyName("reason")] public string Reason { get; set; } = "";
+}
+
 public sealed class DuplicatesResponse
 {
     [JsonPropertyName("exact")] public List<List<FileItem>> Exact { get; set; } = [];
     [JsonPropertyName("visual")] public List<List<FileItem>> Visual { get; set; } = [];
+    /// <summary>For each group above (same order): which file to keep and why.</summary>
+    [JsonPropertyName("exact_info")] public List<DupPick> ExactInfo { get; set; } = [];
+    [JsonPropertyName("visual_info")] public List<DupPick> VisualInfo { get; set; } = [];
     [JsonPropertyName("total_exact")] public int TotalExact { get; set; }
     [JsonPropertyName("total_visual")] public int TotalVisual { get; set; }
     /// <summary>True when the library changed since this scan was made.</summary>

@@ -283,6 +283,11 @@
       </Border>
 
       <StackPanel x:Name="ToolButtons" Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+        <Button x:Name="FiltersBtn" Style="{StaticResource BoxButton}" Padding="10,0" ToolTipService.ToolTip="Filters (Ctrl+Shift+F)" AutomationProperties.Name="Filters">
+          <StackPanel Orientation="Horizontal" Spacing="7"><local:LineIcon Kind="filter" Size="14"/><TextBlock Text="Filters" FontSize="12.5"/>
+            <Border x:Name="FilterBadge" Visibility="Collapsed" CornerRadius="8" MinWidth="16" Height="16" Padding="5,0" Background="{StaticResource AccentBrush}" VerticalAlignment="Center">
+              <TextBlock x:Name="FilterBadgeText" FontSize="10.5" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border></StackPanel>
+        </Button>
         <Button x:Name="SortBtn" Style="{StaticResource BoxButton}" Padding="10,0" ToolTipService.ToolTip="Sort" AutomationProperties.Name="Sort">
           <StackPanel Orientation="Horizontal" Spacing="7"><local:LineIcon Kind="sort" Size="14"/><TextBlock x:Name="SortText" Text="Newest" FontSize="12.5"/></StackPanel>
           <Button.Flyout>

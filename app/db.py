@@ -144,6 +144,7 @@ def init():
         );
         CREATE INDEX IF NOT EXISTS idx_file_labels_label ON file_labels(label);
         INSERT OR IGNORE INTO meta(key, value) VALUES ('index_gen', '0');
+        CREATE TABLE IF NOT EXISTS discover_cache (id INTEGER PRIMARY KEY CHECK (id = 1), gen INTEGER, model_ready INTEGER, created REAL, groups TEXT, ids TEXT);
         CREATE TABLE IF NOT EXISTS dup_cache (id INTEGER PRIMARY KEY CHECK (id = 1), gen INTEGER, created REAL, result TEXT);
         CREATE INDEX IF NOT EXISTS idx_files_status_mtime ON files(status, mtime);
         CREATE INDEX IF NOT EXISTS idx_files_root_status ON files(root_id, status);
@@ -157,7 +158,7 @@ def init():
             BEGIN UPDATE meta SET value = value + 1 WHERE key = 'index_gen'; END;
     """)
     # Cached fingerprints, reused while the file is unchanged (hash_key = "size:mtime").
-    for name, sql_type in (("sha256", "BLOB"), ("hash_key", "TEXT"), ("dh", "TEXT"), ("seq_json", "TEXT")):
+    for name, sql_type in (("sha256", "BLOB"), ("hash_key", "TEXT"), ("dh", "TEXT"), ("seq_json", "TEXT"), ("camera", "TEXT"), ("camera_key", "TEXT"), ("sharp", "REAL"), ("sharp_key", "TEXT")):
         if name not in cols:
             conn().execute(f"ALTER TABLE files ADD COLUMN {name} {sql_type}")
     conn().commit()

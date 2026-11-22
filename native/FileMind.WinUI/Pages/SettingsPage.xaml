@@ -55,6 +55,11 @@
             </Grid>
             <Grid ColumnSpacing="16">
               <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <StackPanel Spacing="2"><TextBlock Text="Light follows the pointer"/><TextBlock Text="A soft glow and a small lift on the tile or card under the mouse." Style="{StaticResource Helper}"/></StackPanel>
+              <ToggleSwitch x:Name="LightSwitch" Grid.Column="1" OnContent="" OffContent="" MinWidth="0" Toggled="Light_Toggled"/>
+            </Grid>
+            <Grid ColumnSpacing="16">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
               <StackPanel Spacing="2"><TextBlock Text="Show file names"/><TextBlock Text="Under every tile." Style="{StaticResource Helper}"/></StackPanel>
               <ToggleSwitch x:Name="NamesSwitch" Grid.Column="1" OnContent="" OffContent="" MinWidth="0" Toggled="Names_Toggled"/>
             </Grid>
@@ -99,7 +104,7 @@
         <Border x:Name="SecSidebar" Style="{StaticResource GlassCard}">
           <StackPanel Spacing="14">
             <StackPanel Orientation="Horizontal" Spacing="10"><local:LineIcon Kind="f-all" Size="16" Foreground="{StaticResource AccentBrush}"/><TextBlock Text="Sidebar order" Style="{StaticResource CardTitle}"/></StackPanel>
-            <TextBlock Text="Choose where each section sits in the Library's left sidebar. Drag a row up or down to move it. You can also fold a section by clicking its name there." Style="{StaticResource Helper}" TextWrapping="Wrap"/>
+            <TextBlock Text="Choose where each section sits in the Library's left sidebar. Refine, Colours, Looks &amp; moods and Folders are under the Filters button. Drag a row up or down to move it. You can also fold a section by clicking its name there." Style="{StaticResource Helper}" TextWrapping="Wrap"/>
             <ListView x:Name="OrderList" SelectionMode="None" CanReorderItems="True" CanDragItems="True" AllowDrop="True" IsItemClickEnabled="False"
                       ScrollViewer.VerticalScrollMode="Disabled" ScrollViewer.VerticalScrollBarVisibility="Hidden" DragItemsCompleted="Order_DragCompleted"/>
             <Button Content="Reset to the default order" Click="OrderReset_Click" Style="{StaticResource GlassButton}" HorizontalAlignment="Left"/>

@@ -116,13 +116,28 @@ public sealed partial class DuplicatesPage : Page
     {
         var card = new Border { Style = Ui.Style("GlassCard"), Padding = new Thickness(16, 12, 16, 10) };
         var stack = new StackPanel { Spacing = 10 };
-        stack.Children.Add(new TextBlock
+        var keep = Keeper(g, out var reason);
+        var head = new Grid { ColumnSpacing = 10 };
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var title = new StackPanel { Spacing = 1 };
+        title.Children.Add(new TextBlock
         {
             FontSize = 12.5, Foreground = Ui.Brush("GlassTextSecondaryBrush"), TextTrimming = TextTrimming.CharacterEllipsis,
             Text = _tab == "exact" ? $"{g.Count} copies  ·  {g[0].SizeText} each  ·  {g[0].Name}" : $"{g.Count} look alike  ·  {g[0].Name}",
         });
+        if (reason.Length > 0) title.Children.Add(new TextBlock { FontSize = 11.5, Foreground = Ui.Brush("GlassTextTertiaryBrush"), Text = $"Keeping the best one: {reason}" });
+        head.Children.Add(title);
+        var keepBest = new Button { Style = Ui.Style("GlassButton"), Padding = new Thickness(12, 5, 12, 5), Content = new TextBlock { Text = "Keep best", FontSize = 12.5 }, VerticalAlignment = VerticalAlignment.Center };
+        ToolTipService.SetToolTip(keepBest, "Select the others in this set, then confirm");
+        keepBest.Click += (_, _) =>
+        {
+            foreach (var f in g) { if (f.Id == keep.Id) _sel.Remove(f.Id); else _sel.Add(f.Id); }
+            Sync(); Remove_Click(this, new RoutedEventArgs());
+        };
+        Grid.SetColumn(keepBest, 1); head.Children.Add(keepBest);
+        stack.Children.Add(head);
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
-        var keep = Keeper(g);
         foreach (var f in g) row.Children.Add(FileTile(f, f.Id == keep.Id));
         stack.Children.Add(new ScrollViewer
         {
@@ -134,9 +149,18 @@ public sealed partial class DuplicatesPage : Page
     }
 
     /// <summary>Which file of a set to keep: the oldest exact copy (usually the original), or the sharpest look-alike.</summary>
-    private FileItem Keeper(List<FileItem> g) => _tab == "exact"
-        ? g.OrderBy(f => f.Mtime).First()
-        : g.OrderByDescending(f => (long)(f.Width ?? 0) * (f.Height ?? 0)).ThenByDescending(f => f.Size).First();
+    private FileItem Keeper(List<FileItem> g, out string reason)
+    {
+        reason = "";
+        var set = _tab == "exact" ? _data?.Exact : _data?.Visual;
+        var infos = _tab == "exact" ? _data?.ExactInfo : _data?.VisualInfo;
+        var at = set?.IndexOf(g) ?? -1;
+        if (infos is not null && at >= 0 && at < infos.Count && g.FirstOrDefault(f => f.Id == infos[at].Best) is { } pick)
+        { reason = infos[at].Reason; return pick; }
+        return _tab == "exact" ? g.OrderBy(f => f.Mtime).First()
+             : g.OrderByDescending(f => (long)(f.Width ?? 0) * (f.Height ?? 0)).ThenByDescending(f => f.Size).First();
+    }
+    private FileItem Keeper(List<FileItem> g) => Keeper(g, out _);
 
     private static SolidColorBrush Dim => new(Windows.UI.Color.FromArgb(0x88, 0, 0, 0));
 
@@ -159,7 +183,7 @@ public sealed partial class DuplicatesPage : Page
             {
                 HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(8), Padding = new Thickness(7, 2, 7, 2), CornerRadius = new CornerRadius(4),
                 Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0xB0, 0, 0, 0)),
-                Child = new TextBlock { Text = _tab == "exact" ? "Original" : "Sharpest", FontSize = 10.5, Foreground = new SolidColorBrush(Microsoft.UI.Colors.White) },
+                Child = new TextBlock { Text = "Best", FontSize = 10.5, Foreground = new SolidColorBrush(Microsoft.UI.Colors.White) },
             });
         _marks[f.Id] = (ring, check);
 

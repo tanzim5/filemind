@@ -1,7 +1,10 @@
 """Browsable, read-only groups derived from indexed files and their metadata."""
 from collections import defaultdict
 from functools import lru_cache
+import json
+import sqlite3
 import threading
+import time
 
 import numpy as np
 from PIL import Image
@@ -50,6 +53,19 @@ def camera_name(path: str, mtime: float) -> str | None:
         return None
 
 
+def _camera(r):
+    """The camera of a photo, read from the file once and kept in the index while the file is unchanged."""
+    keys = r.keys()
+    if "camera_key" not in keys:
+        return camera_name(r["path"], r["mtime"] or 0)
+    stamp = f"{r['size']}:{r['mtime']}"
+    if r["camera_key"] == stamp:
+        return r["camera"] or None
+    name = camera_name(r["path"], r["mtime"] or 0)
+    db.conn().execute("UPDATE files SET camera=?, camera_key=? WHERE id=?", (name or "", stamp, r["id"]))
+    return name
+
+
 _cache = {"key": None, "groups": [], "ids": {}}
 _building = False
 _build_lock = threading.Lock()
@@ -78,9 +94,55 @@ def _quick_groups(key):
     return out
 
 
+def _index_gen():
+    try:
+        return int(db.conn().execute("SELECT value FROM meta WHERE key='index_gen'").fetchone()[0])
+    except (sqlite3.OperationalError, TypeError):
+        return None
+
+
+def _saved():
+    """The last result kept in the index, or None. It survives a restart, so opening Discover costs nothing."""
+    try:
+        row = db.conn().execute("SELECT gen, model_ready, groups, ids FROM discover_cache WHERE id=1").fetchone()
+    except sqlite3.OperationalError:
+        return None
+    if not row:
+        return None
+    try:
+        return {"gen": row["gen"], "ready": row["model_ready"], "groups": json.loads(row["groups"]),
+                "ids": {k: set(v) for k, v in json.loads(row["ids"]).items()}}
+    except ValueError:
+        return None
+
+
+def _save(gen, groups_, ids):
+    if gen is None:
+        return
+    try:
+        c = db.conn()
+        c.execute("INSERT OR REPLACE INTO discover_cache(id, gen, model_ready, created, groups, ids) VALUES (1, ?, ?, ?, ?, ?)",
+                  (gen, int(bool(embedder.ready())), time.time(), json.dumps(groups_), json.dumps({k: sorted(v) for k, v in ids.items()})))
+        c.commit()
+    except sqlite3.OperationalError:
+        pass
+
+
 def request_groups():
-    """Return immediately while a larger library is being grouped in the background."""
+    """Return immediately. The last result is kept in the index; it is rebuilt in the background only when the library changed."""
     global _building
+    gen = _index_gen()
+    saved = _saved() if gen is not None else None
+    if saved and saved["gen"] == gen and saved["ready"] == int(bool(embedder.ready())):
+        _cache.update(key=("saved", gen), groups=saved["groups"], ids=saved["ids"])
+        return {"groups": saved["groups"], "building": False}
+    if saved:                                           # out of date: show it now, refresh behind it
+        _cache.update(groups=saved["groups"], ids=saved["ids"])
+        with _build_lock:
+            if not _building:
+                _building = True
+                threading.Thread(target=_build_async, daemon=True).start()
+        return {"groups": saved["groups"], "building": True, "stale": True}
     r = db.conn().execute("SELECT COUNT(*) AS n, SUM(id) AS ids, SUM(CAST(mtime AS INTEGER)) AS modified FROM files WHERE status='done'").fetchone()
     key = (r["n"], r["ids"] or 0, r["modified"] or 0, embedder.ready())
     with _build_lock:
@@ -102,9 +164,15 @@ def _build_async():
 
 
 def groups():
-    rows = db.conn().execute(
-        "SELECT id,path,name,kind,mtime,thumb,vec FROM files WHERE status='done' ORDER BY mtime DESC"
-    ).fetchall()
+    gen = _index_gen()
+    try:
+        rows = db.conn().execute(
+            "SELECT id,path,name,kind,mtime,thumb,vec,width,height,camera,camera_key,size FROM files WHERE status='done' ORDER BY mtime DESC"
+        ).fetchall()
+    except sqlite3.OperationalError:
+        rows = db.conn().execute(
+            "SELECT id,path,name,kind,mtime,thumb,vec FROM files WHERE status='done' ORDER BY mtime DESC"
+        ).fetchall()
     key = (len(rows), sum(int(r["id"]) for r in rows), sum(int(r["mtime"] or 0) for r in rows), embedder.ready())
     if _cache["key"] == key:
         return _cache["groups"]
@@ -117,7 +185,7 @@ def groups():
         if source:
             by_group[f"source:{source}"].append(fid)
         if r["kind"] == "image" and r["path"].lower().endswith((".jpg", ".jpeg", ".heic", ".heif", ".tif", ".tiff", ".webp")):
-            camera = camera_name(r["path"], r["mtime"] or 0)
+            camera = _camera(r)
             if camera:
                 by_group[f"camera:{camera}"].append(fid)
 
@@ -156,10 +224,14 @@ def groups():
         add(key_name, key_name[7:], "Camera model in photo metadata", "image", ids)
 
     _cache.update(key=key, groups=out, ids=dict(by_group))
+    db.conn().commit()
+    _save(gen, out, by_group)
     return out
 
 
 def file_ids(key: str) -> set[int]:
+    if not _cache["ids"] and (saved := _saved()):       # after a restart the sets come from the index
+        _cache["ids"] = saved["ids"]
     if key in _cache["ids"]:
         return set(_cache["ids"][key])
     if key in _preview["ids"]:

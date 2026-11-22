@@ -65,7 +65,7 @@ internal static class Anim
         catch (Exception) { done(); }
     }
 
-    private static void Scale(UIElement e, float to, int ms)
+    internal static void Scale(UIElement e, float to, int ms)
     {
         try
         {
