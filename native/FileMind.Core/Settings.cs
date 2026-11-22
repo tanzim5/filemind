@@ -41,6 +41,8 @@ public sealed class AppSettings
     public bool CheckUpdates { get; set; } = true;
     /// <summary>A soft light follows the pointer over tiles and cards.</summary>
     public bool PointerLight { get; set; } = true;
+    /// <summary>"slim" (the detailed filters sit behind a Filters button) or "classic" (every section in the left sidebar).</summary>
+    public string SidebarStyle { get; set; } = "slim";
     public string? SkipVersion { get; set; }
     public long LastUpdateCheck { get; set; }
     /// <summary>"short" or "long": which side of a picture the size is measured on.</summary>

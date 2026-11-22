@@ -340,6 +340,12 @@ public sealed partial class SettingsPage : Page
         St.Volume = VolumeSlider.Value / 100; Save(); Labels(); ViewerPage.SetDefaultVolume(St.Volume);
     }
 
+    private void SidebarStyle_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_ready || SidebarStyleChoice.SelectedItem is not RadioButton r) return;
+        St.SidebarStyle = (string)r.Tag; Save(); BuildOrder(); LibraryPage.Current?.ApplySections();
+    }
+
     private void Light_Toggled(object sender, RoutedEventArgs e)
     {
         if (!_ready) return;
@@ -431,6 +437,7 @@ public sealed partial class SettingsPage : Page
         About.Text = $"File Mind {Updater.CurrentVersion} (native)\nData: {rt.Paths.Root}\nInstalled as: {Updater.Mode switch { InstallMode.Store => "Microsoft Store (the Store updates it)", InstallMode.Winget => "winget", _ => "unzipped folder" }}";
         UpdatesSwitch.IsOn = rt.Settings.CheckUpdates;
         LightSwitch.IsOn = rt.Settings.PointerLight;
+        SidebarStyleChoice.SelectedIndex = rt.Settings.SidebarStyle == "classic" ? 1 : 0;
         UpdateCheckBtn.IsEnabled = Updater.Available;
         if (!Updater.Available) UpdateStatus.Text = "Updates are off while running from a source checkout.";
         else if (Updater.Pending is { } p) ShowUpdate(p);

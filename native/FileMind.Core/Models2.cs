@@ -138,6 +138,32 @@ public sealed class WaveData
     [JsonPropertyName("duration")] public double Duration { get; set; }
 }
 
+/// <summary>A moment inside a video or sound that matches a search: which file, from when to when, and how well.</summary>
+public sealed class MomentHit
+{
+    [JsonPropertyName("file_id")] public int FileId { get; set; }
+    [JsonPropertyName("start")] public double Start { get; set; }
+    [JsonPropertyName("end")] public double End { get; set; }
+    [JsonPropertyName("score")] public double Score { get; set; }
+    [JsonPropertyName("file")] public FileItem File { get; set; } = new();
+    public string TimeText => $"{TimeSpan.FromSeconds(Start):m\\:ss}–{TimeSpan.FromSeconds(End):m\\:ss}";
+}
+
+public sealed class MomentHits
+{
+    [JsonPropertyName("moments")] public List<MomentHit> Moments { get; set; } = [];
+}
+
+/// <summary>Progress of the background analysis of videos for moment search.</summary>
+public sealed class MomentQueue
+{
+    [JsonPropertyName("pending")] public int Pending { get; set; }
+    [JsonPropertyName("total")] public int Total { get; set; }
+    [JsonPropertyName("done")] public int Done { get; set; }
+    [JsonPropertyName("current")] public string? Current { get; set; }
+    [JsonPropertyName("running")] public bool Running { get; set; }
+}
+
 public sealed class MomentSegment
 {
     [JsonPropertyName("start")] public double Start { get; set; }

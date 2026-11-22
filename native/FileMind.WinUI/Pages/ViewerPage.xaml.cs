@@ -166,6 +166,7 @@ public sealed partial class ViewerPage : Page
             var i = -1;
             for (var k = 0; k < _siblings.Count; k++) if (_siblings[k].Id == r.Item.Id) { i = k; break; }
             if (i < 0) { _siblings = [r.Item]; i = 0; }
+            _openAt = r.StartAt is { } a && r.EndAt is { } b ? (a, b) : null;      // from a "moment" search result
             Show(i);
         }
     }
@@ -259,6 +260,7 @@ public sealed partial class ViewerPage : Page
 
     // ---- Trim marks and export ----
     private double? _in, _out;
+    private (double From, double To)? _openAt;
 
     /// <summary>Screenshot helper: marks a short range on the playing clip.</summary>
     public void DevExport() { DevTrim(); _ = ExportAsync(); }
@@ -419,7 +421,7 @@ public sealed partial class ViewerPage : Page
             PageStack.Padding = on ? new Thickness(0) : new Thickness(20, 66, 20, 40);
             StageCard.CornerRadius = new CornerRadius(on ? 0 : 8); StageCard.BorderThickness = new Thickness(on ? 0 : 1);
             DetailsCard.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
-            MoreSection.Visibility = on || _side ? Visibility.Collapsed : Visibility.Visible;
+            MoreSection.Visibility = on || _side || IsPdf ? Visibility.Collapsed : Visibility.Visible;
             Scroll.ChangeView(null, 0, null, true);
             FitStage();
         }
@@ -427,11 +429,14 @@ public sealed partial class ViewerPage : Page
     }
 
     /// <summary>The stage and the panel beside it fill the window under the bar, leaving the heading of More like this in view below.</summary>
+    /// <summary>A PDF gets the whole middle of the page: no "More like this" under it.</summary>
+    private bool IsPdf => _item is { Kind: "doc" } && _item.Ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase);
+
     private void FitStage()
     {
         var h = Scroll.ActualHeight;
         if (h < 100) return;
-        var v = _full ? h : Math.Clamp(h - 150, 520, 760);
+        var v = _full ? h : IsPdf ? Math.Max(h - 110, 420) : Math.Clamp(h - 150, 520, 760);     // a PDF reader takes the whole middle
         StageCard.Height = DetailsCard.Height = v;
     }
 
@@ -496,6 +501,8 @@ public sealed partial class ViewerPage : Page
         _in = _out = null; PaintTrim();
         _speed = 1; SpeedText.Text = "1×";
 
+        MoreSection.Visibility = _full || _side || IsPdf ? Visibility.Collapsed : Visibility.Visible;
+        FitStage();
         try { BuildStage(); } catch (Exception ex) { App.Log("viewer-stage", ex, ex.Message); ShowStageMessage("This file can't be previewed here."); }
         BuildDetails();
         _ = LoadInfoAsync(_cts.Token);
@@ -576,10 +583,10 @@ public sealed partial class ViewerPage : Page
     private async void BuildPdf()
     {
         var pages = new StackPanel { Spacing = 16, HorizontalAlignment = HorizontalAlignment.Center, Padding = new Thickness(0, 16, 0, 24) };
-        var sv = new ScrollViewer { Content = pages, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalAlignment = HorizontalAlignment.Stretch, Background = Ui.Brush("GlassFillBrush") };
+        var sv = new ScrollViewer { Content = pages, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalAlignment = HorizontalAlignment.Stretch };
         var counter = new TextBlock { FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center };
         var mode = new Button { Style = Ui.Style("GlassButton"), Padding = new Thickness(10, 5, 10, 5), Content = new TextBlock { Text = "Fit width", FontSize = 12.5 } };
-        var pill = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Padding = new Thickness(14, 4, 6, 4), CornerRadius = new CornerRadius(8), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 12, 0, 0), Background = Ui.Brush("GlassFillBrush"), BorderBrush = Ui.Brush("GlassStrokeBrush"), BorderThickness = new Thickness(1) };
+        var pill = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Padding = new Thickness(14, 4, 6, 4), CornerRadius = new CornerRadius(8), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 12, 0, 0), Background = Ui.Brush("ToolbarGlassBrush"), BorderBrush = Ui.Brush("GlassStrokeBrush"), BorderThickness = new Thickness(1), Translation = new System.Numerics.Vector3(0, 0, 24), Shadow = new ThemeShadow() };
         pill.Children.Add(counter); pill.Children.Add(mode);
         var host = new Grid(); host.Children.Add(sv); host.Children.Add(pill);
         MediaHost.Children.Add(host);
@@ -606,7 +613,7 @@ public sealed partial class ViewerPage : Page
             var gate = new SemaphoreSlim(1, 1); var epoch = 0;
             for (var i = 0; i < n; i++)
             {
-                cells[i] = new Border { Background = new SolidColorBrush(Colors.White), HorizontalAlignment = HorizontalAlignment.Center };
+                cells[i] = new Border { Background = new SolidColorBrush(Colors.White), HorizontalAlignment = HorizontalAlignment.Center, BorderBrush = Ui.Brush("GlassStrokeBrush"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3) };
                 pages.Children.Add(cells[i]);
             }
 
@@ -792,6 +799,14 @@ public sealed partial class ViewerPage : Page
         _volume = 0.5;      // a video always opens at half volume
         var player = new MediaPlayer { Volume = _volume, AutoPlay = true, IsLoopingEnabled = true, Source = MediaSource.CreateFromUri(Api.FileUri(_item.Id)) };
         _player = player;
+        if (_openAt is { } at)
+        {
+            _openAt = null;                                            // seek to the moment and mark it, so Export saves just that clip
+            player.MediaOpened += (_, _) => DispatcherQueue.TryEnqueue(() =>
+            {
+                try { player.PlaybackSession.Position = TimeSpan.FromSeconds(at.From); MarkRange(at.From, at.To); } catch (Exception) { }
+            });
+        }
         var element = new MediaPlayerElement { AreTransportControlsEnabled = false, Stretch = Stretch.Uniform, AutoPlay = true, Background = new SolidColorBrush(Colors.Transparent), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         element.SetMediaPlayer(player);
         // The player paints black wherever the picture does not reach, so the element is sized to the picture itself: no bars.
@@ -1472,7 +1487,7 @@ public sealed partial class ViewerPage : Page
             SimilarScroll.Content = null;
             if (!MoreBelowHost.Children.Contains(More)) MoreBelowHost.Children.Add(More);
             More.Margin = new Thickness(0);
-            MoreSection.Visibility = Visibility.Visible;
+            MoreSection.Visibility = IsPdf ? Visibility.Collapsed : Visibility.Visible;
             TabBar.Visibility = Visibility.Collapsed;
             FitMoreColumns();
         }

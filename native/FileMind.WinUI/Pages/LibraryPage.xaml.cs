@@ -21,7 +21,7 @@ namespace FileMind.Pages;
 /// <summary>Something another page wants the library to show (a Discover group, a space, a duplicate set…).</summary>
 public sealed record LibraryRequest(FileQuery Query, string Title, List<(string Label, string Query)>? Tags = null, int Similar = 0, string SimilarName = "");
 
-public sealed record ViewerRequest(FileItem Item, IReadOnlyList<FileItem> Siblings);
+public sealed record ViewerRequest(FileItem Item, IReadOnlyList<FileItem> Siblings, double? StartAt = null, double? EndAt = null);
 
 public sealed partial class LibraryPage : Page
 {
@@ -84,12 +84,17 @@ public sealed partial class LibraryPage : Page
             byKey[key].Visibility = Visibility.Visible;
             SectionStack.Children.Add(byKey[key]);
         }
+        FiltersBtn.Visibility = Classic ? Visibility.Collapsed : Visibility.Visible;
+        if (Classic) return;
         foreach (var key in new[] { "refine", "colours", "moods", "folders" })
         {
             byKey[key].Visibility = Visibility.Visible;
             _filtersStack.Children.Add(byKey[key]);
         }
     }
+
+    /// <summary>The older layout: every section in the left sidebar, no Filters button.</summary>
+    public static bool Classic => AppRuntime.Current.Settings.SidebarStyle == "classic";
 
     // The detailed filters (Refine, Colours, Looks & moods, Folders) open from the Filters button in the toolbar.
     private readonly StackPanel _filtersStack = new() { Spacing = 18, Padding = new Thickness(4, 4, 8, 8), Width = 340 };
@@ -104,9 +109,17 @@ public sealed partial class LibraryPage : Page
     private int FilterCount() => _q.DetailFilters().Count + (_q.Color is not null ? 1 : 0) + (_q.Near is not null ? 1 : 0) + (_q.Root is not null ? 1 : 0);
 
     /// <summary>The sidebar sections in the default order, with their names for Settings.</summary>
-    public static readonly (string Key, string Name)[] SidebarSections =
+    public static (string Key, string Name)[] SidebarSections => Classic ? AllSections : BarSections;
+
+    private static readonly (string Key, string Name)[] BarSections =
     [
         ("types", "File types"), ("labels", "Labels"), ("sources", "Sources"), ("spaces", "Spaces"),
+    ];
+
+    private static readonly (string Key, string Name)[] AllSections =
+    [
+        ("types", "File types"), ("labels", "Labels"), ("spaces", "Spaces"), ("sources", "Sources"),
+        ("refine", "Refine"), ("colours", "Colours"), ("moods", "Looks & moods"), ("folders", "Folders"),
     ];
 
     /// <summary>The order chosen in Settings; sections it doesn't mention keep their default place after it.</summary>
@@ -226,11 +239,59 @@ public sealed partial class LibraryPage : Page
     private void UpdateInsets()
     {
         var strip = SuggestStrip.Visibility == Visibility.Visible ? SuggestStrip.ActualHeight + 8 : 0;
-        SuggestStrip.Margin = new Thickness(0, _bandH + 4, 0, 0);
+        if (MomentStrip.Visibility == Visibility.Visible) strip = Math.Max(strip, MomentStrip.ActualHeight + 8);
+        SuggestStrip.Margin = MomentStrip.Margin = new Thickness(0, _bandH + 4, 0, 0);
         TileRepeater.Margin = new Thickness(0, _bandH + 4 + strip, 0, 24);
     }
 
     private void SuggestStrip_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateInsets();
+
+    private int _momentGen;
+
+    /// <summary>For a text search: also look inside the analysed videos and sounds, and offer the best moments above the results.</summary>
+    private async Task ShowMomentsAsync(IReadOnlyList<string> words)
+    {
+        var gen = ++_momentGen;
+        var text = string.Join(" ", words.Where(w => !w.StartsWith("voice:")));
+        if (text.Trim().Length < 2) { HideMoments(); return; }
+        List<MomentHit> hits;
+        try { hits = await Api.SearchMomentsAsync(text, 24); }
+        catch (Exception ex) { App.Log("moments", ex, null); return; }
+        if (gen != _momentGen) return;
+        // Only the clearly best ones: close to the strongest match, one or two per file.
+        var best = hits.Count > 0 ? hits.Max(h => h.Score) : 0;
+        var shown = hits.Where(h => best >= 0.15 && h.Score >= best * 0.85).GroupBy(h => h.FileId).SelectMany(g => g.Take(2)).Take(12).ToList();
+        if (shown.Count == 0) { HideMoments(); return; }
+        MomentRow.Children.Clear();
+        foreach (var m in shown) MomentRow.Children.Add(MomentCard(m));
+        MomentNote.Text = $"{shown.Count} found";
+        MomentStrip.Visibility = Visibility.Visible;
+        UpdateInsets();
+    }
+
+    private void HideMoments()
+    {
+        _momentGen++;
+        MomentRow.Children.Clear();
+        MomentStrip.Visibility = Visibility.Collapsed;
+        UpdateInsets();
+    }
+
+    private FrameworkElement MomentCard(MomentHit m)
+    {
+        var mid = (m.Start + m.End) / 2;
+        var img = new Grid { Width = 190, Height = 110, CornerRadius = new CornerRadius(6), Background = Ui.Brush("GlassFillBrush") };
+        img.Children.Add(new Image { Source = new BitmapImage(Api.MomentFrameUri(m.FileId, mid)) { DecodePixelWidth = 380 }, Stretch = Stretch.UniformToFill });
+        img.Children.Add(new Border { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(6), Padding = new Thickness(6, 1, 6, 1), CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0xB0, 0, 0, 0)), Child = new TextBlock { Text = m.TimeText, FontSize = 11, Foreground = new SolidColorBrush(Microsoft.UI.Colors.White) } });
+        var card = new StackPanel { Spacing = 5, Width = 190, Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent) };
+        card.Children.Add(img);
+        card.Children.Add(new TextBlock { Text = m.File.Name, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis });
+        card.Tapped += (_, _) => Frame.Navigate(typeof(ViewerPage), new ViewerRequest(m.File, [m.File], m.Start, m.End));
+        card.PointerEntered += (_, _) => Glow.On(card, 6, false);
+        card.PointerExited += (_, _) => Glow.Off(card, false);
+        ToolTipService.SetToolTip(card, "Open at this moment");
+        return card;
+    }
 
     private void TopBand_SizeChanged(object sender, SizeChangedEventArgs e)
     {
@@ -428,6 +489,7 @@ public sealed partial class LibraryPage : Page
     {
         if (_loading || !_more) return;
         _loading = true;
+        if (_offset == 0 && _tags.Count == 0) HideMoments();
         Busy.IsActive = _tiles.Count == 0;
         try
         {
@@ -446,6 +508,7 @@ public sealed partial class LibraryPage : Page
             {
                 items = await Api.SearchAsync(_tags.Select(t => t.Query), _q, PageSize, _offset, ct);
                 _more = items.Count == PageSize;
+                if (_offset == 0) _ = ShowMomentsAsync(_tags.Select(t => t.Query).ToList());
             }
             else
             {
