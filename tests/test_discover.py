@@ -66,3 +66,33 @@ class DiscoverTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DiscoverPersistenceTests(unittest.TestCase):
+    def test_result_survives_a_restart_and_goes_stale_when_the_library_changes(self):
+        import os, tempfile
+        os.environ.setdefault("FILEMIND_DATA", tempfile.mkdtemp())
+        from app import db as real_db
+        if "tmp" not in str(real_db.DATA_DIR).lower():
+            self.skipTest("needs its own data folder")
+        real_db.init()
+        c = real_db.conn()
+        c.execute("DELETE FROM files"); c.execute("DELETE FROM discover_cache")
+        c.execute("INSERT INTO files(id, root_id, path, name, ext, kind, size, mtime, status) VALUES(1,1,'a.png','a.png','.png','image',1,1,'done')")
+        c.commit()
+        from app import discover as d
+        with patch.object(d.embedder, "ready", return_value=False):
+            d._cache.update(key=None, groups=[], ids={}); d._building = False
+            first = d.request_groups()
+            for _ in range(100):                                     # the first build runs in the background
+                if not d._building:
+                    break
+                __import__("time").sleep(0.05)
+            d._cache.update(key=None, groups=[], ids={})             # a restart forgets the memory
+            again = d.request_groups()
+            self.assertFalse(again["building"])
+            self.assertTrue(again["groups"])
+            c.execute("INSERT INTO files(id, root_id, path, name, ext, kind, size, mtime, status) VALUES(2,1,'b.png','b.png','.png','image',1,2,'done')")
+            c.commit()
+            stale = d.request_groups()
+            self.assertTrue(stale["building"] and stale.get("stale"))

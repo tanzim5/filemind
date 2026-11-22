@@ -39,6 +39,8 @@ public sealed class AppSettings
     public int MinSide { get; set; }
     /// <summary>Look for a newer version at start-up (at most once a day).</summary>
     public bool CheckUpdates { get; set; } = true;
+    /// <summary>A soft light follows the pointer over tiles and cards.</summary>
+    public bool PointerLight { get; set; } = true;
     public string? SkipVersion { get; set; }
     public long LastUpdateCheck { get; set; }
     /// <summary>"short" or "long": which side of a picture the size is measured on.</summary>

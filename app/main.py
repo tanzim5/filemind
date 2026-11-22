@@ -1049,6 +1049,8 @@ def _dup_payload(result):
         f"SELECT * FROM files WHERE id IN ({','.join('?' for _ in ids) or 'NULL'})", tuple(ids))}
     return {"exact": [[rows[fid] for fid in group if fid in rows] for group in result["exact"]],
             "visual": [[rows[fid] for fid in group if fid in rows] for group in result["visual"]],
+            "exact_info": duplicates_mod.describe(result["exact"], True),
+            "visual_info": duplicates_mod.describe(result["visual"], False),
             "total_exact": result["total_exact"], "total_visual": result["total_visual"]}
 
 

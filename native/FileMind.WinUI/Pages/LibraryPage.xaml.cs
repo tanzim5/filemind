@@ -72,24 +72,41 @@ public sealed partial class LibraryPage : Page
     public void ApplySections()
     {
         SectionStack.Children.Clear();
+        _filtersStack.Children.Clear();
         var byKey = new Dictionary<string, UIElement>
         {
             ["types"] = SecTypes, ["labels"] = SecLabels, ["spaces"] = SecSpaces, ["sources"] = SecSources,
             ["refine"] = SecDetails, ["colours"] = SecColours, ["moods"] = SecMoods, ["folders"] = SecFolders,
         };
+        // The slim sidebar keeps what you reach for all the time; the detailed filters live in the Filters panel.
         foreach (var key in OrderedSectionKeys())
         {
-            var sec = byKey[key];
-            sec.Visibility = Visibility.Visible;
-            SectionStack.Children.Add(sec);
+            byKey[key].Visibility = Visibility.Visible;
+            SectionStack.Children.Add(byKey[key]);
+        }
+        foreach (var key in new[] { "refine", "colours", "moods", "folders" })
+        {
+            byKey[key].Visibility = Visibility.Visible;
+            _filtersStack.Children.Add(byKey[key]);
         }
     }
+
+    // The detailed filters (Refine, Colours, Looks & moods, Folders) open from the Filters button in the toolbar.
+    private readonly StackPanel _filtersStack = new() { Spacing = 18, Padding = new Thickness(4, 4, 8, 8), Width = 340 };
+
+    private void BuildFiltersFlyout()
+    {
+        var scroll = new ScrollViewer { Content = _filtersStack, MaxHeight = 640, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        FiltersBtn.Flyout = new Flyout { Content = scroll, Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.BottomEdgeAlignedRight };
+    }
+
+    /// <summary>How many of the Filters-panel filters are on: Refine choices, a colour, a folder.</summary>
+    private int FilterCount() => _q.DetailFilters().Count + (_q.Color is not null ? 1 : 0) + (_q.Near is not null ? 1 : 0) + (_q.Root is not null ? 1 : 0);
 
     /// <summary>The sidebar sections in the default order, with their names for Settings.</summary>
     public static readonly (string Key, string Name)[] SidebarSections =
     [
-        ("types", "File types"), ("labels", "Labels"), ("spaces", "Spaces"), ("sources", "Sources"),
-        ("refine", "Refine"), ("colours", "Colours"), ("moods", "Looks & moods"), ("folders", "Folders"),
+        ("types", "File types"), ("labels", "Labels"), ("sources", "Sources"), ("spaces", "Spaces"),
     ];
 
     /// <summary>The order chosen in Settings; sections it doesn't mention keep their default place after it.</summary>
@@ -143,6 +160,7 @@ public sealed partial class LibraryPage : Page
         TileRepeater.ElementPrepared += (_, a) => Anim.In(a.Element, 160);
         Current = this;
         KeyboardAcceleratorPlacementMode = Microsoft.UI.Xaml.Input.KeyboardAcceleratorPlacementMode.Hidden;
+        BuildFiltersFlyout();
         ApplySections();
         ApplySurface();
         TileRepeater.ItemsSource = _tiles;
@@ -156,6 +174,19 @@ public sealed partial class LibraryPage : Page
         AddAccelerator(VirtualKey.Right, VirtualKeyModifiers.Menu, async () => await GoForwardAsync(), true);
         AddAccelerator(VirtualKey.A, VirtualKeyModifiers.Control, async () => await SelectAllAsync(), false);
         AddAccelerator(VirtualKey.F, VirtualKeyModifiers.Control, () => { SearchBox.Focus(FocusState.Programmatic); return Task.CompletedTask; }, true);
+        // Single keys (never while typing in a box): / search, F favourite, 1-7 colour label, 0 no label for the selected files.
+        AddAccelerator((VirtualKey)191, VirtualKeyModifiers.None, () => { SearchBox.Focus(FocusState.Programmatic); return Task.CompletedTask; }, false);
+        AddAccelerator(VirtualKey.F, VirtualKeyModifiers.None, () => { if (_sel.Count > 0) Favourite_Click(this, new RoutedEventArgs()); return Task.CompletedTask; }, false);
+        for (var i = 0; i <= 7; i++)
+        {
+            var n = i;
+            AddAccelerator((VirtualKey)((int)VirtualKey.Number0 + n), VirtualKeyModifiers.None, async () =>
+            {
+                if (_sel.Count == 0) return;
+                await ApplyLabelAsync(_sel.ToList(), n == 0 ? null : LabelInfo.All[n - 1].Name);
+            }, false);
+        }
+        AddAccelerator(VirtualKey.F, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, () => { FiltersBtn.Flyout?.ShowAt(FiltersBtn); return Task.CompletedTask; }, true);
         AddAccelerator(VirtualKey.Escape, VirtualKeyModifiers.None, () => { ClearSelection(); return Task.CompletedTask; }, false);
         AddAccelerator(VirtualKey.Delete, VirtualKeyModifiers.None, async () => await DeleteSelectedAsync(), false);
         AddAccelerator(VirtualKey.C, VirtualKeyModifiers.Control, async () => await CopySelectedAsync(false), false);
@@ -1155,8 +1186,23 @@ public sealed partial class LibraryPage : Page
         if (_q.Pattern is { } pat) Active("Names like “" + pat + "”", () => _q.Pattern = null);
         if (_q.Discover is not null) Active(_title.Length > 0 ? _title : "Discover group", () => { _q.Discover = null; _title = ""; });
         foreach (var (k, v) in _q.DetailFilters()) Active(DetailLabel(k, v), () => ClearDetail(k));
+        if (string.Equals(_q.Tag, TagInfo.Favourite, StringComparison.OrdinalIgnoreCase)) Active("\u2605 Favourites", () => _q.Tag = null);
+        foreach (var label in ActiveLabels())
+        {
+            var l = label;
+            Active("Label: " + (LabelInfo.All.FirstOrDefault(x => x.Name == l).Title ?? l), () => { var set = ActiveLabels(); set.Remove(l); _q.Label = set.Count == 0 ? null : string.Join(',', set); });
+        }
+        if (chips.Count >= 2)
+        {
+            var clear = new HyperlinkButton { Content = "Clear all", FontSize = 11.5, Padding = new Thickness(6, 0, 6, 0), Height = 22 };
+            clear.Click += (_, _) => ClearFilters_Click(this, new RoutedEventArgs());
+            chips.Add(clear);
+        }
         ActiveChips.ItemsSource = chips;
         ClearFiltersBtn.Visibility = _q.IsNarrowed ? Visibility.Visible : Visibility.Collapsed;
+        var count = FilterCount();
+        FilterBadge.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        FilterBadgeText.Text = count.ToString();
     }
 
     private static string DetailLabel(string key, object v) => key switch
@@ -1531,8 +1577,8 @@ public sealed partial class LibraryPage : Page
         return null;
     }
 
-    private void Tile_PointerEntered(object sender, PointerRoutedEventArgs e) { if (Vm(sender) is { } t) t.Hover = true; }
-    private void Tile_PointerExited(object sender, PointerRoutedEventArgs e) { if (Vm(sender) is { } t) t.Hover = false; }
+    private void Tile_PointerEntered(object sender, PointerRoutedEventArgs e) { if (Vm(sender) is { } t) { t.Hover = true; if (sender is FrameworkElement fe) Glow.On(fe); } }
+    private void Tile_PointerExited(object sender, PointerRoutedEventArgs e) { if (Vm(sender) is { } t) { t.Hover = false; if (sender is FrameworkElement fe) Glow.Off(fe); } }
 
     /// <summary>Right-click a tile: the usual things to do with it. Over a ticked tile the menu acts on every ticked file.</summary>
     private void Tile_RightTapped(object sender, RightTappedRoutedEventArgs e)
