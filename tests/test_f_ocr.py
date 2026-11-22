@@ -35,3 +35,15 @@ class OcrTests(unittest.TestCase):
         self.assertEqual(main._ocr_matches(["quarterly", "report"]), [2])
         self.assertEqual(main._ocr_matches(["quarterly", "missing"]), [])
         self.assertEqual(main._ocr_matches(["ab"]), [])                                     # too short to mean anything
+
+    def test_media_only_leaves_out_text_and_sound(self):
+        c = db.conn()
+        for i, (ext, kind) in enumerate(((".txt", "text"), (".mp3", "audio")), 10):
+            c.execute("INSERT INTO files(id, root_id, path, name, ext, kind, size, mtime, status) VALUES(?,?,?,?,?,?,?,?,?)",
+                      (i, 1, f"C:/x/{i}{ext}", f"{i}{ext}", ext, kind, 9, 9, "done"))
+        c.commit()
+        everything = set(main.files(ids_only=True)["ids"])
+        media = set(main.files(ids_only=True, media=True)["ids"])
+        self.assertTrue({10, 11} <= everything)
+        self.assertEqual(media & {10, 11}, set())
+        self.assertTrue({1, 2, 3} <= media)

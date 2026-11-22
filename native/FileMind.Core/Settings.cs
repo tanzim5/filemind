@@ -43,6 +43,8 @@ public sealed class AppSettings
     public bool PointerLight { get; set; } = true;
     /// <summary>"slim" (the detailed filters sit behind a Filters button) or "classic" (every section in the left sidebar).</summary>
     public string SidebarStyle { get; set; } = "slim";
+    /// <summary>The plain All page shows only pictures and videos (text, PDFs and sounds stay one tap away in the type tiles).</summary>
+    public bool OnlyPicturesVideos { get; set; } = true;
     /// <summary>Read the text in pictures with Windows OCR: "off", "screens" (screenshots) or "all".</summary>
     public string OcrMode { get; set; } = "screens";
     public string? SkipVersion { get; set; }

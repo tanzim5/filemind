@@ -488,7 +488,7 @@ public sealed partial class ViewerPage : Page
         var timed = _item.Kind is "video" or "audio";
         ZoomPill.Visibility = _item.Kind == "image" ? Visibility.Visible : Visibility.Collapsed;
         TransportPill.Visibility = timed ? Visibility.Visible : Visibility.Collapsed;
-        StageHost.Margin = new Thickness(24, 24, 24, visual || timed ? 88 : 24);
+        StageHost.Margin = new Thickness(24, 24, 24, 88);            // the same for every kind, so stepping through files never shifts the stage
         _copyFrameItem.Visibility = visual ? Visibility.Visible : Visibility.Collapsed;
         ToolsPill.Visibility = visual || timed ? Visibility.Visible : Visibility.Collapsed;
         var isVideo = _item.Kind == "video";

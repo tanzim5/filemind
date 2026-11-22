@@ -56,9 +56,9 @@ public static class ThemeEngine
     private static Color Lift(Color c, int d) => Windows.UI.Color.FromArgb(255, (byte)Math.Clamp(c.R + d, 0, 255), (byte)Math.Clamp(c.G + d, 0, 255), (byte)Math.Clamp(c.B + d, 0, 255));
 
     // One transparency setting (0 = solid, 1 = most glass). The floors keep text readable over any wallpaper:
-    // the page never drops below 78 % opacity, the sidebar below 40 %.
-    public static double RailOpacity(AppSettings st) => 1 - (IsLiquid(st) ? 0.66 : 0.60) * Math.Clamp(st.Transparency, 0, 1);
-    public static double PanelOpacity(AppSettings st) => 1 - (IsLiquid(st) ? 0.30 : 0.22) * Math.Clamp(st.Transparency, 0, 1);
+    // the page never drops below ~30 % opacity, the sidebar below ~16 % (the blurred acrylic behind keeps text legible).
+    public static double RailOpacity(AppSettings st) => 1 - (IsLiquid(st) ? 0.84 : 0.78) * Math.Clamp(st.Transparency, 0, 1);
+    public static double PanelOpacity(AppSettings st) => 1 - (IsLiquid(st) ? 0.70 : 0.62) * Math.Clamp(st.Transparency, 0, 1);
 
     public static bool IsLiquid(AppSettings st) => st.Surface == "liquid";
     /// <summary>True while the liquid-glass surface style is applied (set by <see cref="Apply"/>).</summary>
