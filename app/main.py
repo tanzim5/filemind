@@ -601,16 +601,17 @@ def sources():
 def sources_in_view(body: dict = Body(...)):
     """The same counts, but only over what is on screen (the browsed scope, without the source filter itself)."""
     scope = {k: body[k] for k in _SCOPE_KEYS if body.get(k) is not None and k != "source"}
+    media = bool(scope.pop("media", False))
     ids = files(**scope, ids_only=True)["ids"] if scope else None
-    return _source_counts(ids)
+    return _source_counts(ids, media)
 
 
-def _source_counts(ids):
+def _source_counts(ids, media=False):
     from collections import Counter
     c = db.conn()
     cnt = Counter()
     if ids is None:
-        rows = c.execute("SELECT name, path, width, height FROM files WHERE status='done'")
+        rows = c.execute("SELECT name, path, width, height FROM files WHERE status='done'" + (" AND kind IN ('image','video')" if media else ""))
         cnt.update(names_mod.source_of_row(r) for r in rows)
     else:
         for start in range(0, len(ids), 900):

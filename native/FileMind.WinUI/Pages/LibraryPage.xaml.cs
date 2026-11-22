@@ -367,14 +367,12 @@ public sealed partial class LibraryPage : Page
     {
         try
         {
-            _stats = await Api.GetStatsAsync();
-            _roots = await Api.GetRootsAsync();
-            _colors = await Api.GetColorsAsync();
-            _sources = await Api.GetSourcesAsync();
-            _moods = await Api.GetMoodsAsync();
-            _projects = await Api.GetProjectsAsync();
-            _tagList = (await Api.GetTagsAsync()).Tags;
-            _labelList = (await Api.GetLabelsAsync()).Labels;
+            // All at once (they used to run one after another); the source counts come with the view's own refresh.
+            var stats = Api.GetStatsAsync(); var roots = Api.GetRootsAsync(); var colors = Api.GetColorsAsync(); var moods = Api.GetMoodsAsync();
+            var projects = Api.GetProjectsAsync(); var tags = Api.GetTagsAsync(); var labels = Api.GetLabelsAsync();
+            await Task.WhenAll(stats, roots, colors, moods, projects, tags, labels);
+            _stats = stats.Result; _roots = roots.Result; _colors = colors.Result; _moods = moods.Result;
+            _projects = projects.Result; _tagList = tags.Result.Tags; _labelList = labels.Result.Labels;
         }
         catch (Exception ex) { FileMind.Core.Diag.Log("Library.panels", ex); }
         RebuildPanels();
@@ -1412,6 +1410,8 @@ public sealed partial class LibraryPage : Page
         catch (Exception ex) { App.Log("sources", ex, null); }
     }
 
+    private string _refineSig = "";
+
     private async Task FillRefineAsync()
     {
         var gen = ++_refineGen;
@@ -1420,9 +1420,15 @@ public sealed partial class LibraryPage : Page
             ["kind"] = _q.Kind == "all" ? null : _q.Kind, ["root"] = _q.Root, ["project"] = _q.Project,
             ["unassigned"] = _q.Unassigned ? true : null, ["color"] = _q.Color, ["near"] = _q.Near,
             ["source"] = _q.Source, ["pattern"] = _q.Pattern, ["discover"] = _q.Discover, ["tag"] = _q.Tag, ["label"] = _q.Label,
+            ["media"] = _q.MediaOnlyActive ? true : null,
         };
-        _ = RefreshSourcesAsync(scope, gen);
         IEnumerable<int>? ids = IsPlainBrowse ? null : _tiles.Select(t => t.Item.Id).ToList();
+        // The same view again (a re-sort, a selection, a label on one file) needs no new counts from the engine.
+        var sig = string.Join("|", scope.Where(kv => kv.Value is not null).Select(kv => kv.Key + "=" + kv.Value)) + "#" + _stats.Total
+                  + (ids is null ? "" : "#" + _tiles.Count + ":" + (_tiles.Count > 0 ? _tiles[0].Item.Id + "," + _tiles[^1].Item.Id : ""));
+        if (sig == _refineSig && RefineGroups.Children.Count + SourceChips.Children.Count > 0) return;
+        _refineSig = sig;
+        _ = RefreshSourcesAsync(scope, gen);
         FacetResult r;
         try { r = await Api.GetFacetsAsync(scope.Where(kv => kv.Value is not null).ToDictionary(kv => kv.Key, kv => kv.Value), ids); }
         catch (Exception ex) { App.Log("facets", ex, null); return; }
