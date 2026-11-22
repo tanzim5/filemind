@@ -157,7 +157,7 @@ def init():
             BEGIN UPDATE meta SET value = value + 1 WHERE key = 'index_gen'; END;
     """)
     # Cached fingerprints, reused while the file is unchanged (hash_key = "size:mtime").
-    for name, sql_type in (("sha256", "BLOB"), ("hash_key", "TEXT"), ("dh", "TEXT")):
+    for name, sql_type in (("sha256", "BLOB"), ("hash_key", "TEXT"), ("dh", "TEXT"), ("seq_json", "TEXT")):
         if name not in cols:
             conn().execute(f"ALTER TABLE files ADD COLUMN {name} {sql_type}")
     conn().commit()

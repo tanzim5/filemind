@@ -186,6 +186,15 @@ def prepare(path: Path, kind: str, name: str) -> dict:
     return p
 
 
+def prepare_sequence(path: Path, info: dict, name: str) -> dict:
+    """A numbered frame sequence is searched through a few evenly spaced frames, like a video."""
+    import hashlib
+    h = hashlib.sha1(str(path).encode("utf-8", "ignore")).hexdigest()[:12]      # same folder extract.cleanup_tmp removes
+    from . import sequences
+    frames = sequences.sample_jpgs(info, video_frame_count(), extract.TMP_DIR / h)
+    return {"path": path, "kind": "video", "name": name, "frames": frames}
+
+
 def discard(p: dict):
     """Drop a prepared file's temporary files (when it will not be embedded after all)."""
     if p.get("image"):

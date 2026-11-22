@@ -46,7 +46,7 @@ def _thumb_hash(row):
 
 
 def groups(limit=60, focus=None):
-    rows = db.conn().execute("SELECT id,path,size,mtime,kind,thumb,sha256,hash_key,dh FROM files WHERE status='done' ORDER BY mtime DESC").fetchall()
+    rows = db.conn().execute("SELECT id,path,size,mtime,kind,thumb,sha256,hash_key,dh FROM files WHERE status='done' AND seq_json IS NULL ORDER BY mtime DESC").fetchall()
     if focus is not None:
         chosen = next((row for row in rows if row["id"] == focus), None)
         if chosen is None:

@@ -30,6 +30,7 @@ from . import moments as moments_mod
 from . import export as export_mod
 from . import search_mix
 from . import space_suggest, space_match
+from . import sequences as sequences_mod
 
 app = FastAPI(title="Local File Brain")
 
@@ -86,6 +87,8 @@ def _file_dict(r, score=None):
     d.update({key: r[key] for key in ("width", "height", "duration", "fps", "codec") if key in r.keys()})
     d["tags"] = _file_tags().get(r["id"], [])
     d["label"] = _file_labels().get(r["id"])
+    if "seq_json" in r.keys() and r["seq_json"] and (info := sequences_mod.load(r["seq_json"])):
+        d["seq"] = sequences_mod.brief(info, r["fps"] if "fps" in r.keys() else None)
     if score is not None:
         d["score"] = round(float(score), 4)
     return d
@@ -1196,10 +1199,47 @@ def thumb(fid: int):
 
 @app.get("/api/file/{fid}")
 def open_file(fid: int):
-    r = db.conn().execute("SELECT path FROM files WHERE id=?", (fid,)).fetchone()
+    r = db.conn().execute("SELECT path, seq_json, fps FROM files WHERE id=?", (fid,)).fetchone()
     if not r or not os.path.exists(r["path"]):
         raise HTTPException(404)
+    if r["seq_json"]:                                   # a sequence plays as its preview video (made by /api/sequence/{id}/proxy)
+        info = sequences_mod.load(r["seq_json"])
+        video = sequences_mod.proxy_path(info, r["fps"] or sequences_mod.DEFAULT_FPS) if info else None
+        if video is None or not video.exists():
+            raise HTTPException(404, "The preview of this sequence has not been made yet.")
+        return FileResponse(video, media_type="video/mp4")
     return FileResponse(r["path"])
+
+
+@app.post("/api/sequence/{fid}/proxy")
+def sequence_proxy(fid: int):
+    """Makes the preview video of a sequence (a minute at most for a long one) so it can be played."""
+    r = db.conn().execute("SELECT seq_json, fps FROM files WHERE id=?", (fid,)).fetchone()
+    info = sequences_mod.load(r["seq_json"]) if r else None
+    if not info:
+        raise HTTPException(404, "That is not an image sequence.")
+    try:
+        sequences_mod.build_proxy(info, r["fps"] or sequences_mod.DEFAULT_FPS)
+    except Exception as exc:
+        logging.getLogger("filemind").warning("sequence preview failed", exc_info=True)
+        raise HTTPException(500, f"The preview could not be made: {exc}") from exc
+    return {"ok": True}
+
+
+@app.post("/api/sequence/{fid}/fps")
+def sequence_fps(fid: int, body: dict = Body(...)):
+    """{fps}: the playback speed of a sequence (the preview is made again at that speed)."""
+    fps = float(body.get("fps") or 0)
+    if not 1 <= fps <= 240:
+        raise HTTPException(400, "Choose a speed between 1 and 240 frames per second.")
+    c = db.conn()
+    r = c.execute("SELECT seq_json FROM files WHERE id=?", (fid,)).fetchone()
+    info = sequences_mod.load(r["seq_json"]) if r else None
+    if not info:
+        raise HTTPException(404, "That is not an image sequence.")
+    c.execute("UPDATE files SET fps=?, duration=? WHERE id=?", (fps, info["count"] / fps, fid))
+    c.commit()
+    return {"fps": fps}
 
 
 @app.post("/api/file_actions")
@@ -1211,14 +1251,20 @@ def file_actions(body: dict = Body(...)):
         raise HTTPException(400, "Choose files and a valid action.")
     ids = list(dict.fromkeys(ids))
     c = db.conn()
-    files = [c.execute("SELECT id, path FROM files WHERE id=?", (fid,)).fetchone() for fid in ids]
+    files = [c.execute("SELECT id, path, seq_json FROM files WHERE id=?", (fid,)).fetchone() for fid in ids]
     if any(r is None or not Path(r["path"]).is_file() for r in files):
         raise HTTPException(404, "One or more files are no longer at their indexed locations.")
+
+    def paths_of(r):                                    # a sequence is every one of its frames
+        info = sequences_mod.load(r["seq_json"]) if r["seq_json"] else None
+        return sequences_mod.frame_paths(info) if info else [r["path"]]
     if action == "delete":
         done = 0
         for r in files:
             try:
-                send2trash(r["path"])
+                for p in paths_of(r):
+                    if os.path.exists(p):
+                        send2trash(p)
             except OSError as exc:
                 raise HTTPException(500, f"Moved {done} files to Trash; the next file failed: {exc}") from exc
             _drop_files(c, "id=?", (r["id"],))      # the row, its tags, moments, names and thumbnail
@@ -1227,10 +1273,20 @@ def file_actions(body: dict = Body(...)):
     destination = Path(str(body.get("destination") or "")).expanduser()
     if not destination.is_dir():
         raise HTTPException(400, "Choose an existing destination folder.")
-    ops = [{"old": r["path"], "new": str(destination / Path(r["path"]).name), "file_id": r["id"]} for r in files]
+    ops = []
+    for r in files:
+        if r["seq_json"]:                               # every frame, under its own name; the row itself is re-read afterwards
+            ops += [{"old": p, "new": str(destination / Path(p).name), "file_id": 0} for p in paths_of(r)]
+        else:
+            ops.append({"old": r["path"], "new": str(destination / Path(r["path"]).name), "file_id": r["id"]})
     if len({os.path.normcase(op["new"]) for op in ops}) != len(ops) or any(os.path.exists(op["new"]) for op in ops):
         raise HTTPException(409, "A file with that name already exists in the destination. Nothing was changed.")
-    return commit_mod.run(ops, action)
+    result = commit_mod.run(ops, action)
+    if action == "move":
+        for r in files:
+            if r["seq_json"]:
+                _drop_files(c, "id=?", (r["id"],))      # the next folder scan registers it again at its new place
+    return result
 
 
 @app.post("/api/reveal/{fid}")
