@@ -10,7 +10,7 @@ automatically, but the **first** version has to be submitted by hand once.
 3. Create the manifest from the release zip:
 
    ```
-   wingetcreate new https://github.com/tanzim5/filemind/releases/download/v0.12.0/FileMind-Windows.zip
+   wingetcreate new https://github.com/tanzim5/filemind/releases/download/v0.16.0/FileMind-x64.msi
    ```
 
    Answer the questions with these values (the tool fills in the hash for you):
@@ -22,7 +22,7 @@ automatically, but the **first** version has to be submitted by hand once.
    | Publisher | `Tanzim` |
    | License | the licence of this repository |
    | ShortDescription | `Find your photos, videos, sounds and documents by describing them. Runs on your PC.` |
-   | InstallerType | `zip` |
+   | InstallerType | `wix` (the MSI) |
    | NestedInstallerType | `portable` |
    | RelativeFilePath | `FileMind\FileMind.exe` |
    | PortableCommandAlias | `filemind` |
@@ -49,6 +49,7 @@ Users get it with `winget upgrade Tanzim.FileMind`. The app itself notices the w
 
 | Installed with | Who updates it |
 |---|---|
-| Unzipped folder | File Mind itself: it downloads the new zip, checks its SHA-256 against `FileMind-Windows.zip.sha256`, swaps the folder and restarts. Your settings and library are not in that folder. |
+| MSI installer | File Mind itself: it downloads the new `FileMind-x64.msi`, checks its SHA-256 against `FileMind-x64.msi.sha256`, runs it (no admin prompt) and restarts. |
+| Unzipped folder (portable) | File Mind itself: same, with `FileMind-Windows.zip`. Your settings and library are not in that folder. |
 | winget | `winget upgrade Tanzim.FileMind` (the app opens it for you). |
 | Microsoft Store | The Store. File Mind never replaces its own files there. |

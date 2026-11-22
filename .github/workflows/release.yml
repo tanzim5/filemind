@@ -55,6 +55,14 @@ jobs:
           Copy-Item -Recurse dist/engine/FileMind dist/app/FileMind/engine
           Compress-Archive -Path dist/app/FileMind -DestinationPath dist/FileMind-Windows.zip
 
+      - name: Build the installer (x64 MSI, per-user, updates itself)
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          $ver = ([xml](Get-Content native/FileMind.WinUI/FileMind.WinUI.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          $root = (Get-Location).Path
+          wix build -arch x64 -d Version=$ver -d "SourceDir=$root\dist\app\FileMind" -d "IconFile=$root\packaging\filemind.ico" -d "MarkerFile=$root\packaging\msi\installed-by-msi.txt" -o dist/FileMind-x64.msi packaging/msi/FileMind.wxs
+
       - name: Validate the download
         run: python packaging/validate_build.py windows
 
@@ -64,7 +72,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: FileMind-Windows
-          path: dist/FileMind-Windows.zip
+          path: |
+            dist/FileMind-Windows.zip
+            dist/FileMind-x64.msi
           compression-level: 0
 
   release:
@@ -77,20 +87,27 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Checksum (the in-app updater and winget verify the zip against this)
-        run: cd dist && sha256sum FileMind-Windows.zip | cut -d' ' -f1 | tr 'a-f' 'A-F' > FileMind-Windows.zip.sha256
+      - name: Checksums (the in-app updater and winget verify the downloads against these)
+        run: |
+          cd dist
+          sha256sum FileMind-Windows.zip | cut -d' ' -f1 | tr 'a-f' 'A-F' > FileMind-Windows.zip.sha256
+          sha256sum FileMind-x64.msi | cut -d' ' -f1 | tr 'a-f' 'A-F' > FileMind-x64.msi.sha256
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.release_tag || github.ref_name }}
           files: |
+            dist/FileMind-x64.msi
+            dist/FileMind-x64.msi.sha256
             dist/FileMind-Windows.zip
             dist/FileMind-Windows.zip.sha256
           body: |
-            ## One download for every Windows 10/11 PC: `FileMind-Windows.zip`
+            ## Download `FileMind-x64.msi` (64-bit Windows 10/11)
 
-            Unzip anywhere and double-click `FileMind.exe`. Windows may say "Windows protected your PC" because the app isn't code-signed: click **More info → Run anyway**.
+            Double-click it. It installs for your account (no administrator prompt), adds a Start menu entry, and File Mind then updates itself when a new release comes out. Windows may say "Windows protected your PC" because the app isn't code-signed: click **More info → Run anyway**.
+
+            Prefer a portable copy? `FileMind-Windows.zip` is the same app: unzip anywhere and double-click `FileMind.exe`.
 
             On first launch File Mind checks your graphics card and downloads what it needs once:
 
@@ -113,5 +130,5 @@ jobs:
       - uses: vedantmgoyal9/winget-releaser@v2
         with:
           identifier: Tanzim.FileMind
-          installers-regex: 'FileMind-Windows\.zip$'
+          installers-regex: 'FileMind-x64\.msi$'
           token: ${{ secrets.WINGET_TOKEN }}

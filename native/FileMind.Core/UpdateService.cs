@@ -14,9 +14,11 @@ public enum InstallMode
     Winget,
     /// <summary>An unzipped folder: File Mind can download the new zip, check it and swap the folder itself.</summary>
     Zip,
+    /// <summary>The Windows installer (MSI): File Mind downloads the new installer, checks it and runs it, no admin prompt.</summary>
+    Msi,
 }
 
-public sealed record UpdateInfo(string Version, string PageUrl, string? ZipUrl, string? Sha256, string Notes);
+public sealed record UpdateInfo(string Version, string PageUrl, string? ZipUrl, string? Sha256, string Notes, string? MsiUrl = null, string? MsiSha256 = null);
 
 /// <summary>Looks for a newer release on GitHub and, for a zip install, replaces the app folder with it.
 /// A download is only used when its SHA-256 matches the one the release publishes.</summary>
@@ -24,6 +26,8 @@ public static class UpdateService
 {
     public const string LatestApi = "https://api.github.com/repos/tanzim5/filemind/releases/latest";
     public const string ZipName = "FileMind-Windows.zip";
+    public const string MsiName = "FileMind-x64.msi";
+    public const string MsiMarker = "installed-by-msi.txt";
     public const string WingetId = "Tanzim.FileMind";
 
     public static InstallMode DetectMode(string appDir)
@@ -31,6 +35,7 @@ public static class UpdateService
         var p = appDir.Replace('/', '\\');
         if (p.Contains("\\WindowsApps\\", StringComparison.OrdinalIgnoreCase)) return InstallMode.Store;
         if (p.Contains("\\Microsoft\\WinGet\\", StringComparison.OrdinalIgnoreCase)) return InstallMode.Winget;
+        if (File.Exists(Path.Combine(appDir, MsiMarker))) return InstallMode.Msi;
         return InstallMode.Zip;
     }
 
@@ -72,7 +77,7 @@ public static class UpdateService
         var tag = release.TryGetProperty("tag_name", out var t) ? t.GetString() ?? "" : "";
         if (release.TryGetProperty("prerelease", out var pre) && pre.GetBoolean()) return null;
         if (!IsNewer(current, tag)) return null;
-        string? zip = null, sha = null, shaUrl = null;
+        string? zip = null, sha = null, shaUrl = null, msi = null, msiSha = null, msiShaUrl = null;
         if (release.TryGetProperty("assets", out var assets))
             foreach (var a in assets.EnumerateArray())
             {
@@ -85,23 +90,38 @@ public static class UpdateService
                         sha = digest[7..];
                 }
                 else if (name == ZipName + ".sha256") shaUrl = url;
+                else if (name == MsiName)
+                {
+                    msi = url;
+                    if (a.TryGetProperty("digest", out var d2) && d2.GetString() is { } dg && dg.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
+                        msiSha = dg[7..];
+                }
+                else if (name == MsiName + ".sha256") msiShaUrl = url;
             }
         // A published checksum file wins if the API gave no digest; resolved lazily by the caller through ShaUrl.
         var page = release.TryGetProperty("html_url", out var h) ? h.GetString() ?? "" : "";
         var notes = release.TryGetProperty("body", out var b) ? b.GetString() ?? "" : "";
-        return new UpdateInfo(tag.TrimStart('v', 'V'), page, zip, sha ?? (shaUrl is null ? null : "url:" + shaUrl), notes);
+        return new UpdateInfo(tag.TrimStart('v', 'V'), page, zip, sha ?? (shaUrl is null ? null : "url:" + shaUrl), notes,
+                              msi, msiSha ?? (msiShaUrl is null ? null : "url:" + msiShaUrl));
     }
 
     /// <summary>Downloads the zip and checks it against the published SHA-256. Throws if they differ or none is published.</summary>
-    public static async Task<string> DownloadAsync(HttpClient http, UpdateInfo info, string tempDir, IProgress<double>? progress, CancellationToken ct)
+    public static Task<string> DownloadAsync(HttpClient http, UpdateInfo info, string tempDir, IProgress<double>? progress, CancellationToken ct) =>
+        DownloadFileAsync(http, info.ZipUrl, info.Sha256, ZipName, tempDir, progress, ct);
+
+    /// <summary>The installer, checked the same way.</summary>
+    public static Task<string> DownloadMsiAsync(HttpClient http, UpdateInfo info, string tempDir, IProgress<double>? progress, CancellationToken ct) =>
+        DownloadFileAsync(http, info.MsiUrl, info.MsiSha256, MsiName, tempDir, progress, ct);
+
+    private static async Task<string> DownloadFileAsync(HttpClient http, string? url, string? sha, string name, string tempDir, IProgress<double>? progress, CancellationToken ct)
     {
-        if (info.ZipUrl is null || info.Sha256 is null) throw new InvalidOperationException("This release has no checksum to verify, so File Mind will not install it by itself.");
-        var expected = info.Sha256;
+        if (url is null || sha is null) throw new InvalidOperationException("This release has no checksum to verify, so File Mind will not install it by itself.");
+        var expected = sha;
         if (expected.StartsWith("url:"))
             expected = (await http.GetStringAsync(expected[4..], ct)).Trim().Split(' ', '\t', '\n')[0];
         Directory.CreateDirectory(tempDir);
-        var file = Path.Combine(tempDir, ZipName);
-        using (var resp = await http.GetAsync(info.ZipUrl, HttpCompletionOption.ResponseHeadersRead, ct))
+        var file = Path.Combine(tempDir, name);
+        using (var resp = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct))
         {
             resp.EnsureSuccessStatusCode();
             var total = resp.Content.Headers.ContentLength ?? 0;
@@ -149,6 +169,26 @@ public static class UpdateService
             UseShellExecute = false, CreateNoWindow = true,
         });
     }
+
+    /// <summary>Runs the installer once this process has exited (it replaces the files in place; per-user, so no admin prompt) and starts the app again.</summary>
+    public static void RunInstallerAndRestart(string msiFile, int processId)
+    {
+        var script = Path.Combine(Path.GetTempPath(), "filemind-msi-update.ps1");
+        File.WriteAllText(script, MsiScript);
+        Process.Start(new ProcessStartInfo("powershell.exe")
+        {
+            ArgumentList = { "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", script,
+                             "-ProcId", processId.ToString(), "-Msi", msiFile },
+            UseShellExecute = false, CreateNoWindow = true,
+        });
+    }
+
+    public const string MsiScript = """
+        param($ProcId, $Msi)
+        try { Wait-Process -Id $ProcId -Timeout 120 -ErrorAction SilentlyContinue } catch {}
+        Start-Process msiexec.exe -ArgumentList @('/i', ('"' + $Msi + '"'), '/passive', '/norestart', 'LAUNCHAFTER=1') -Wait
+        Remove-Item -LiteralPath $Msi -Force -ErrorAction SilentlyContinue
+        """;
 
     public const string SwapScript = """
         param($ProcId, $Target, $Next, $Exe)

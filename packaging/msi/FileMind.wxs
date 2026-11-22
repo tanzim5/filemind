@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- File Mind installer (x64, per-user: no administrator prompt, updates can be applied by the app itself).
+     Build: wix build -arch x64 -d Version=0.15.0 -d SourceDir=dist\app\FileMind -o dist\FileMind-x64.msi packaging\msi\FileMind.wxs -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="File Mind" Manufacturer="Tanzim" Version="$(Version)" Language="1033" Scope="perUser"
+           UpgradeCode="7C1B0E52-3F7A-4D5E-9A62-1E5B2D4C8F10" InstallerVersion="500" Compressed="yes">
+    <SummaryInformation Description="File Mind: search your own files by meaning, on your PC" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of File Mind is already installed." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="mszip" MaximumUncompressedMediaSize="1000" />
+    <Icon Id="filemind.ico" SourceFile="$(var.IconFile)" />
+    <Property Id="ARPPRODUCTICON" Value="filemind.ico" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/tanzim5/filemind" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsDir" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="File Mind">
+          <Files Include="$(var.SourceDir)\**" />
+          <Component Id="MsiMarker" Guid="9B1C4F6A-52D0-4E1B-8C77-3A0E6D2B91F4">
+            <File Id="MarkerFile" Source="$(var.MarkerFile)" KeyPath="yes" />
+          </Component>
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Component Id="StartMenuShortcut" Guid="D3E8A5B1-6C94-4F27-B0A3-85C1E7F2A64D">
+        <Shortcut Id="AppShortcut" Name="File Mind" Description="Search your files by meaning"
+                  Target="[INSTALLFOLDER]FileMind.exe" WorkingDirectory="INSTALLFOLDER" />
+        <RegistryValue Root="HKCU" Key="Software\Tanzim\FileMind" Name="StartMenu" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+
+
+    <!-- Start the app when the installer was run by the person (full UI) or by the in-app updater (LAUNCHAFTER=1); silent installs stay silent. -->
+    <CustomAction Id="LaunchApp" Directory="INSTALLFOLDER" ExeCommand="&quot;[INSTALLFOLDER]FileMind.exe&quot;" Return="asyncNoWait" Impersonate="yes" />
+    <InstallExecuteSequence>
+      <Custom Action="LaunchApp" After="InstallFinalize" Condition="NOT REMOVE AND (LAUNCHAFTER=1 OR UILevel &gt;= 5)" />
+    </InstallExecuteSequence>
+  </Package>
+</Wix>

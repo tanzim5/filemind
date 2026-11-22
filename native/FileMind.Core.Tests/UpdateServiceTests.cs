@@ -36,6 +36,20 @@ public class UpdateServiceTests
         Assert.Null(UpdateService.Parse(doc.RootElement, "0.12.0"));
     }
 
+    [Fact] public void FindsTheInstallerAndItsChecksum()
+    {
+        var json = """
+        {"tag_name":"v0.16.0","html_url":"h","body":"","prerelease":false,"assets":[
+         {"name":"FileMind-Windows.zip","browser_download_url":"https://x/zip","digest":"sha256:AA"},
+         {"name":"FileMind-x64.msi","browser_download_url":"https://x/msi"},
+         {"name":"FileMind-x64.msi.sha256","browser_download_url":"https://x/msi.sha256"}]}
+        """;
+        using var doc = JsonDocument.Parse(json);
+        var info = UpdateService.Parse(doc.RootElement, "0.15.0")!;
+        Assert.Equal("https://x/msi", info.MsiUrl);
+        Assert.Equal("url:https://x/msi.sha256", info.MsiSha256);
+    }
+
     [Fact] public void ChecksumMismatchIsDetected()
     {
         var f = Path.GetTempFileName();
