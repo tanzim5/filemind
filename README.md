@@ -47,7 +47,7 @@ that runs on your own machine. Type what you remember ("red logo on black", "a m
 - **Image sequences as one clip.** A folder of numbered frames (`render_0001.png`… PNG, JPG, TIFF, EXR, DPX, TGA) shows as one item with its frame count, searchable by a few sample frames and playable as a video with a speed menu. Delete, copy and move act on every frame.
 - **Hide small pictures.** Settings > Library can leave out anything under 256 to 1080 px. Nothing is deleted.
 - **See where your data is.** Settings > Storage lists everything File Mind keeps (index, previews, models, engine, logs), what it is for, how big it is, and lets you clear the safe parts.
-- **Updates.** File Mind checks for a new version once a day (you can turn that off) and, for an unzipped copy, downloads, verifies and installs it for you. winget and Microsoft Store copies update through their own tools.
+- **Updates.** File Mind checks for a new version once a day (you can turn that off) and, for an MSI or unzipped copy, downloads, verifies and installs it for you. winget and Microsoft Store copies update through their own tools.
 
 ### 🖱️ Work with your files
 - **Right-click a tile** in the Library for a menu: open, show in folder, copy the file or its path, favourite, find similar, add to a space, delete. Over several ticked files it acts on all of them. Right-click in the viewer for copy, show in Explorer, export and previous or next file.
@@ -72,7 +72,7 @@ Nothing to install: Python, ffmpeg and everything else are inside the download. 
 
 | Your computer | Download | First launch also downloads |
 |---|---|---|
-| **Windows 10/11** (64-bit) | `FileMind-Windows.zip`: one app for every PC; on first run it picks CPU or NVIDIA PyTorch automatically | AI model (~1.5 GB), plus GPU support (~2.8 GB) on NVIDIA cards |
+| **Windows 10/11** (64-bit) | `FileMind-x64.msi`: double-click to install (no admin prompt); a portable `FileMind-Windows.zip` is also published. One app for every PC; on first run it picks CPU or NVIDIA PyTorch automatically | AI model (~1.5 GB), plus GPU support (~2.8 GB) on NVIDIA cards |
 
 **Quick search anywhere:** press **Ctrl+Shift+Space** for the Raycast-style launcher. Change the shortcut in Settings.
 
@@ -83,7 +83,7 @@ Nothing to install: Python, ffmpeg and everything else are inside the download. 
 <details>
 <summary><b>Windows steps</b></summary>
 
-1. Unzip anywhere (Desktop, a USB stick…) and double-click **`FileMind.exe`**.
+1. Run `FileMind-x64.msi` (or unzip the portable zip anywhere and double-click **`FileMind.exe`**).
 2. Windows may show "Windows protected your PC" because the app isn't code-signed: click **More info → Run anyway**.
 3. While it reads your files, the banner shows what it runs on (for example *on NVIDIA GeForce RTX 3060 (CUDA)* or *on CPU*). To watch the card work, open Task Manager → Performance → your NVIDIA GPU and switch a graph from *3D* to *Cuda*.
 

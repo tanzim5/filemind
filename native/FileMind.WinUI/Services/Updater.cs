@@ -66,6 +66,22 @@ public static class Updater
                 Process.Start(new ProcessStartInfo("powershell.exe") { ArgumentList = { "-NoExit", "-Command", $"winget upgrade --id {UpdateService.WingetId}" }, UseShellExecute = true });
                 return;
         }
+        if (Mode == InstallMode.Msi && info.MsiUrl is not null)
+        {
+            try
+            {
+                var msi = await UpdateService.DownloadMsiAsync(rt.Http, info, Path.Combine(Path.GetTempPath(), "filemind-update"), progress, CancellationToken.None);
+                UpdateService.RunInstallerAndRestart(msi, Environment.ProcessId);
+                rt.Host.Stop();
+                Application.Current.Exit();
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or InvalidDataException or HttpRequestException or IOException)
+            {
+                App.Log("update-msi", ex, ex.Message);
+                Process.Start(new ProcessStartInfo(info.PageUrl) { UseShellExecute = true });
+            }
+            return;
+        }
         try
         {
             var zip = await UpdateService.DownloadAsync(rt.Http, info, Path.Combine(Path.GetTempPath(), "filemind-update"), progress, CancellationToken.None);

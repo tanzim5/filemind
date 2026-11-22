@@ -182,6 +182,7 @@ def dictate(wav_path: str) -> dict:
     with _dictation_lock:
         _load_dictation()
         segments, info = _dictation.transcribe(wav_path, beam_size=1, vad_filter=True, without_timestamps=True,
-                                               condition_on_previous_text=False)
+                                               condition_on_previous_text=False, temperature=0.0,
+                                               initial_prompt="Searching my files: photos, videos, screenshots, songs, 4K, sunset, interview.")
         text = " ".join(s.text.strip() for s in segments).strip()
     return {"text": text, "language": info.language}

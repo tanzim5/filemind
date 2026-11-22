@@ -808,51 +808,38 @@ public sealed partial class LibraryPage : Page
 
 
     // ------------------------------------------------------------------ voice, and dropping files in
-    private VoiceRecorder? _voice;
-    private readonly DispatcherTimer _voiceStop = new() { Interval = TimeSpan.FromSeconds(12) };
+    private readonly SpeechInput _speech = new();
 
-    /// <summary>Tap to talk, tap again (or wait twelve seconds) to search. The sound itself becomes the query.</summary>
+    /// <summary>Tap to talk. What you say is turned into text (on this PC) and searched like typed words, so "videos of the beach
+    /// over ten seconds" works the same spoken or typed. It stops by itself when you pause; tap again to stop early.</summary>
     private async void Voice_Click(object sender, RoutedEventArgs e)
     {
-        if (_voice is { IsRecording: true }) { await FinishVoiceAsync(); return; }
-        try
-        {
-            _voice = new VoiceRecorder();
-            await _voice.StartAsync();
-            VoiceBtn.Background = Ui.Brush("AccentFillBrush");
-            ToolTipService.SetToolTip(VoiceBtn, "Listening… tap to search");
-            _listening = true; UpdateHint();
-            _voiceStop.Tick -= VoiceStop_Tick; _voiceStop.Tick += VoiceStop_Tick; _voiceStop.Start();
-        }
+        if (_listening) { _speech.Stop(); return; }
+        _listening = true;
+        VoiceBtn.Background = Ui.Brush("AccentFillBrush");
+        ToolTipService.SetToolTip(VoiceBtn, "Listening… tap to stop");
+        UpdateHint();
+        void Heard(string t) => DispatcherQueue.TryEnqueue(() => { if (_listening) SearchHint.Text = t.Length > 0 ? t : "Listening…"; });
+        _speech.Hypothesis += Heard;
+        string said;
+        try { said = (await _speech.ListenAsync()).Trim(); }
         catch (Exception ex)
         {
             App.Log("voice", ex, ex.Message);
-            _voice?.Dispose(); _voice = null;
-            ShowToast("Couldn't reach a microphone. Check Settings > Privacy > Microphone, and let desktop apps use it.");
+            ShowToast("Couldn't use the microphone. Check Windows Settings > Privacy > Microphone, and let desktop apps use it.");
+            said = "";
         }
-    }
-
-    private async void VoiceStop_Tick(object? sender, object e) { _voiceStop.Stop(); await FinishVoiceAsync(); }
-
-    private async Task FinishVoiceAsync()
-    {
-        _voiceStop.Stop();
-        VoiceBtn.ClearValue(Control.BackgroundProperty);
-        ToolTipService.SetToolTip(VoiceBtn, "Search by voice");
-        _listening = false; UpdateHint();
-        string? path = null;
-        try { path = _voice is null ? null : await _voice.StopAsync(); } catch (Exception ex) { App.Log("voice-stop", ex, ex.Message); }
-        _voice?.Dispose(); _voice = null;
-        if (path is null) return;
-        try
+        finally
         {
-            Busy.IsActive = true;
-            var v = await Api.VoiceAsync(path);
-            var label = v.Hint.Count > 0 ? "🎙 " + string.Join(", ", v.Hint.Take(2)) : "🎙 voice search";
-            await GoAsync(() => { _tags.Add((label, "voice:" + v.Id)); _similarTo = 0; _imagePath = null; _title = ""; });
+            _speech.Hypothesis -= Heard;
+            _listening = false;
+            VoiceBtn.ClearValue(Control.BackgroundProperty);
+            ToolTipService.SetToolTip(VoiceBtn, "Search by voice");
+            UpdateHint();
         }
-        catch (Exception ex) { App.Log("voice-search", ex, ex.Message); ShowToast(ex.Message.Length is > 0 and < 140 ? ex.Message : "Couldn't search with that recording."); }
-        finally { Busy.IsActive = false; try { File.Delete(path); } catch (Exception) { } }
+        if (said.Length == 0) return;
+        ShowToast($"Heard: “{(said.Length > 90 ? said[..90] + "…" : said)}”");
+        await ApplySmartAsync(said);
     }
 
     private void Host_DragOver(object sender, DragEventArgs e)
