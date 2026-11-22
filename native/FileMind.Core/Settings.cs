@@ -37,6 +37,10 @@ public sealed class AppSettings
     public List<string> Collapsed { get; set; } = [];
     /// <summary>Hide pictures and clips smaller than this many pixels (0 = show everything).</summary>
     public int MinSide { get; set; }
+    /// <summary>Look for a newer version at start-up (at most once a day).</summary>
+    public bool CheckUpdates { get; set; } = true;
+    public string? SkipVersion { get; set; }
+    public long LastUpdateCheck { get; set; }
     /// <summary>"short" or "long": which side of a picture the size is measured on.</summary>
     public string MinSideMode { get; set; } = "short";
     /// <summary>Order of the Library's sidebar sections (keys, top to bottom). Empty means the default order.</summary>

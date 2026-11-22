@@ -37,13 +37,17 @@ that runs on your own machine. Type what you remember ("red logo on black", "a m
 - **More like this.** Keep following similar files, endlessly.
 - **Automatic tags and colours** on every file. Filter by colour, type, source tool, date or size.
 - **Quick search from anywhere.** Press **Ctrl+Shift+Space** for a launcher with results, a preview and file details.
-- **Favourites and your own tags.** Star files, make coloured tags, and filter by them.
-- **A sidebar you can fold.** Click the heading of Tags, Spaces, Sources, Refine or any filter group to fold it away; File Mind remembers. Spaces shows five at first, with the rest one click away. Settings > Sidebar order lets you put the sections in any order you like.
+- **Favourites and colour labels.** Star files, or give them a Finder-style colour label (red to grey) from the right-click menu, then filter or sort by label. A small dot on the tile shows it.
+- **A sidebar you can fold.** Click the heading of Labels, Spaces, Sources, Refine or any filter group to fold it away; File Mind remembers. Spaces shows five at first, with the rest one click away. Settings > Sidebar order lets you put the sections in any order you like.
 
 ### 🧭 Explore your library
 - **Discover** visual themes (architecture, products, illustrations…) or start from a suggested question.
 - **Spaces.** Group files into collections. *Live* spaces keep matching files added later; *snapshots* stay fixed. **Auto-group** suggests named collections for you to review.
-- **Review duplicates**: byte-identical copies and visually similar matches. Nothing is deleted for you.
+- **Review duplicates**: byte-identical copies and visually similar matches. The last scan is remembered, so the page opens instantly; Scan again only re-reads files that changed. Nothing is deleted for you.
+- **Image sequences as one clip.** A folder of numbered frames (`render_0001.png`… PNG, JPG, TIFF, EXR, DPX, TGA) shows as one item with its frame count, searchable by a few sample frames and playable as a video with a speed menu. Delete, copy and move act on every frame.
+- **Hide small pictures.** Settings > Library can leave out anything under 256 to 1080 px. Nothing is deleted.
+- **See where your data is.** Settings > Storage lists everything File Mind keeps (index, previews, models, engine, logs), what it is for, how big it is, and lets you clear the safe parts.
+- **Updates.** File Mind checks for a new version once a day (you can turn that off) and, for an unzipped copy, downloads, verifies and installs it for you. winget and Microsoft Store copies update through their own tools.
 
 ### 🖱️ Work with your files
 - **Right-click a tile** in the Library for a menu: open, show in folder, copy the file or its path, favourite, find similar, add to a space, delete. Over several ticked files it acts on all of them. Right-click in the viewer for copy, show in Explorer, export and previous or next file.
@@ -53,7 +57,7 @@ that runs on your own machine. Type what you remember ("red logo on black", "a m
 - **Copy a video frame** as a PNG straight from the viewer.
 - **Export.** Save part of a video or sound as its own clip (mark the start with **I** and the end with **O**), turn files into MP4, WebM, GIF, MP3, WAV, JPG, PNG or WebP, shrink them to fit under a size, pull the sound out of a video, or make a contact sheet. Exports are always new files; the original is never changed. Select several files in the Library to export them together.
 - **Audio playback and transcripts**: play and scrub a waveform right on its tile, then transcribe speech on your device in the detected language.
-- **Previews for documents too**: PDFs show their first page, text, Markdown and Word files show a text card, and each opens in a viewer.
+- **Previews for documents too**: PDFs open as whole pages in one smooth scroll (fit width or whole page), text and Word files show a text card, and each opens in a viewer.
 - **File actions**: copy or move the original, or send it to the Recycle Bin. Copy and move never overwrite.
 - **Preview renames** before anything on disk changes; commits can be undone.
 

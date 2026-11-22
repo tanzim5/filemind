@@ -173,6 +173,16 @@
           <StackPanel Spacing="14">
             <StackPanel Orientation="Horizontal" Spacing="10"><local:LineIcon Kind="info" Size="16" Foreground="{StaticResource AccentBrush}"/><TextBlock Text="About" Style="{StaticResource CardTitle}"/></StackPanel>
             <TextBlock x:Name="About" Style="{StaticResource Helper}" IsTextSelectionEnabled="True"/>
+            <Grid ColumnSpacing="16">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <StackPanel Spacing="2"><TextBlock Text="Check for updates"/><TextBlock Text="Looks once a day, and asks before changing anything." Style="{StaticResource Helper}"/></StackPanel>
+              <ToggleSwitch x:Name="UpdatesSwitch" Grid.Column="1" OnContent="" OffContent="" MinWidth="0" Toggled="Updates_Toggled"/>
+            </Grid>
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <Button x:Name="UpdateCheckBtn" Content="Check now" Click="UpdateCheck_Click" Style="{StaticResource GlassButton}"/>
+              <Button x:Name="UpdateInstallBtn" Content="Update" Click="UpdateInstall_Click" Style="{StaticResource GlassAccentButton}" Visibility="Collapsed"/>
+              <TextBlock x:Name="UpdateStatus" Style="{StaticResource Helper}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+            </StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="10">
               <Button Content="Reset appearance and layout" Click="Reset_Click" Style="{StaticResource GlassButton}"/>
             </StackPanel>

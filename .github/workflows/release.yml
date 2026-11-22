@@ -77,11 +77,16 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Checksum (the in-app updater and winget verify the zip against this)
+        run: cd dist && sha256sum FileMind-Windows.zip | cut -d' ' -f1 | tr 'a-f' 'A-F' > FileMind-Windows.zip.sha256
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.release_tag || github.ref_name }}
-          files: dist/FileMind-Windows.zip
+          files: |
+            dist/FileMind-Windows.zip
+            dist/FileMind-Windows.zip.sha256
           body: |
             ## One download for every Windows 10/11 PC: `FileMind-Windows.zip`
 
@@ -97,3 +102,16 @@ jobs:
             You can force CPU or NVIDIA in Settings. After that File Mind works fully offline. Older releases (macOS, separate NVIDIA build) remain available on the Releases page.
 
             Made by [Tanzim](https://x.com/tanzim31).
+
+  # Sends the new version to the winget community repository. Needs the one-time setup in packaging/winget/README.md
+  # (the first manifest submitted by hand, then a WINGET_TOKEN secret and a WINGET_ENABLED=true repository variable).
+  winget:
+    needs: [release]
+    if: startsWith(github.ref, 'refs/tags/') && vars.WINGET_ENABLED == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: Tanzim.FileMind
+          installers-regex: 'FileMind-Windows\.zip$'
+          token: ${{ secrets.WINGET_TOKEN }}
