@@ -340,6 +340,42 @@ public sealed partial class SettingsPage : Page
         St.Volume = VolumeSlider.Value / 100; Save(); Labels(); ViewerPage.SetDefaultVolume(St.Volume);
     }
 
+    private void Updates_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (!_ready) return;
+        St.CheckUpdates = UpdatesSwitch.IsOn; Save();
+    }
+
+    private void ShowUpdate(UpdateInfo info)
+    {
+        UpdateStatus.Text = $"Version {info.Version} is available.";
+        UpdateInstallBtn.Content = Updater.Mode switch { InstallMode.Winget => "Update with winget", _ => "Download and install" };
+        UpdateInstallBtn.Visibility = Updater.Mode == InstallMode.Store ? Visibility.Collapsed : Visibility.Visible;
+        if (Updater.Mode == InstallMode.Store) UpdateStatus.Text += " The Microsoft Store will install it.";
+    }
+
+    private async void UpdateCheck_Click(object sender, RoutedEventArgs e)
+    {
+        UpdateCheckBtn.IsEnabled = false; UpdateStatus.Text = "Checking…";
+        try
+        {
+            var info = await Updater.CheckAsync(true);
+            if (info is null) { UpdateStatus.Text = $"File Mind {Updater.CurrentVersion} is the latest version (or GitHub could not be reached)."; UpdateInstallBtn.Visibility = Visibility.Collapsed; }
+            else ShowUpdate(info);
+        }
+        finally { UpdateCheckBtn.IsEnabled = true; }
+    }
+
+    private async void UpdateInstall_Click(object sender, RoutedEventArgs e)
+    {
+        if (Updater.Pending is not { } info) return;
+        UpdateInstallBtn.IsEnabled = false;
+        var progress = new Progress<double>(p => UpdateStatus.Text = $"Downloading… {p:P0}");
+        try { await Updater.InstallAsync(info, progress); }
+        catch (Exception ex) { App.Log("update-install", ex, ex.Message); UpdateStatus.Text = ex.Message; }
+        finally { UpdateInstallBtn.IsEnabled = true; }
+    }
+
     private void Reset_Click(object sender, RoutedEventArgs e)
     {
         var d = new AppSettings();
@@ -386,7 +422,11 @@ public sealed partial class SettingsPage : Page
         }
         catch (Exception ex) { FileMind.Core.Diag.Log("Settings.folders", ex); }
 
-        About.Text = $"File Mind {typeof(SettingsPage).Assembly.GetName().Version?.ToString(3)} (native)\nData: {rt.Paths.Root}";
+        About.Text = $"File Mind {Updater.CurrentVersion} (native)\nData: {rt.Paths.Root}\nInstalled as: {Updater.Mode switch { InstallMode.Store => "Microsoft Store (the Store updates it)", InstallMode.Winget => "winget", _ => "unzipped folder" }}";
+        UpdatesSwitch.IsOn = rt.Settings.CheckUpdates;
+        UpdateCheckBtn.IsEnabled = Updater.Available;
+        if (!Updater.Available) UpdateStatus.Text = "Updates are off while running from a source checkout.";
+        else if (Updater.Pending is { } p) ShowUpdate(p);
     }
 
     private async void Apply_Click(object sender, RoutedEventArgs e)
