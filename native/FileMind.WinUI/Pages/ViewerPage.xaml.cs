@@ -578,8 +578,8 @@ public sealed partial class ViewerPage : Page
         var pages = new StackPanel { Spacing = 16, HorizontalAlignment = HorizontalAlignment.Center, Padding = new Thickness(0, 16, 0, 24) };
         var sv = new ScrollViewer { Content = pages, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalAlignment = HorizontalAlignment.Stretch, Background = Ui.Brush("GlassFillBrush") };
         var counter = new TextBlock { FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center };
-        var mode = new Button { Style = Ui.Style("GlassButton"), Padding = new Thickness(10, 5, 10, 5), Content = new TextBlock { Text = "Whole page", FontSize = 12.5 } };
-        var pill = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Padding = new Thickness(14, 4, 6, 4), CornerRadius = new CornerRadius(8), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 14), Background = Ui.Brush("GlassFillBrush"), BorderBrush = Ui.Brush("GlassStrokeBrush"), BorderThickness = new Thickness(1) };
+        var mode = new Button { Style = Ui.Style("GlassButton"), Padding = new Thickness(10, 5, 10, 5), Content = new TextBlock { Text = "Fit width", FontSize = 12.5 } };
+        var pill = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Padding = new Thickness(14, 4, 6, 4), CornerRadius = new CornerRadius(8), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 12, 0, 0), Background = Ui.Brush("GlassFillBrush"), BorderBrush = Ui.Brush("GlassStrokeBrush"), BorderThickness = new Thickness(1) };
         pill.Children.Add(counter); pill.Children.Add(mode);
         var host = new Grid(); host.Children.Add(sv); host.Children.Add(pill);
         MediaHost.Children.Add(host);
@@ -602,7 +602,7 @@ public sealed partial class ViewerPage : Page
             }, ct);
             if (ct.IsCancellationRequested) return;
 
-            var cells = new Border[n]; var drawn = new bool[n]; var wide = true;
+            var cells = new Border[n]; var drawn = new bool[n]; var wide = false;       // opens showing each whole page
             var gate = new SemaphoreSlim(1, 1); var epoch = 0;
             for (var i = 0; i < n; i++)
             {
