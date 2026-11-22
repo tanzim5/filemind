@@ -74,7 +74,7 @@ public sealed partial class LibraryPage : Page
         SectionStack.Children.Clear();
         var byKey = new Dictionary<string, UIElement>
         {
-            ["types"] = SecTypes, ["tags"] = SecTags, ["spaces"] = SecSpaces, ["sources"] = SecSources,
+            ["types"] = SecTypes, ["labels"] = SecLabels, ["spaces"] = SecSpaces, ["sources"] = SecSources,
             ["refine"] = SecDetails, ["colours"] = SecColours, ["moods"] = SecMoods, ["folders"] = SecFolders,
         };
         foreach (var key in OrderedSectionKeys())
@@ -88,7 +88,7 @@ public sealed partial class LibraryPage : Page
     /// <summary>The sidebar sections in the default order, with their names for Settings.</summary>
     public static readonly (string Key, string Name)[] SidebarSections =
     [
-        ("types", "File types"), ("tags", "Tags"), ("spaces", "Spaces"), ("sources", "Sources"),
+        ("types", "File types"), ("labels", "Labels"), ("spaces", "Spaces"), ("sources", "Sources"),
         ("refine", "Refine"), ("colours", "Colours"), ("moods", "Looks & moods"), ("folders", "Folders"),
     ];
 
@@ -96,7 +96,7 @@ public sealed partial class LibraryPage : Page
     public static List<string> OrderedSectionKeys()
     {
         var all = SidebarSections.Select(s => s.Key).ToList();
-        var chosen = AppRuntime.Current.Settings.SidebarOrder.Where(all.Contains).Distinct().ToList();
+        var chosen = AppRuntime.Current.Settings.SidebarOrder.Select(k => k == "tags" ? "labels" : k).Where(all.Contains).Distinct().ToList();
         return chosen.Concat(all.Where(k => !chosen.Contains(k))).ToList();
     }
 
@@ -137,7 +137,7 @@ public sealed partial class LibraryPage : Page
     public LibraryPage()
     {
         InitializeComponent();
-        foreach (var (sec, key) in new (StackPanel, string)[] { (SecTags, "tags"), (SecSpaces, "spaces"), (SecSources, "sources"), (SecDetails, "refine"),
+        foreach (var (sec, key) in new (StackPanel, string)[] { (SecLabels, "labels"), (SecSpaces, "spaces"), (SecSources, "sources"), (SecDetails, "refine"),
                                                                (SecColours, "colours"), (SecMoods, "moods"), (SecFolders, "folders") })
             MakeCollapsible(sec, key);
         TileRepeater.ElementPrepared += (_, a) => Anim.In(a.Element, 160);
@@ -274,10 +274,14 @@ public sealed partial class LibraryPage : Page
             _moods = await Api.GetMoodsAsync();
             _projects = await Api.GetProjectsAsync();
             _tagList = (await Api.GetTagsAsync()).Tags;
+            _labelList = (await Api.GetLabelsAsync()).Labels;
         }
         catch (Exception ex) { FileMind.Core.Diag.Log("Library.panels", ex); }
         RebuildPanels();
     }
+
+    /// <summary>A display preference changed (for example the smallest size shown): the next visit reloads, and so does this one if it is open.</summary>
+    public void RefreshAfterPrefs() => _ = ReloadAsync();
 
     private async Task ReloadAsync()
     {
@@ -954,6 +958,25 @@ public sealed partial class LibraryPage : Page
 
     private bool _spacesAll;
 
+    /// <summary>The Sources chips: the sources in view, the active one first, six at first.</summary>
+    private void BuildSourceChips()
+    {
+        var srcAll = _sources.Where(x => x.Count > 0 || _q.Source == x.Key).OrderByDescending(x => x.Key == _q.Source).ThenByDescending(x => x.Count).ToList();
+        var srcShown = _allSources ? srcAll : srcAll.Take(6).ToList();
+        var srcChips = srcShown.Select(x =>
+            Chip(x.Label, _q.Source == x.Key, () => GoAsync(() => { _q.Source = _q.Source == x.Key ? null : x.Key; _title = ""; }), x.Color, x.Count, x.Label)).ToList();
+        if (srcAll.Count > 6)
+        {
+            var more = new HyperlinkButton { Content = _allSources ? "Show fewer" : $"+{srcAll.Count - 6} more", FontSize = 12, Padding = new Thickness(6, 4, 6, 4) };
+            more.Click += (_, _) => { _allSources = !_allSources; RebuildPanels(); };
+            srcChips.Add(more);
+        }
+        var byName = new HyperlinkButton { FontSize = 12, Padding = new Thickness(6, 4, 6, 4), Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { new LineIcon { Kind = "text", Size = 12 }, new TextBlock { Text = "By file name" } } } };
+        byName.Click += NameGroups_Click;
+        srcChips.Add(byName);
+        SourceChips.ItemsSource = srcChips;
+    }
+
     private void RebuildPanels()
     {
         _syncing = true;
@@ -996,20 +1019,7 @@ public sealed partial class LibraryPage : Page
 
             MoodChips.ItemsSource = _moods.Select(m => MoodChip(m, _tags.Any(t => t.Query == m.Query))).ToList();
 
-            var srcAll = _sources.Where(x => x.Count > 0 || _q.Source == x.Key).OrderByDescending(x => x.Key == _q.Source).ThenByDescending(x => x.Count).ToList();
-            var srcShown = _allSources ? srcAll : srcAll.Take(6).ToList();
-            var srcChips = srcShown.Select(x =>
-                Chip(x.Label, _q.Source == x.Key, () => GoAsync(() => { _q.Source = _q.Source == x.Key ? null : x.Key; _title = ""; }), x.Color, x.Count, x.Label)).ToList();
-            if (srcAll.Count > 6)
-            {
-                var more = new HyperlinkButton { Content = _allSources ? "Show fewer" : $"+{srcAll.Count - 6} more", FontSize = 12, Padding = new Thickness(6, 4, 6, 4) };
-                more.Click += (_, _) => { _allSources = !_allSources; RebuildPanels(); };
-                srcChips.Add(more);
-            }
-            var byName = new HyperlinkButton { FontSize = 12, Padding = new Thickness(6, 4, 6, 4), Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { new LineIcon { Kind = "text", Size = 12 }, new TextBlock { Text = "By file name" } } } };
-            byName.Click += NameGroups_Click;
-            srcChips.Add(byName);
-            SourceChips.ItemsSource = srcChips;
+            BuildSourceChips();
 
             SpaceList.Children.Clear();
             var hiddenSpaces = 0;
@@ -1062,7 +1072,7 @@ public sealed partial class LibraryPage : Page
                 FolderList.Children.Add(line);
             }
 
-            BuildTagChips();
+            BuildLabelChips();
             _ = FillRefineAsync();
 
             RebuildActiveChips();
@@ -1286,6 +1296,18 @@ public sealed partial class LibraryPage : Page
         }
     }
 
+    private async Task RefreshSourcesAsync(Dictionary<string, object?> scope, int gen)
+    {
+        try
+        {
+            var found = await Api.GetSourcesAsync(scope.Where(kv => kv.Value is not null && kv.Key != "source").ToDictionary(kv => kv.Key, kv => kv.Value));
+            if (gen != _refineGen) return;
+            _sources = found;
+            BuildSourceChips();
+        }
+        catch (Exception ex) { App.Log("sources", ex, null); }
+    }
+
     private async Task FillRefineAsync()
     {
         var gen = ++_refineGen;
@@ -1293,8 +1315,9 @@ public sealed partial class LibraryPage : Page
         {
             ["kind"] = _q.Kind == "all" ? null : _q.Kind, ["root"] = _q.Root, ["project"] = _q.Project,
             ["unassigned"] = _q.Unassigned ? true : null, ["color"] = _q.Color, ["near"] = _q.Near,
-            ["source"] = _q.Source, ["pattern"] = _q.Pattern, ["discover"] = _q.Discover,
+            ["source"] = _q.Source, ["pattern"] = _q.Pattern, ["discover"] = _q.Discover, ["tag"] = _q.Tag, ["label"] = _q.Label,
         };
+        _ = RefreshSourcesAsync(scope, gen);
         IEnumerable<int>? ids = IsPlainBrowse ? null : _tiles.Select(t => t.Item.Id).ToList();
         FacetResult r;
         try { r = await Api.GetFacetsAsync(scope.Where(kv => kv.Value is not null).ToDictionary(kv => kv.Key, kv => kv.Value), ids); }
@@ -1325,39 +1348,68 @@ public sealed partial class LibraryPage : Page
         RefineEmpty.Visibility = RefineGroups.Children.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    // ------------------------------------------------------------------ tags and favourites
+    // ------------------------------------------------------------------ colour labels and favourites
     private List<TagInfo> _tagList = [];
+    private List<LabelInfo> _labelList = [];
 
-    private void BuildTagChips()
+    private HashSet<string> ActiveLabels() => (_q.Label ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).ToHashSet();
+
+    private void BuildLabelChips()
     {
-        TagChips.Children.Clear();
-        foreach (var t in _tagList)
+        LabelChips.Children.Clear();
+        var favCount = _tagList.FirstOrDefault(t => t.Name == TagInfo.Favourite)?.Count ?? 0;
+        var favOn = string.Equals(_q.Tag, TagInfo.Favourite, StringComparison.OrdinalIgnoreCase);
+        LabelChips.Children.Add(Chip("\u2605  Favourites", favOn,
+            () => GoAsync(() => { _q.Tag = favOn ? null : TagInfo.Favourite; _title = ""; }), null, favCount));
+        var active = ActiveLabels();
+        foreach (var (name, title, hex) in LabelInfo.All)
         {
-            if (t.Name != TagInfo.Favourite && t.Count == 0 && _q.Tag != t.Name) continue;
-            var name = t.Name;
-            var fav = name == TagInfo.Favourite;
-            var chip = Chip(fav ? "\u2605  Favourites" : t.Name, string.Equals(_q.Tag, name, StringComparison.OrdinalIgnoreCase),
-                () => GoAsync(() => { _q.Tag = string.Equals(_q.Tag, name, StringComparison.OrdinalIgnoreCase) ? null : name; _title = ""; }),
-                fav ? null : t.Color, t.Count);
-            if (!fav)
+            var count = _labelList.FirstOrDefault(l => l.Name == name)?.Count ?? 0;
+            if (count == 0 && !active.Contains(name)) continue;
+            var n = name;
+            LabelChips.Children.Add(Chip(title, active.Contains(name), () => GoAsync(() =>
             {
-                var menu = new MenuFlyout();
-                var rename = new MenuFlyoutItem { Text = "Rename..." };
-                rename.Click += async (_, _) => { var n = await PromptAsync("Rename tag", name); if (n is null) return; _tagList = (await Api.DefineTagAsync(name, null, n)).Tags; BuildTagChips(); };
-                var colour = new MenuFlyoutSubItem { Text = "Colour" };
-                foreach (var (hex, label) in new[] { ("#EF4444", "Red"), ("#F59E0B", "Orange"), ("#22A559", "Green"), ("#3B82F6", "Blue"), ("#8B5CF6", "Purple"), ("#EC4899", "Pink"), ("#64748B", "Grey") })
-                {
-                    var item = new MenuFlyoutItem { Text = label, Icon = new FontIcon { Glyph = "\u25CF", Foreground = Brush(hex) } };
-                    item.Click += async (_, _) => { _tagList = (await Api.DefineTagAsync(name, hex)).Tags; BuildTagChips(); };
-                    colour.Items.Add(item);
-                }
-                var delete = new MenuFlyoutItem { Text = "Delete tag" };
-                delete.Click += async (_, _) => { await Api.DeleteTagAsync(name); _tagList = (await Api.GetTagsAsync()).Tags; if (_q.Tag == name) await GoAsync(() => _q.Tag = null); BuildTagChips(); };
-                menu.Items.Add(rename); menu.Items.Add(colour); menu.Items.Add(new MenuFlyoutSeparator()); menu.Items.Add(delete);
-                chip.ContextFlyout = menu;
-            }
-            TagChips.Children.Add(chip);
+                var set = ActiveLabels(); if (!set.Remove(n)) set.Add(n);
+                _q.Label = set.Count == 0 ? null : string.Join(',', set); _title = "";
+            }), hex, count));
         }
+    }
+
+    /// <summary>The colour choices for these files: a dot per colour, ticked when they all carry it, and "No label".</summary>
+    private void AddLabelItems(IList<MenuFlyoutItemBase> into, IReadOnlyList<FileItem> items)
+    {
+        var ids = items.Select(i => i.Id).ToList();
+        foreach (var (name, title, hex) in LabelInfo.All)
+        {
+            var on = items.All(i => i.Label == name);
+            var m = new ToggleMenuFlyoutItem { Text = title, IsChecked = on, Icon = new FontIcon { Glyph = "\u25CF", Foreground = Brush(hex) } };
+            m.Click += async (_, _) => await ApplyLabelAsync(ids, on ? null : name);
+            into.Add(m);
+        }
+        var none = new MenuFlyoutItem { Text = "No label", Icon = new FontIcon { Glyph = "\uE711" } };
+        none.Click += async (_, _) => await ApplyLabelAsync(ids, null);
+        into.Add(none);
+    }
+
+    private async Task ApplyLabelAsync(IReadOnlyCollection<int> ids, string? label)
+    {
+        try
+        {
+            _labelList = (await Api.SetLabelAsync(ids, label)).Labels;
+            foreach (var t in _tiles.Where(t => ids.Contains(t.Item.Id))) t.SetLabel(label);
+            BuildLabelChips();
+            if (_q.Label is not null || _q.Sort == "label") await ReloadAsync();
+        }
+        catch (Exception ex) { ShowToast(ex.Message); }
+    }
+
+    private void LabelSel_Click(object sender, RoutedEventArgs e)
+    {
+        var items = SelectedItems();
+        if (items.Count == 0) return;
+        var menu = new MenuFlyout();
+        AddLabelItems(menu.Items, items);
+        menu.ShowAt((FrameworkElement)sender);
     }
 
     private List<FileItem> SelectedItems() => _tiles.Where(t => _sel.Contains(t.Item.Id)).Select(t => t.Item).ToList();
@@ -1372,7 +1424,7 @@ public sealed partial class LibraryPage : Page
                 if (add is not null && !t.Item.Tags.Contains(add, StringComparer.OrdinalIgnoreCase)) t.Item.Tags.Add(add);
                 if (remove is not null) t.Item.Tags.RemoveAll(x => string.Equals(x, remove, StringComparison.OrdinalIgnoreCase));
             }
-            BuildTagChips();
+            BuildLabelChips();
             SyncFavButton();
         }
         catch (Exception ex) { ShowToast(ex.Message); }
@@ -1393,36 +1445,6 @@ public sealed partial class LibraryPage : Page
         var ids = items.Select(i => i.Id).ToList();
         if (items.All(i => i.IsFavourite)) { await ApplyTagsAsync(ids, null, TagInfo.Favourite); ShowToast($"Removed {ids.Count:N0} from Favourites."); }
         else { await ApplyTagsAsync(ids, TagInfo.Favourite, null); ShowToast($"Added {ids.Count:N0} to Favourites."); }
-    }
-
-    // Every tag, ticked when all selected files carry it, plus "New tag...".
-    private void TagSel_Click(object sender, RoutedEventArgs e)
-    {
-        var items = SelectedItems();
-        if (items.Count == 0) return;
-        var ids = items.Select(i => i.Id).ToList();
-        var menu = new MenuFlyout();
-        foreach (var t in _tagList.Where(t => t.Name != TagInfo.Favourite))
-        {
-            var name = t.Name;
-            var on = items.All(i => i.Tags.Contains(name, StringComparer.OrdinalIgnoreCase));
-            var item = new ToggleMenuFlyoutItem { Text = name, IsChecked = on, Icon = new FontIcon { Glyph = "\u25CF", Foreground = Brush(t.Color) } };
-            item.Click += async (_, _) => await ApplyTagsAsync(ids, on ? null : name, on ? name : null);
-            menu.Items.Add(item);
-        }
-        if (menu.Items.Count > 0) menu.Items.Add(new MenuFlyoutSeparator());
-        var add = new MenuFlyoutItem { Text = "New tag..." };
-        add.Click += async (_, _) => { var n = await PromptAsync("New tag", "Name the tag"); if (n is not null && n.Trim().Length > 0) await ApplyTagsAsync(ids, n.Trim(), null); };
-        menu.Items.Add(add);
-        menu.ShowAt((FrameworkElement)sender);
-    }
-
-    private async void NewTag_Click(object sender, RoutedEventArgs e)
-    {
-        var n = await PromptAsync("New tag", "Name the tag");
-        if (n is null || n.Trim().Length == 0) return;
-        try { _tagList = (await Api.DefineTagAsync(n.Trim(), null)).Tags; BuildTagChips(); ShowToast($"Made the tag {n.Trim()}. Select files and choose Tag to add it."); }
-        catch (Exception ex) { ShowToast(ex.Message); }
     }
 
     private async Task ApplySmartAsync(string input)

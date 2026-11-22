@@ -105,6 +105,18 @@ public sealed partial class ViewerPage : Page
             Entry("Show in Explorer", "", () => Reveal_Click(this, new RoutedEventArgs()));
             Entry("Export", "", () => Export_Click(this, new RoutedEventArgs()));
             ctx.Items.Add(new MenuFlyoutSeparator());
+            var label = new MenuFlyoutSubItem { Text = "Colour label", Icon = new FontIcon { Glyph = "" } };
+            foreach (var (name, title, hex) in LabelInfo.All)
+            {
+                var on = _item.Label == name; var n = name;
+                var li = new ToggleMenuFlyoutItem { Text = title, IsChecked = on, Icon = new FontIcon { Glyph = "●", Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, Convert.ToByte(hex[1..3], 16), Convert.ToByte(hex[3..5], 16), Convert.ToByte(hex[5..7], 16))) } };
+                li.Click += async (_, _) => { try { await Api.SetLabelAsync([_item.Id], on ? null : n); _item.Label = on ? null : n; } catch (Exception ex) { App.Log("viewer-label", ex, ex.Message); } };
+                label.Items.Add(li);
+            }
+            var noLabel = new MenuFlyoutItem { Text = "No label" };
+            noLabel.Click += async (_, _) => { try { await Api.SetLabelAsync([_item.Id], null); _item.Label = null; } catch (Exception ex) { App.Log("viewer-label", ex, ex.Message); } };
+            label.Items.Add(noLabel); ctx.Items.Add(label);
+            ctx.Items.Add(new MenuFlyoutSeparator());
             Entry("Previous file", "", () => Prev_Click(this, new RoutedEventArgs()), "Ctrl+←");
             Entry("Next file", "", () => Next_Click(this, new RoutedEventArgs()), "Ctrl+→");
             ctx.Closed += (_, _) => Focus(FocusState.Programmatic);

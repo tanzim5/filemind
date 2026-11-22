@@ -16,6 +16,8 @@ public sealed class FileQuery
     public string? Discover { get; set; }
     public string? Pattern { get; set; }
     public string? Tag { get; set; }
+    /// <summary>Colour labels to show, comma separated ("red,blue").</summary>
+    public string? Label { get; set; }
     public string Sort { get; set; } = "mtime";
 
     public double? After { get; set; }
@@ -55,7 +57,7 @@ public sealed class FileQuery
 
     /// <summary>True when something other than the plain sort narrows the library.</summary>
     public bool IsNarrowed => Kind != "all" || Root is not null || Project is not null || Unassigned
-        || Color is not null || Near is not null || Source is not null || Discover is not null || Pattern is not null || Tag is not null || HasDetailFilters;
+        || Color is not null || Near is not null || Source is not null || Discover is not null || Pattern is not null || Tag is not null || Label is not null || HasDetailFilters;
 
     public string ToQueryString(int limit, int offset)
     {
@@ -69,7 +71,7 @@ public sealed class FileQuery
         if (Kind != "all") Add("kind", Kind);
         Add("root", Root); Add("project", Project);
         if (Unassigned) Add("unassigned", "true");
-        Add("color", Color); Add("near", Near); Add("source", Source); Add("discover", Discover); Add("pattern", Pattern); Add("tag", Tag);
+        Add("color", Color); Add("near", Near); Add("source", Source); Add("discover", Discover); Add("pattern", Pattern); Add("tag", Tag); Add("label", Label);
         foreach (var (k, v) in DetailFilters()) Add(k, v);
         return string.Join('&', parts);
     }
@@ -84,6 +86,7 @@ public sealed class FileQuery
         if (Color is not null) body["color"] = Color;
         if (Source is not null) body["source"] = Source;
         if (Tag is not null) body["tag"] = Tag;
+        if (Label is not null) body["label"] = Label;
         var f = DetailFilters();
         if (f.Count > 0) body["filters"] = f;
         return body;

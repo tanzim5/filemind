@@ -22,7 +22,10 @@ public sealed partial class SettingsPage : Page
         InitializeComponent();
         Loaded += async (_, _) => await FillAsync();
         GlassSlider.Value = St.Transparency * 100;
+        MinSideBox.SelectedIndex = Math.Max(0, new[] { 0, 256, 300, 512, 720, 1080 }.ToList().IndexOf(St.MinSide));
+        MinSideModeBox.SelectedIndex = St.MinSideMode == "long" ? 1 : 0;
         BuildOrder();
+        _ = BuildStorageAsync();
         ShowHotkey(); KeepSwitch.IsOn = St.KeepRunning;
         VoiceChoice.SelectedIndex = St.VoiceEngine == "windows" ? 1 : 0;
         SimilarChoice.SelectedIndex = St.SimilarFiles == "side" ? 1 : 0;
@@ -40,6 +43,15 @@ public sealed partial class SettingsPage : Page
         if (!_ready) return;
         St.SimilarFiles = SimilarChoice.SelectedIndex == 1 ? "side" : "below";
         Save();
+    }
+
+    private async void MinSide_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_ready || MinSideBox.SelectedItem is not ComboBoxItem n || MinSideModeBox.SelectedItem is not ComboBoxItem m) return;
+        St.MinSide = int.Parse((string)n.Tag); St.MinSideMode = (string)m.Tag;
+        Save();
+        if (AppRuntime.Current.Api is { } api) await api.SetMinSideAsync(St.MinSide, St.MinSideMode);
+        LibraryPage.Current?.RefreshAfterPrefs();
     }
 
     private async void Speed_Changed(object sender, SelectionChangedEventArgs e)
@@ -116,7 +128,7 @@ public sealed partial class SettingsPage : Page
 
     private void BuildSections()
     {
-        foreach (var (name, card) in new (string, FrameworkElement)[] { ("Appearance", SecAppearance), ("Library", SecLibrary), ("Quick search", SecQuick), ("Sidebar", SecSidebar), ("Viewer", SecViewer), ("Engine", SecEngine), ("Folders", SecFolders), ("About", SecAbout) })
+        foreach (var (name, card) in new (string, FrameworkElement)[] { ("Appearance", SecAppearance), ("Library", SecLibrary), ("Quick search", SecQuick), ("Sidebar", SecSidebar), ("Viewer", SecViewer), ("Engine", SecEngine), ("Folders", SecFolders), ("Storage", SecStorage), ("About", SecAbout) })
         {
             var chip = new ToggleButton { Style = Ui.Style("GlassChip"), Padding = new Thickness(12, 5, 12, 5), CornerRadius = new CornerRadius(6), Content = new TextBlock { Text = name, FontSize = 12.5 } };
             var c = card;
@@ -386,6 +398,46 @@ public sealed partial class SettingsPage : Page
         await App.Window!.RestartEngineAsync();
     }
 
-    private void OpenData_Click(object sender, RoutedEventArgs e) =>
-        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{AppRuntime.Current.Paths.Root}\"") { UseShellExecute = false });
+    // ---- Storage: what is kept on disk, how big, and what can be cleared ----
+    private async Task BuildStorageAsync()
+    {
+        var rt = AppRuntime.Current;
+        var (data, models, runtime, logs) = rt.StorageFolders();
+        var entries = StorageInfo.Describe(data, models, runtime, logs, rt.Paths.SettingsFile, AppContext.BaseDirectory.TrimEnd(System.IO.Path.DirectorySeparatorChar));
+        await Task.Run(() => StorageInfo.Measure(entries, data, rt.Paths.SettingsFile));
+        StorageList.Children.Clear();
+        StorageTotal.Text = $"In total about {StorageInfo.Format(entries.Sum(e => e.Bytes))}.";
+        foreach (var e in entries.Where(e => e.Bytes > 0 || e.Clearable))
+        {
+            var entry = e;
+            var row = new Grid { ColumnSpacing = 10, Padding = new Thickness(12, 9, 8, 9), CornerRadius = new CornerRadius(6), Background = Ui.Brush("GlassFillBrush") };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var text = new StackPanel { Spacing = 2 };
+            text.Children.Add(new TextBlock { Text = entry.Name });
+            text.Children.Add(new TextBlock { Text = entry.Purpose, Style = Ui.Style("Helper"), TextWrapping = TextWrapping.Wrap });
+            text.Children.Add(new TextBlock { Text = entry.Path, Style = Ui.Style("Helper"), IsTextSelectionEnabled = true, TextTrimming = TextTrimming.CharacterEllipsis, Opacity = 0.7 });
+            row.Children.Add(text);
+            var size = new TextBlock { Text = StorageInfo.Format(entry.Bytes), VerticalAlignment = VerticalAlignment.Center, MinWidth = 64, TextAlignment = TextAlignment.Right };
+            Grid.SetColumn(size, 1); row.Children.Add(size);
+            var open = new Button { Style = Ui.Style("GlassButton"), Content = "Open", Padding = new Thickness(12, 5, 12, 5), VerticalAlignment = VerticalAlignment.Center };
+            open.Click += (_, _) => { try { Process.Start(new ProcessStartInfo("explorer.exe", $"\"{entry.Path}\"") { UseShellExecute = false }); } catch (Exception ex) { App.Log("storage-open", ex, ex.Message); } };
+            Grid.SetColumn(open, 2); row.Children.Add(open);
+            if (entry.Clearable && entry.Bytes > 0)
+            {
+                var clear = new Button { Style = Ui.Style("GlassButton"), Content = "Clear", Padding = new Thickness(12, 5, 12, 5), VerticalAlignment = VerticalAlignment.Center };
+                clear.Click += async (_, _) =>
+                {
+                    var dlg = new ContentDialog { XamlRoot = XamlRoot, Title = $"Clear {entry.Name.ToLowerInvariant()}?", Content = $"This frees {StorageInfo.Format(entry.Bytes)}. {entry.ClearNote} Your own files are not touched.", PrimaryButtonText = "Clear", CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Close };
+                    if (await dlg.ShowAsync() != ContentDialogResult.Primary) return;
+                    await Task.Run(() => StorageInfo.Clear(entry));
+                    await BuildStorageAsync();
+                };
+                Grid.SetColumn(clear, 3); row.Children.Add(clear);
+            }
+            StorageList.Children.Add(row);
+        }
+    }
 }

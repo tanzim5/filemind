@@ -17,7 +17,7 @@ class DiscoverTests(unittest.TestCase):
         self.conn = sqlite3.connect(":memory:")
         self.conn.row_factory = sqlite3.Row
         self.addCleanup(self.conn.close)
-        self.conn.execute("CREATE TABLE files (id INTEGER, path TEXT, name TEXT, kind TEXT, mtime REAL, thumb TEXT, vec BLOB, status TEXT)")
+        self.conn.execute("CREATE TABLE files (id INTEGER, path TEXT, name TEXT, kind TEXT, mtime REAL, thumb TEXT, vec BLOB, status TEXT, width INTEGER, height INTEGER)")
         self.patch_db = patch.object(discover.db, "conn", return_value=self.conn)
         self.patch_ready = patch.object(discover.embedder, "ready", return_value=False)
         self.patch_db.start()
@@ -34,8 +34,8 @@ class DiscoverTests(unittest.TestCase):
         exif[271] = "Canon"
         exif[272] = "EOS R5"
         image.save(path, exif=exif)
-        self.conn.execute("INSERT INTO files VALUES (1, ?, ?, 'image', 1, '1.jpg', NULL, 'done')", (str(path), path.name))
-        self.conn.execute("INSERT INTO files VALUES (2, ?, 'ChatGPT Image.png', 'image', 1, '2.jpg', NULL, 'done')", (str(path),))
+        self.conn.execute("INSERT INTO files VALUES (1, ?, ?, 'image', 1, '1.jpg', NULL, 'done', NULL, NULL)", (str(path), path.name))
+        self.conn.execute("INSERT INTO files VALUES (2, ?, 'ChatGPT Image.png', 'image', 1, '2.jpg', NULL, 'done', NULL, NULL)", (str(path),))
         self.conn.commit()
 
         preview = {group["key"]: group for group in discover._quick_groups((2, 3, 2))}
@@ -53,7 +53,7 @@ class DiscoverTests(unittest.TestCase):
         category_count = len(discover.CATEGORIES)
         for i in range(category_count * 2):
             vector = np.eye(category_count, dtype=np.float32)[i // 2]
-            self.conn.execute("INSERT INTO files VALUES (?, ?, ?, 'image', 1, 'thumb.jpg', ?, 'done')",
+            self.conn.execute("INSERT INTO files VALUES (?, ?, ?, 'image', 1, 'thumb.jpg', ?, 'done', NULL, NULL)",
                               (i + 1, str(Path(self.tmp.name) / f'{i}.png'), f'{i}.png', vector.tobytes()))
         self.conn.commit()
         query_index = {category[3]: i for i, category in enumerate(discover.CATEGORIES)}

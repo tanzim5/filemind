@@ -21,6 +21,10 @@ public sealed class TileVm(FileItem item, ApiClient api) : INotifyPropertyChange
     public Visibility GlyphVisible => Item.HasThumb || Item.Kind == "audio" ? Visibility.Collapsed : Visibility.Visible;
     public Visibility AudioVisible => Item.Kind == "audio" ? Visibility.Visible : Visibility.Collapsed;
     public string IconKind => Item.Kind switch { "audio" => "music", "video" => "video", _ => "file" };
+    public Visibility LabelVisible => Item.Label is null ? Visibility.Collapsed : Visibility.Visible;
+    public Microsoft.UI.Xaml.Media.Brush LabelBrush => new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255,
+        Convert.ToByte(LabelInfo.Hex(Item.Label)[1..3], 16), Convert.ToByte(LabelInfo.Hex(Item.Label)[3..5], 16), Convert.ToByte(LabelInfo.Hex(Item.Label)[5..7], 16)));
+    public void SetLabel(string? label) { Item.Label = label; Raise(nameof(LabelVisible), nameof(LabelBrush)); }
     public Visibility BadgeVisible => Item.DurationText.Length > 0 && Item.Kind != "audio" ? Visibility.Visible : Visibility.Collapsed;
     public string Badge => Item.DurationText;
 

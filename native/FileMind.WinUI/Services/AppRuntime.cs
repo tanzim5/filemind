@@ -42,6 +42,14 @@ public sealed class AppRuntime
     }
 
     /// <summary>What to run right now, or null when the engine folder is missing from the app.</summary>
+    /// <summary>Where the engine keeps its data, models, runtime and logs right now (the working copy while developing).</summary>
+    public (string Data, string Models, string Runtime, string Logs) StorageFolders()
+    {
+        if (SourceLabel is not null && EngineLocator.FindSourceCheckout(AppContext.BaseDirectory) is { } src)
+            return (Path.Combine(src.WorkingDir, "data"), Path.Combine(src.WorkingDir, "models"), Path.Combine(src.WorkingDir, ".venv"), Paths.Logs);
+        return (Paths.Data, Paths.Models, Paths.Runtime, Paths.Logs);
+    }
+
     public EngineLaunch? ResolveLaunch()
     {
         var wantInstalled = Environment.GetEnvironmentVariable("FILEMIND_ENGINE") == "installed";
@@ -61,6 +69,7 @@ public sealed class AppRuntime
         Api?.Dispose();
         Api = new ApiClient(Host.BaseUri, Host.Token);
         _ = Api.SetIndexSpeedAsync(Settings.IndexSpeed);
+        _ = Api.SetMinSideAsync(Settings.MinSide, Settings.MinSideMode);
     }
 
     public void Shutdown()
