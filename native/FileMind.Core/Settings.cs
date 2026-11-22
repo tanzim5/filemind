@@ -35,6 +35,10 @@ public sealed class AppSettings
     public string IndexSpeed { get; set; } = "balanced";
     /// <summary>Sidebar sections the person folded away (by key, e.g. "spaces" or "refine:Shape").</summary>
     public List<string> Collapsed { get; set; } = [];
+    /// <summary>Hide pictures and clips smaller than this many pixels (0 = show everything).</summary>
+    public int MinSide { get; set; }
+    /// <summary>"short" or "long": which side of a picture the size is measured on.</summary>
+    public string MinSideMode { get; set; } = "short";
     /// <summary>Order of the Library's sidebar sections (keys, top to bottom). Empty means the default order.</summary>
     public List<string> SidebarOrder { get; set; } = [];
     /// <summary>Where the viewer shows similar files: "below" the file (default) or "side" (the Similar tab in the side panel).</summary>

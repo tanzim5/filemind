@@ -58,6 +58,17 @@
               <StackPanel Spacing="2"><TextBlock Text="Show file names"/><TextBlock Text="Under every tile." Style="{StaticResource Helper}"/></StackPanel>
               <ToggleSwitch x:Name="NamesSwitch" Grid.Column="1" OnContent="" OffContent="" MinWidth="0" Toggled="Names_Toggled"/>
             </Grid>
+            <Grid ColumnSpacing="12">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <StackPanel Spacing="2"><TextBlock Text="Hide small pictures and clips"/><TextBlock Text="Anything smaller than this is left out of every view and search. Nothing is deleted, and turning it off brings everything back." Style="{StaticResource Helper}" TextWrapping="Wrap"/></StackPanel>
+              <ComboBox x:Name="MinSideBox" Grid.Column="1" Width="120" VerticalAlignment="Center" SelectionChanged="MinSide_Changed">
+                <ComboBoxItem Content="Show all" Tag="0"/><ComboBoxItem Content="256 px" Tag="256"/><ComboBoxItem Content="300 px" Tag="300"/><ComboBoxItem Content="512 px" Tag="512"/>
+                <ComboBoxItem Content="720 px" Tag="720"/><ComboBoxItem Content="1080 px" Tag="1080"/>
+              </ComboBox>
+              <ComboBox x:Name="MinSideModeBox" Grid.Column="2" Width="130" VerticalAlignment="Center" SelectionChanged="MinSide_Changed">
+                <ComboBoxItem Content="Shorter side" Tag="short"/><ComboBoxItem Content="Longer side" Tag="long"/>
+              </ComboBox>
+            </Grid>
           </StackPanel>
         </Border>
 
@@ -149,12 +160,20 @@
           </StackPanel>
         </Border>
 
+        <Border x:Name="SecStorage" Style="{StaticResource GlassCard}">
+          <StackPanel Spacing="14">
+            <StackPanel Orientation="Horizontal" Spacing="10"><local:LineIcon Kind="f-library" Size="16" Foreground="{StaticResource AccentBrush}"/><TextBlock Text="Storage" Style="{StaticResource CardTitle}"/></StackPanel>
+            <TextBlock Text="Everything File Mind keeps on this PC, what it is for and how much room it takes. Your own files are never copied or moved." Style="{StaticResource Helper}" TextWrapping="Wrap"/>
+            <TextBlock x:Name="StorageTotal" Style="{StaticResource SecondaryText}" Text="Adding it up…"/>
+            <StackPanel x:Name="StorageList" Spacing="10"/>
+          </StackPanel>
+        </Border>
+
         <Border x:Name="SecAbout" Style="{StaticResource GlassCard}">
           <StackPanel Spacing="14">
             <StackPanel Orientation="Horizontal" Spacing="10"><local:LineIcon Kind="info" Size="16" Foreground="{StaticResource AccentBrush}"/><TextBlock Text="About" Style="{StaticResource CardTitle}"/></StackPanel>
             <TextBlock x:Name="About" Style="{StaticResource Helper}" IsTextSelectionEnabled="True"/>
             <StackPanel Orientation="Horizontal" Spacing="10">
-              <Button Content="Open data folder" Click="OpenData_Click" Style="{StaticResource GlassButton}"/>
               <Button Content="Reset appearance and layout" Click="Reset_Click" Style="{StaticResource GlassButton}"/>
             </StackPanel>
           </StackPanel>

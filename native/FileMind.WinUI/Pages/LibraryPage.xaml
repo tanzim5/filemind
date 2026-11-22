@@ -17,6 +17,8 @@
         <TextBlock Text="{x:Bind Name}" FontSize="12" Margin="12,0,12,10" VerticalAlignment="Bottom"
                    TextTrimming="CharacterEllipsis" MaxLines="1" Foreground="White"
                    Visibility="{x:Bind NameVisible, Mode=OneWay}"/>
+        <Border Width="11" Height="11" CornerRadius="6" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,10,13" BorderBrush="#CCFFFFFF" BorderThickness="1.5"
+                Background="{x:Bind LabelBrush, Mode=OneWay}" Visibility="{x:Bind LabelVisible, Mode=OneWay}" IsHitTestVisible="False"/>
         <Border Visibility="{x:Bind BadgeVisible}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,10,0"
                 Background="#99000000" CornerRadius="4" Padding="8,2">
           <TextBlock Text="{x:Bind Badge}" FontSize="11" Foreground="White"/>
@@ -52,13 +54,9 @@
               <local:WrapPanel x:Name="TypeChips" Columns="3" Spacing="6"/>
             </StackPanel>
 
-            <StackPanel x:Name="SecTags" Spacing="8">
-              <Grid>
-                <TextBlock Text="Tags" Style="{StaticResource SectionLabel}" VerticalAlignment="Center"/>
-                <Button Style="{StaticResource GlassButton}" HorizontalAlignment="Right" Padding="6,1" CornerRadius="4" Click="NewTag_Click" ToolTipService.ToolTip="New tag">
-                  <local:LineIcon Kind="plus" Size="11"/></Button>
-              </Grid>
-              <local:WrapPanel x:Name="TagChips" Columns="2" Spacing="6"/>
+            <StackPanel x:Name="SecLabels" Spacing="8">
+              <TextBlock Text="Labels" Style="{StaticResource SectionLabel}" VerticalAlignment="Center"/>
+              <local:WrapPanel x:Name="LabelChips" Columns="2" Spacing="6"/>
             </StackPanel>
 
             <StackPanel x:Name="SecSources" Spacing="8">
@@ -179,8 +177,8 @@
             <TextBlock x:Name="SelCount" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" Margin="6,0,8,0"/>
             <Button x:Name="FavBtn" Style="{StaticResource GlassButton}" Click="Favourite_Click" Padding="9,5" ToolTipService.ToolTip="Favourite">
               <StackPanel Orientation="Horizontal" Spacing="6"><local:LineIcon x:Name="FavIcon" Kind="star" Size="13"/><TextBlock x:Name="FavText" Text="Favourite" FontSize="12.5"/></StackPanel></Button>
-            <Button Style="{StaticResource GlassButton}" Click="TagSel_Click" Padding="9,5" ToolTipService.ToolTip="Tag the selected files">
-              <StackPanel Orientation="Horizontal" Spacing="6"><local:LineIcon Kind="tag" Size="13"/><TextBlock Text="Tag" FontSize="12.5"/></StackPanel></Button>
+            <Button Style="{StaticResource GlassButton}" Click="LabelSel_Click" Padding="9,5" ToolTipService.ToolTip="Colour-label the selected files">
+              <StackPanel Orientation="Horizontal" Spacing="6"><local:LineIcon Kind="tag" Size="13"/><TextBlock Text="Label" FontSize="12.5"/></StackPanel></Button>
             <Border Width="1" Height="18" Background="{StaticResource DividerBrush}" Margin="4,0"/>
             <ComboBox x:Name="SpacePick" MinWidth="130" PlaceholderText="Choose a space" VerticalAlignment="Center" FontSize="12.5"/>
             <Button Style="{StaticResource GlassAccentButton}" Click="AddToSpace_Click" Padding="9,5">
@@ -293,6 +291,7 @@
               <MenuFlyoutItem Text="Name A–Z" Tag="name" Click="Sort_Click"/>
               <MenuFlyoutItem Text="Largest first" Tag="size" Click="Sort_Click"/>
               <MenuFlyoutItem Text="By colour (rainbow)" Tag="color" Click="Sort_Click"/>
+              <MenuFlyoutItem Text="By colour label" Tag="label" Click="Sort_Click"/>
             </MenuFlyout>
           </Button.Flyout>
         </Button>

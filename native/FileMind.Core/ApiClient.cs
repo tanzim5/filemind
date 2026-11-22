@@ -74,6 +74,15 @@ public sealed class ApiClient(Uri baseUri, string token = "") : IDisposable
         using var response = await _http.DeleteAsync($"/api/tags/{Uri.EscapeDataString(name)}", ct);
         response.EnsureSuccessStatusCode();
     }
+    public Task<LabelList> GetLabelsAsync(CancellationToken ct = default) => GetAsync<LabelList>("/api/labels", ct);
+    /// <summary>Gives files a colour label, or clears it with null.</summary>
+    public Task<LabelList> SetLabelAsync(IEnumerable<int> ids, string? label, CancellationToken ct = default) =>
+        PostAsync<LabelList>("/api/labels", new { ids = ids.ToArray(), label }, ct);
+    /// <summary>Hides pictures and clips below this size (0 = show all). Nothing is deleted.</summary>
+    public async Task SetMinSideAsync(int pixels, string mode)
+    {
+        try { using var r = await _http.PostAsJsonAsync("/api/prefs", new { min_side = pixels, min_side_mode = mode }); } catch (Exception) { }
+    }
     public Task<TagList> GetTagsAsync(CancellationToken ct = default) => GetAsync<TagList>("/api/tags", ct);
     public Task<TagList> TagFilesAsync(IEnumerable<int> ids, IEnumerable<string>? add, IEnumerable<string>? remove, CancellationToken ct = default) =>
         PostAsync<TagList>("/api/tags", new { ids = ids.ToList(), add = add?.ToList() ?? [], remove = remove?.ToList() ?? [] }, ct);
@@ -132,6 +141,9 @@ public sealed class ApiClient(Uri baseUri, string token = "") : IDisposable
 
     public Task<List<ColorSwatch>> GetColorsAsync(CancellationToken ct = default) => GetAsync<List<ColorSwatch>>("/api/colors", ct);
     public async Task<List<SourceEntry>> GetSourcesAsync(CancellationToken ct = default) => (await GetAsync<SourcesResponse>("/api/sources", ct)).Sources;
+    /// <summary>Source counts over what is on screen only, so the list follows the view.</summary>
+    public async Task<List<SourceEntry>> GetSourcesAsync(Dictionary<string, object?> scope, CancellationToken ct = default) =>
+        (await PostAsync<SourcesResponse>("/api/sources", scope, ct)).Sources;
     public Task<List<MoodEntry>> GetMoodsAsync(CancellationToken ct = default) => GetAsync<List<MoodEntry>>("/api/moods", ct);
     public Task<List<ProjectEntry>> GetProjectsAsync(CancellationToken ct = default) => GetAsync<List<ProjectEntry>>("/api/projects", ct);
     public Task<FileDetails> GetInfoAsync(int id, CancellationToken ct = default) => GetAsync<FileDetails>($"/api/info/{id}", ct);

@@ -29,6 +29,7 @@ class FileActionTests(unittest.TestCase):
             CREATE TABLE proposed_names (file_id INTEGER, new_name TEXT);
             CREATE TABLE file_tags (file_id INTEGER, tag TEXT);
             CREATE TABLE moments (file_id INTEGER);
+            CREATE TABLE file_labels (file_id INTEGER, label TEXT);
             CREATE TABLE moment_runs (file_id INTEGER);
             CREATE TABLE space_dismissals (project_id INTEGER, file_id INTEGER);
             INSERT INTO project_files VALUES (4, 1);

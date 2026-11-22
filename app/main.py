@@ -1,7 +1,9 @@
 import asyncio
 import os
 import json
+import logging
 import re
+import sqlite3
 import subprocess
 import sys
 import time
@@ -43,6 +45,7 @@ def _startup():
     c.execute("DELETE FROM project_files WHERE file_id NOT IN (SELECT id FROM files)")
     c.execute("DELETE FROM proposed_names WHERE file_id NOT IN (SELECT id FROM files)")
     c.commit()
+    _migrate_labels(c)
     _drop_files(c, "root_id NOT IN (SELECT id FROM roots)")     # left behind by a folder that was forgotten long ago
     _sweep_thumbs(c)
     indexer.invalidate()
@@ -79,9 +82,10 @@ def _file_dict(r, score=None):
     d = {"tw": dm[0] if dm else None, "th": dm[1] if dm else None, "id": r["id"], "name": r["name"], "path": r["path"], "ext": r["ext"], "kind": r["kind"],
          "size": r["size"], "mtime": r["mtime"], "has_thumb": bool(r["thumb"]),
          "status": r["status"], "mode": r["embed_mode"], "snippet": r["snippet"],
-         "dom": r["dom"] or None, "src": names_mod.source_of(r["name"])}
+         "dom": r["dom"] or None, "src": names_mod.source_of_row(r)}
     d.update({key: r[key] for key in ("width", "height", "duration", "fps", "codec") if key in r.keys()})
     d["tags"] = _file_tags().get(r["id"], [])
+    d["label"] = _file_labels().get(r["id"])
     if score is not None:
         d["score"] = round(float(score), 4)
     return d
@@ -169,7 +173,7 @@ def add_root(body: dict = Body(...)):
     return {"id": rid, "path": path}
 
 
-_FILE_LINKS = ("project_files", "proposed_names", "file_tags", "moments", "moment_runs", "space_dismissals")
+_FILE_LINKS = ("project_files", "proposed_names", "file_tags", "file_labels", "moments", "moment_runs", "space_dismissals")
 
 
 def _drop_files(c, where: str, args: tuple = ()) -> int:
@@ -238,8 +242,11 @@ def files(root: int | None = None, kind: str | None = None, project: int | None 
           min_width: int | None = None, min_height: int | None = None, min_pixels: int | None = None,
           min_duration: float | None = None, max_duration: float | None = None,
           min_fps: float | None = None, aspect: str | None = None,
-          codec: str | None = None, ids_only: bool = False, tag: str | None = None):
+          codec: str | None = None, ids_only: bool = False, tag: str | None = None, label: str | None = None):
     where, args = ["f.status='done'"], []      # only fully read files; never half-processed cards
+    hide = _min_side_sql()
+    if hide:
+        where.append(hide)
     if root:
         where.append("f.root_id=?"); args.append(root)
     if kind and kind != "all":
@@ -253,6 +260,10 @@ def files(root: int | None = None, kind: str | None = None, project: int | None 
         where.append("f.id NOT IN (SELECT file_id FROM project_files)")
     if tag:
         where.append("f.id IN (SELECT file_id FROM file_tags WHERE tag=?)"); args.append(tag)
+    if label:
+        wanted = [x for x in label.split(",") if x in LABELS]
+        if wanted:
+            where.append(f"f.id IN (SELECT file_id FROM file_labels WHERE label IN ({','.join('?' * len(wanted))}))"); args += wanted
     if after is not None:
         where.append("f.mtime>=?"); args.append(after)
     if before is not None:
@@ -277,9 +288,11 @@ def files(root: int | None = None, kind: str | None = None, project: int | None 
         where.append("(" + aspect_sql[aspect] + ")")
     if codec:
         where.append("f.codec=?"); args.append(codec.lower())
-    order = {"mtime": "f.mtime DESC", "name": "f.name COLLATE NOCASE", "size": "f.size DESC"}.get(sort, "f.mtime DESC")
+    order = {"mtime": "f.mtime DESC", "name": "f.name COLLATE NOCASE", "size": "f.size DESC",
+             "label": "COALESCE((SELECT CASE label WHEN 'red' THEN 1 WHEN 'orange' THEN 2 WHEN 'yellow' THEN 3 WHEN 'green' THEN 4 "
+                      "WHEN 'blue' THEN 5 WHEN 'purple' THEN 6 ELSE 7 END FROM file_labels WHERE file_id=f.id), 9), f.mtime DESC"}.get(sort, "f.mtime DESC")
     c = db.conn()
-    base = c.execute(f"SELECT f.id, f.name, f.dom, f.pal FROM files f WHERE {' AND '.join(where)} ORDER BY {order}", args).fetchall()
+    base = c.execute(f"SELECT f.id, f.name, f.path, f.width, f.height, f.dom, f.pal FROM files f WHERE {' AND '.join(where)} ORDER BY {order}", args).fetchall()
     meta = {r["id"]: r for r in base}
     ids = [r["id"] for r in base]
     if smart_members is not None:
@@ -289,9 +302,9 @@ def files(root: int | None = None, kind: str | None = None, project: int | None 
         ids = [i for i in ids if i in discovered]
     # filters that are computed (file-name source / pattern, colour) are applied here
     if source:
-        ids = [i for i in ids if (names_mod.source_of(meta[i]["name"]) or "none") == source]
+        ids = [i for i in ids if (names_mod.source_of_row(meta[i]) or "none") == source]
     if pattern:
-        ids = [i for i in ids if names_mod.source_of(meta[i]["name"]) is None and names_mod.signature(meta[i]["name"]) == pattern]
+        ids = [i for i in ids if names_mod.source_of_row(meta[i]) is None and names_mod.signature(meta[i]["name"]) == pattern]
     if color:
         share = {i: colors_mod.shares(meta[i]["pal"]).get(color, 0) for i in ids}
         ids = [i for i in ids if share[i] >= colors_mod.MIN_SHARE]
@@ -315,6 +328,107 @@ def files(root: int | None = None, kind: str | None = None, project: int | None 
         d["proposed"] = pn.get(i)
         out.append(d)
     return {"total": total, "files": out}
+
+
+# ---------------------------------------------------------------- colour labels (Finder-style) and display preferences
+LABELS = ("red", "orange", "yellow", "green", "blue", "purple", "grey")
+_LABEL_RGB = {"red": (239, 68, 68), "orange": (249, 115, 22), "yellow": (234, 179, 8), "green": (34, 197, 94),
+              "blue": (59, 130, 246), "purple": (168, 85, 247), "grey": (156, 163, 175)}
+_label_cache: dict | None = None
+
+
+def _file_labels() -> dict:
+    global _label_cache
+    if _label_cache is None:
+        try:
+            _label_cache = {r[0]: r[1] for r in db.conn().execute("SELECT file_id, label FROM file_labels")}
+        except sqlite3.OperationalError:
+            return {}
+    return _label_cache
+
+
+def _migrate_labels(c) -> None:
+    """One time: the tag list is retired. Each file that carried a tag of its own gets a colour label (the nearest to the
+    tag's colour), and every old tag is saved to data/legacy-tags.json first. Favourites are untouched."""
+    if c.execute("SELECT 1 FROM meta WHERE key='labels_migrated'").fetchone():
+        return
+    rows = c.execute("SELECT ft.file_id, ft.tag, t.color FROM file_tags ft LEFT JOIN tags t ON t.name=ft.tag "
+                     "WHERE ft.tag != ? COLLATE NOCASE ORDER BY ft.file_id, ft.rowid", (FAVOURITE,)).fetchall()
+    if rows:
+        try:
+            (db.DATA_DIR / "legacy-tags.json").write_text(json.dumps(
+                [{"file_id": r[0], "tag": r[1], "color": r[2]} for r in rows], indent=1), encoding="utf-8")
+        except OSError:
+            logging.getLogger("filemind").warning("could not save legacy-tags.json", exc_info=True)
+
+        def nearest(hex_):
+            try:
+                h = (hex_ or "#8B5CF6").lstrip("#"); rgb = tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+            except ValueError:
+                rgb = (139, 92, 246)
+            return min(LABELS, key=lambda k: sum((a - b) ** 2 for a, b in zip(rgb, _LABEL_RGB[k])))
+        seen = set()
+        for fid, _tag, color in rows:
+            if fid not in seen:
+                seen.add(fid)
+                c.execute("INSERT OR IGNORE INTO file_labels(file_id, label) VALUES(?, ?)", (fid, nearest(color)))
+    c.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('labels_migrated', '1')")
+    c.commit()
+
+
+@app.get("/api/labels")
+def labels_list():
+    counts = {r[0]: r[1] for r in db.conn().execute("SELECT label, COUNT(*) FROM file_labels GROUP BY label")}
+    return {"labels": [{"name": k, "count": counts.get(k, 0)} for k in LABELS]}
+
+
+@app.post("/api/labels")
+def labels_apply(body: dict = Body(...)):
+    """{ids, label}: give files a colour label, or clear it with label=null."""
+    global _label_cache
+    ids = [int(i) for i in body.get("ids") or []][:5000]
+    label = body.get("label")
+    if label is not None and label not in LABELS:
+        raise HTTPException(400, "Choose one of: " + ", ".join(LABELS))
+    c = db.conn()
+    if label is None:
+        c.executemany("DELETE FROM file_labels WHERE file_id=?", [(i,) for i in ids])
+    else:
+        c.executemany("INSERT OR REPLACE INTO file_labels(file_id, label) VALUES(?, ?)", [(i, label) for i in ids])
+    c.commit(); _label_cache = None
+    return labels_list()
+
+
+def _min_side() -> tuple[int, str]:
+    c = db.conn()
+    try:
+        n = c.execute("SELECT value FROM meta WHERE key='min_side'").fetchone()
+        m = c.execute("SELECT value FROM meta WHERE key='min_side_mode'").fetchone()
+    except sqlite3.OperationalError:
+        return 0, "short"
+    return (int(n[0]) if n else 0), (m[0] if m else "short")
+
+
+def _min_side_sql() -> str:
+    """Hide pictures and clips smaller than the chosen size. Files whose size is unknown stay visible; nothing is deleted."""
+    n, mode = _min_side()
+    if n <= 0:
+        return ""
+    side = "MIN(f.width, f.height)" if mode == "short" else "MAX(f.width, f.height)"
+    return f"(f.kind NOT IN ('image','video') OR f.width IS NULL OR f.height IS NULL OR {side} >= {int(n)})"
+
+
+@app.post("/api/prefs")
+def set_prefs(body: dict = Body(...)):
+    """{min_side: int, min_side_mode: 'short'|'long'}: display preferences the library views respect."""
+    c = db.conn()
+    if "min_side" in body:
+        c.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('min_side', ?)", (str(max(0, min(int(body["min_side"]), 20000))),))
+    if body.get("min_side_mode") in ("short", "long"):
+        c.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('min_side_mode', ?)", (body["min_side_mode"],))
+    c.commit()
+    n, mode = _min_side()
+    return {"min_side": n, "min_side_mode": mode}
 
 
 # ---------------------------------------------------------------- tags and favourites
@@ -399,7 +513,7 @@ def tags_delete(name: str):
 
 _DETAIL_KEYS = ("after", "before", "min_size", "max_size", "min_width", "min_height", "min_pixels",
                 "min_duration", "max_duration", "min_fps", "aspect", "codec")
-_SCOPE_KEYS = ("root", "kind", "project", "unassigned", "color", "near", "source", "pattern", "discover", "tag")
+_SCOPE_KEYS = ("root", "kind", "project", "unassigned", "color", "near", "source", "pattern", "discover", "tag", "label")
 
 
 @app.post("/api/facets")
@@ -474,7 +588,29 @@ def discover():
 def sources():
     """Which AI tool / app each file name looks like it came from, with counts."""
     from collections import Counter
-    cnt = Counter(names_mod.source_of(r["name"]) for r in db.conn().execute("SELECT name FROM files WHERE status='done'"))
+    return _source_counts(None)
+
+
+@app.post("/api/sources")
+def sources_in_view(body: dict = Body(...)):
+    """The same counts, but only over what is on screen (the browsed scope, without the source filter itself)."""
+    scope = {k: body[k] for k in _SCOPE_KEYS if body.get(k) is not None and k != "source"}
+    ids = files(**scope, ids_only=True)["ids"] if scope else None
+    return _source_counts(ids)
+
+
+def _source_counts(ids):
+    from collections import Counter
+    c = db.conn()
+    cnt = Counter()
+    if ids is None:
+        rows = c.execute("SELECT name, path, width, height FROM files WHERE status='done'")
+        cnt.update(names_mod.source_of_row(r) for r in rows)
+    else:
+        for start in range(0, len(ids), 900):
+            chunk = [int(i) for i in ids[start:start + 900]]
+            rows = c.execute(f"SELECT name, path, width, height FROM files WHERE id IN ({','.join('?' * len(chunk))})", chunk)
+            cnt.update(names_mod.source_of_row(r) for r in rows)
     out = [{"key": k, "label": names_mod.LABEL[k][0], "color": names_mod.LABEL[k][1], "count": v} for k, v in cnt.most_common() if k]
     return {"sources": out, "unknown": cnt.get(None, 0)}
 
@@ -550,8 +686,8 @@ def name_groups(min_count: int = 4):
     from collections import defaultdict
     g = defaultdict(list)
     c = db.conn()
-    for r in c.execute("SELECT id, name FROM files WHERE status='done'"):
-        if names_mod.source_of(r["name"]) is None:
+    for r in c.execute("SELECT id, name, path, width, height FROM files WHERE status='done'"):
+        if names_mod.source_of_row(r) is None:
             g[names_mod.signature(r["name"])].append(r)
     out = []
     for sig, rs in sorted(g.items(), key=lambda kv: -len(kv[1])):
@@ -625,7 +761,14 @@ def _search_filter(body):
     tagged = None
     if body.get("tag"):
         tagged = {r[0] for r in db.conn().execute("SELECT file_id FROM file_tags WHERE tag=?", (body["tag"],))}
-    if not (color or source or project or tagged is not None or any(value is not None for value in filters.values())):
+    labelled = None
+    if body.get("label"):
+        wanted = [x for x in str(body["label"]).split(",") if x in LABELS]
+        if wanted:
+            labelled = {r[0] for r in db.conn().execute(
+                f"SELECT file_id FROM file_labels WHERE label IN ({','.join('?' * len(wanted))})", wanted)}
+    smallest, side = _min_side()
+    if not (color or source or project or tagged is not None or labelled is not None or smallest or any(value is not None for value in filters.values())):
         return None
     members = None
     if project:
@@ -635,6 +778,11 @@ def _search_filter(body):
 
     def keep(r):
         if tagged is not None and r["id"] not in tagged:
+            return False
+        if labelled is not None and r["id"] not in labelled:
+            return False
+        if smallest and r["kind"] in ("image", "video") and r["width"] and r["height"] and \
+                (min(r["width"], r["height"]) if side == "short" else max(r["width"], r["height"])) < smallest:
             return False
         for key, column, comparison in (("min_size", "size", lambda a, b: a >= b),
                                         ("max_size", "size", lambda a, b: a <= b),
@@ -660,7 +808,7 @@ def _search_filter(body):
                 return False
         if color and colors_mod.shares(r["pal"]).get(color, 0) < colors_mod.MIN_SHARE:
             return False
-        if source and (names_mod.source_of(r["name"]) or "none") != source:
+        if source and (names_mod.source_of_row(r) or "none") != source:
             return False
         return members is None or r["id"] in members
     return keep
@@ -711,7 +859,7 @@ def search(body: dict = Body(...)):
             kinds = [it["kind"]]; understood["kind"] = it["kind"]
         if it["source"] and not body.get("source"):
             src = it["source"]; prev = keep
-            keep = (lambda rr, src=src, prev=prev: (names_mod.source_of(rr["name"]) == src) and (prev is None or prev(rr)))
+            keep = (lambda rr, src=src, prev=prev: (names_mod.source_of_row(rr) == src) and (prev is None or prev(rr)))
             understood["source"] = names_mod.LABEL[src][0]
         if it["without"]:
             negs.append(embedder.embed_query(it["without"])); understood.setdefault("without", []).append(it["without"])

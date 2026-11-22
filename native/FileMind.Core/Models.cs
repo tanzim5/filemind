@@ -26,6 +26,8 @@ public sealed class FileItem
     [JsonPropertyName("proposed")] public string? Proposed { get; set; }
     [JsonPropertyName("snippet")] public string? Snippet { get; set; }
     [JsonPropertyName("tags")] public List<string> Tags { get; set; } = [];
+    /// <summary>The Finder-style colour label (red, orange, ...), or null.</summary>
+    [JsonPropertyName("label")] public string? Label { get; set; }
     public bool IsFavourite => Tags.Contains(TagInfo.Favourite, StringComparer.OrdinalIgnoreCase);
 
     public string SizeText => Size switch
@@ -62,6 +64,24 @@ public sealed class RootFolder
     [JsonPropertyName("files")] public int Files { get; set; }
     [JsonPropertyName("indexed")] public int Indexed { get; set; }
     [JsonPropertyName("errors")] public int Errors { get; set; }
+}
+
+/// <summary>The seven colour labels, as macOS has them.</summary>
+public sealed class LabelInfo
+{
+    public static readonly (string Name, string Title, string Hex)[] All =
+    [
+        ("red", "Red", "#EF4444"), ("orange", "Orange", "#F97316"), ("yellow", "Yellow", "#EAB308"), ("green", "Green", "#22C55E"),
+        ("blue", "Blue", "#3B82F6"), ("purple", "Purple", "#A855F7"), ("grey", "Grey", "#9CA3AF"),
+    ];
+    public static string Hex(string? name) => All.FirstOrDefault(l => l.Name == name).Hex ?? "#9CA3AF";
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+    [JsonPropertyName("count")] public int Count { get; set; }
+}
+
+public sealed class LabelList
+{
+    [JsonPropertyName("labels")] public List<LabelInfo> Labels { get; set; } = [];
 }
 
 /// <summary>A tag (Finder-style, with a colour) and how many files carry it. "Favourites" is the built-in one.</summary>

@@ -41,10 +41,27 @@ RULES = [
     ("camera", "Camera & phone", "#78716c", lambda n: bool(re.match(r"^(img_|dsc|dscf|dji_|pxl_|mvimg|vid_|mov_|gopr|p\d{7}|_dsc)", n))),
     ("creation", "creation_… exports", "#db2777", lambda n: bool(re.match(r"^creation_\d+", n))),
 ]
+# Where a file sits says a lot too: a Screenshots folder, a mail attachment cache, Downloads, a phone's DCIM folder.
+# (folder fragment, key); the file name rules above win when they know the source.
+ORIGINS = [
+    ("/screenshots/", "screenshot"), ("/screenshot/", "screenshot"), ("/screen captures/", "screenshot"), ("/snipping tool/", "screenshot"),
+    ("/screen recordings/", "screenrec"), ("/captures/", "screenrec"),
+    ("/whatsapp/", "whatsapp"), ("/dcim/", "camera"), ("/camera roll/", "camera"),
+    ("/content.outlook/", "attachments"), ("/inetcache/", "attachments"), ("/attachments/", "attachments"), ("/attachment/", "attachments"),
+    ("/telegram desktop/", "attachments"), ("/discord/", "attachments"), ("/downloads/", "downloads"),
+]
+EXTRA = {"screenrec": ("Screen recordings", "#64748b"), "attachments": ("Attachments", "#0284c7"), "downloads": ("Downloads", "#0d9488")}
 LABEL = {k: (l, c) for k, l, c, _ in RULES}
+LABEL.update(EXTRA)
+
+# Sizes of a whole screen. A PNG of exactly this size that nothing else claims is almost surely a screen capture.
+SCREEN_SIZES = {(1920, 1080), (2560, 1440), (3840, 2160), (1366, 768), (1440, 900), (1536, 864), (1680, 1050), (1920, 1200),
+                (2560, 1600), (2880, 1800), (3024, 1964), (3456, 2234), (1280, 720), (1600, 900), (2048, 1152), (2256, 1504),
+                (3440, 1440), (5120, 1440), (2736, 1824), (1280, 800), (1024, 768)}
 
 
-def source_of(name: str):
+def source_of(name: str, path: str = "", width=None, height=None):
+    """Where a file came from: its file name first, then the folder it sits in, then (for PNG pictures) its exact screen size."""
     n = name.lower()
     for key, _, _, test in RULES:
         try:
@@ -52,7 +69,21 @@ def source_of(name: str):
                 return key
         except Exception:
             continue
+    if path:
+        p = "/" + path.lower().replace("\\", "/").strip("/") + "/"
+        for fragment, key in ORIGINS:
+            if fragment in p:
+                return key
+    if width and height and n.endswith(".png") and (width, height) in SCREEN_SIZES:
+        return "screenshot"
     return None
+
+
+def source_of_row(r):
+    """source_of for a database row, using whatever of path / width / height the query selected."""
+    keys = r.keys()
+    return source_of(r["name"], r["path"] if "path" in keys else "",
+                     r["width"] if "width" in keys else None, r["height"] if "height" in keys else None)
 
 
 _MONTHS = {m: i for i, m in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split(), 1)}

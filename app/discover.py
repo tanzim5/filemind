@@ -59,11 +59,11 @@ _preview = {"key": None, "groups": [], "ids": {}}
 def _quick_groups(key):
     if _preview["key"] == key:
         return _preview["groups"]
-    rows = db.conn().execute("SELECT id,name,kind,thumb FROM files WHERE status='done' ORDER BY mtime DESC").fetchall()
+    rows = db.conn().execute("SELECT id,name,path,width,height,kind,thumb FROM files WHERE status='done' ORDER BY mtime DESC").fetchall()
     by_group = defaultdict(list)
     for r in rows:
         by_group[f"type:{r['kind']}"].append(r)
-        source = names.source_of(r["name"])
+        source = names.source_of_row(r)
         if source:
             by_group[f"source:{source}"].append(r)
     out = []
@@ -113,7 +113,7 @@ def groups():
     for r in rows:
         fid = int(r["id"])
         by_group[f"type:{r['kind']}"].append(fid)
-        source = names.source_of(r["name"])
+        source = names.source_of_row(r)
         if source:
             by_group[f"source:{source}"].append(fid)
         if r["kind"] == "image" and r["path"].lower().endswith((".jpg", ".jpeg", ".heic", ".heif", ".tif", ".tiff", ".webp")):

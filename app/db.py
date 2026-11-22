@@ -138,6 +138,11 @@ def init():
             error TEXT
         );
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+        CREATE TABLE IF NOT EXISTS file_labels (
+            file_id INTEGER PRIMARY KEY,
+            label TEXT NOT NULL CHECK (label IN ('red','orange','yellow','green','blue','purple','grey'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_file_labels_label ON file_labels(label);
         INSERT OR IGNORE INTO meta(key, value) VALUES ('index_gen', '0');
         CREATE TABLE IF NOT EXISTS dup_cache (id INTEGER PRIMARY KEY CHECK (id = 1), gen INTEGER, created REAL, result TEXT);
         CREATE INDEX IF NOT EXISTS idx_files_status_mtime ON files(status, mtime);
