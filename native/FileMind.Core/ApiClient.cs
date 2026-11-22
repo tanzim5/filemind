@@ -74,6 +74,9 @@ public sealed class ApiClient(Uri baseUri, string token = "") : IDisposable
         using var response = await _http.DeleteAsync($"/api/tags/{Uri.EscapeDataString(name)}", ct);
         response.EnsureSuccessStatusCode();
     }
+    /// <summary>Makes the preview video of a sequence (the first time only) so it can be played.</summary>
+    public Task PrepareSequenceAsync(int id, CancellationToken ct = default) => PostAsync<JsonElement>($"/api/sequence/{id}/proxy", null, ct);
+    public Task SetSequenceFpsAsync(int id, double fps, CancellationToken ct = default) => PostAsync<JsonElement>($"/api/sequence/{id}/fps", new { fps }, ct);
     public Task<LabelList> GetLabelsAsync(CancellationToken ct = default) => GetAsync<LabelList>("/api/labels", ct);
     /// <summary>Gives files a colour label, or clears it with null.</summary>
     public Task<LabelList> SetLabelAsync(IEnumerable<int> ids, string? label, CancellationToken ct = default) =>

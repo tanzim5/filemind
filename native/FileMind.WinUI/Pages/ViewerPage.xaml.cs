@@ -105,6 +105,22 @@ public sealed partial class ViewerPage : Page
             Entry("Show in Explorer", "", () => Reveal_Click(this, new RoutedEventArgs()));
             Entry("Export", "", () => Export_Click(this, new RoutedEventArgs()));
             ctx.Items.Add(new MenuFlyoutSeparator());
+            if (_item.Seq is not null)
+            {
+                var speed = new MenuFlyoutSubItem { Text = "Playback speed", Icon = new FontIcon { Glyph = "\uE916" } };
+                foreach (var f in new[] { 12.0, 23.976, 24.0, 25.0, 30.0, 60.0 })
+                {
+                    var fps = f; var id = _item.Id;
+                    var m = new ToggleMenuFlyoutItem { Text = $"{fps:0.###} fps", IsChecked = Math.Abs((_item.Fps ?? 24) - fps) < 0.01 };
+                    m.Click += async (_, _) =>
+                    {
+                        try { await Api.SetSequenceFpsAsync(id, fps); _item.Fps = fps; _item.Duration = _item.Seq.Count / fps; Teardown(); MediaHost.Children.Clear(); _ = BuildSequenceAsync(); }
+                        catch (Exception ex) { App.Log("viewer-sequence", ex, ex.Message); }
+                    };
+                    speed.Items.Add(m);
+                }
+                ctx.Items.Add(speed);
+            }
             var label = new MenuFlyoutSubItem { Text = "Colour label", Icon = new FontIcon { Glyph = "" } };
             foreach (var (name, title, hex) in LabelInfo.All)
             {
@@ -543,6 +559,7 @@ public sealed partial class ViewerPage : Page
         switch (_item.Kind)
         {
             case "image": BuildImage(); break;
+            case "video" when _item.Seq is not null: _ = BuildSequenceAsync(); break;
             case "video": BuildVideo(); break;
             case "audio": BuildAudio(); break;
             case "doc" when _item.Ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase): BuildPdf(); break;
@@ -748,6 +765,26 @@ public sealed partial class ViewerPage : Page
         StageHost.CanDrag = true;
         _imageScroller = sv;
         MediaHost.Children.Add(sv);
+    }
+
+    /// <summary>A numbered image sequence plays as a small preview video, made the first time it is opened.</summary>
+    private async Task BuildSequenceAsync()
+    {
+        var ct = _cts.Token; var id = _item.Id;
+        ShowStageMessage($"Preparing the preview of {_item.Seq!.Count:N0} frames…");
+        try
+        {
+            await Api.PrepareSequenceAsync(id, ct);
+            if (ct.IsCancellationRequested || _item.Id != id) return;
+            MediaHost.Children.Clear();
+            BuildVideo();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            App.Log("viewer-sequence", ex, ex.Message);
+            if (!ct.IsCancellationRequested) ShowStageMessage("This sequence can't be previewed here. " + ex.Message);
+        }
     }
 
     private void BuildVideo()
@@ -1074,7 +1111,8 @@ public sealed partial class ViewerPage : Page
         if (w > 0 && h > 0) two.Add($"{w:N0}×{h:N0}");
         if (_item.Duration is > 0) two.Add(Clock(_item.Duration.Value));
         if (_item.Fps is > 0) two.Add($"{_item.Fps:0.#} fps");
-        if (!string.IsNullOrEmpty(_item.Codec)) two.Add(_item.Codec!.ToUpperInvariant());
+        if (_item.Seq is not null) two.Add(_item.Seq.Summary);
+        else if (!string.IsNullOrEmpty(_item.Codec)) two.Add(_item.Codec!.ToUpperInvariant());
         var p = new StackPanel { Spacing = 2 };
         p.Children.Add(new TextBlock { Text = string.Join(" · ", one.Where(s => s.Length > 0)), FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Foreground = Ui.Brush("GlassTextPrimaryBrush") });
         if (two.Count > 0) p.Children.Add(new TextBlock { Text = string.Join(" · ", two), FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = Ui.Brush("GlassTextSecondaryBrush") });

@@ -28,6 +28,8 @@ public sealed class FileItem
     [JsonPropertyName("tags")] public List<string> Tags { get; set; } = [];
     /// <summary>The Finder-style colour label (red, orange, ...), or null.</summary>
     [JsonPropertyName("label")] public string? Label { get; set; }
+    /// <summary>Set when this item is a numbered image sequence (render_0001.png ...) shown as one clip.</summary>
+    [JsonPropertyName("seq")] public SequenceInfo? Seq { get; set; }
     public bool IsFavourite => Tags.Contains(TagInfo.Favourite, StringComparer.OrdinalIgnoreCase);
 
     public string SizeText => Size switch
@@ -38,7 +40,7 @@ public sealed class FileItem
         _ => $"{Size} B",
     };
 
-    public string DurationText => Duration is > 0 and var d
+    public string DurationText => Seq is not null ? $"{Seq.Count:N0} frames" : Duration is > 0 and var d
         ? (d >= 3600 ? TimeSpan.FromSeconds(d).ToString(@"h\:mm\:ss") : TimeSpan.FromSeconds(d).ToString(@"m\:ss"))
         : "";
 
@@ -64,6 +66,19 @@ public sealed class RootFolder
     [JsonPropertyName("files")] public int Files { get; set; }
     [JsonPropertyName("indexed")] public int Indexed { get; set; }
     [JsonPropertyName("errors")] public int Errors { get; set; }
+}
+
+/// <summary>What is known about an image sequence: its frame range, how many are missing and how fast it plays.</summary>
+public sealed class SequenceInfo
+{
+    [JsonPropertyName("count")] public int Count { get; set; }
+    [JsonPropertyName("first")] public int First { get; set; }
+    [JsonPropertyName("last")] public int Last { get; set; }
+    [JsonPropertyName("missing")] public int Missing { get; set; }
+    [JsonPropertyName("pattern")] public string Pattern { get; set; } = "";
+    [JsonPropertyName("fps")] public double Fps { get; set; } = 24;
+    [JsonPropertyName("dir")] public string Dir { get; set; } = "";
+    public string Summary => $"{Pattern} · frames {First}–{Last}" + (Missing > 0 ? $" ({Missing:N0} missing)" : "");
 }
 
 /// <summary>The seven colour labels, as macOS has them.</summary>

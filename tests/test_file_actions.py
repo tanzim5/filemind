@@ -24,7 +24,7 @@ class FileActionTests(unittest.TestCase):
         self.db.row_factory = sqlite3.Row
         self.addCleanup(self.db.close)
         self.db.executescript("""
-            CREATE TABLE files (id INTEGER PRIMARY KEY, path TEXT, thumb TEXT);
+            CREATE TABLE files (id INTEGER PRIMARY KEY, path TEXT, thumb TEXT, seq_json TEXT);
             CREATE TABLE project_files (project_id INTEGER, file_id INTEGER);
             CREATE TABLE proposed_names (file_id INTEGER, new_name TEXT);
             CREATE TABLE file_tags (file_id INTEGER, tag TEXT);

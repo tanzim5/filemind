@@ -9,7 +9,9 @@ from pathlib import Path
 
 import numpy as np
 
-from . import colors, embedder, extract, runtime
+import json
+
+from . import colors, embedder, extract, runtime, sequences
 from .db import DATA_DIR, conn
 
 SKIP_DIRS = {"node_modules", ".git", "__pycache__", "$RECYCLE.BIN", "System Volume Information",
@@ -68,13 +70,55 @@ def matrix():
         return _cache["ids"], _cache["mat"]
 
 
+def _register_sequence(c, root_id: int, info: dict, seen: set) -> bool:
+    """One row for a whole sequence: its first frame is the path, the size and time cover every frame."""
+    frames = sequences.frame_paths(info)
+    try:
+        stats = [os.stat(f) for f in frames]
+    except OSError:
+        return False
+    info["stamp"] = f"{sum(s.st_size for s in stats)}:{max(s.st_mtime for s in stats)}"
+    size, mtime = sum(s.st_size for s in stats), max(s.st_mtime for s in stats)
+    first = frames[0]
+    text = json.dumps(info, sort_keys=True)
+    name = sequences.pattern(info)
+    width = height = None
+    if info["ext"].lower() not in sequences.FFMPEG_ONLY:
+        try:
+            from PIL import Image
+            with Image.open(first) as im:
+                width, height = im.size
+        except Exception:
+            pass
+    row = c.execute("SELECT id, seq_json FROM files WHERE path=?", (first,)).fetchone()
+    if row is None:
+        c.execute("INSERT INTO files(root_id,path,name,ext,kind,size,mtime,status,width,height,duration,fps,codec,seq_json) "
+                  "VALUES(?,?,?,?,'video',?,?,'pending',?,?,?,?,'sequence',?)",
+                  (root_id, first, name, info["ext"].lower(), size, mtime, width, height,
+                   info["count"] / sequences.DEFAULT_FPS, sequences.DEFAULT_FPS, text))
+    elif row["seq_json"] != text:
+        c.execute("UPDATE files SET kind='video', name=?, ext=?, size=?, mtime=?, status='pending', vec=NULL, width=?, height=?, "
+                  "duration=?, fps=COALESCE(NULLIF(fps, 0), ?), codec='sequence', seq_json=? WHERE id=?",
+                  (name, info["ext"].lower(), size, mtime, width, height, info["count"] / sequences.DEFAULT_FPS,
+                   sequences.DEFAULT_FPS, text, row["id"]))
+    seen.add(first)
+    return True
+
+
 def scan(root_id: int, root: str) -> int:
     """Walk the folder, register new/changed files, drop vanished ones. Returns file count."""
     c = conn()
     seen = set()
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and os.path.join(dirpath, d) != str(DATA_DIR)]   # never File Mind's own data
+        members = set()
+        for info in sequences.detect(filenames):          # thousands of numbered frames become one item
+            info["dir"] = dirpath
+            if sequences.verify(info) and _register_sequence(c, root_id, info, seen):
+                members.update(sequences.frame_name(info, n) for n in range(info["first"], info["last"] + 1))
         for fn in filenames:
+            if fn in members:
+                continue
             low = fn.lower()
             ext = os.path.splitext(fn)[1].lower()
             if low in SKIP_FILES or ext in SKIP_EXT:
@@ -116,7 +160,7 @@ def _run(root_id: int, root: str):
                   "(error LIKE '%CUDA%' OR error LIKE '%out of memory%')", (root_id,))   # blamed on the GPU, not the file
         c.commit()
         pending = c.execute(
-            "SELECT id, path, name, kind FROM files WHERE root_id=? AND status='pending' "
+            "SELECT id, path, name, kind, seq_json FROM files WHERE root_id=? AND status='pending' "
             "ORDER BY CASE kind WHEN 'image' THEN 0 WHEN 'doc' THEN 1 WHEN 'text' THEN 1 WHEN 'audio' THEN 2 ELSE 3 END, "
             "mtime DESC, id",                 # recent files first: they're the ones people look for
             (root_id,)).fetchall()
@@ -154,6 +198,11 @@ def _run(root_id: int, root: str):
             p = Path(r["path"])
             if not p.exists():
                 return None
+            if r["seq_json"] and (info := sequences.load(r["seq_json"])):
+                thumb = sequences.make_thumb(info, extract._thumb_path(p))
+                if not thumb:
+                    raise ValueError("Could not be decoded (corrupt or unsupported)")
+                return thumb, embedder.prepare_sequence(p, info, r["name"])
             thumb = extract.make_thumb(p, r["kind"])
             if r["kind"] in ("image", "video") and not thumb:
                 raise ValueError("Could not be decoded (corrupt or unsupported)")   # hidden from the library
