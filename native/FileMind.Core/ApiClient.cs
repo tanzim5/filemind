@@ -152,6 +152,9 @@ public sealed class ApiClient(Uri baseUri, string token = "") : IDisposable
     public Task<FileDetails> GetInfoAsync(int id, CancellationToken ct = default) => GetAsync<FileDetails>($"/api/info/{id}", ct);
     public async Task<List<IdeaEntry>> GetIdeasAsync(int n = 36, CancellationToken ct = default) => (await GetAsync<IdeasResponse>($"/api/ideas?n={n}", ct)).Ideas;
     public Task<WaveData> GetWaveAsync(int id, CancellationToken ct = default) => GetAsync<WaveData>($"/api/wave/{id}", ct);
+    public async Task<List<(int Id, string Path)>> GetOcrPendingAsync(string mode, int limit, CancellationToken ct = default) =>
+        (await GetAsync<OcrPending>($"/api/ocr/pending?limit={limit}&mode={Uri.EscapeDataString(mode)}", ct)).Files.Select(f => (f.Id, f.Path)).ToList();
+    public Task StoreOcrAsync(int id, string text, CancellationToken ct = default) => PostAsync<JsonElement>("/api/ocr", new { id, text }, ct);
     /// <summary>Moments inside videos and sounds that match these words (only those already analysed).</summary>
     public async Task<List<MomentHit>> SearchMomentsAsync(string text, int limit = 12, CancellationToken ct = default) =>
         (await PostAsync<MomentHits>("/api/moments/search", new { q = text, limit }, ct)).Moments;

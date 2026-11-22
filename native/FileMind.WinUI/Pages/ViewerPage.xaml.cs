@@ -1237,6 +1237,12 @@ public sealed partial class ViewerPage : Page
             _slot.Children.Add(wrap);
         }
 
+        if (info.Ocr.Length > 0)
+        {
+            _slot.Children.Add(Header("text", "Text in the picture", "read on this PC"));
+            _slot.Children.Add(new TextBlock { Text = info.Ocr.Length > 1200 ? info.Ocr[..1200] + "…" : info.Ocr, FontSize = 12.5, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
+        }
+
         // Colours sit right under the tags; a tap searches by that colour, like the Library's colour filter.
         if (info.Colors.Count > 0 || info.Swatches.Count > 0)
         {

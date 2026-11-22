@@ -302,6 +302,7 @@ public sealed partial class MainWindow : Window
             // The Library is created first, even when something else is shown, so its filters already sit in the sidebar.
             Select("library");
             if (Content?.XamlRoot is { } root) _ = Updater.NotifyAsync(root);
+            OcrService.Start();
             // The opening screen fades away over the Library (about a quarter of a second); nothing waits for it.
             var opening = SetupFrame;
             Pages.Anim.Out(opening, 250, () => { opening.Visibility = Visibility.Collapsed; opening.Content = null; });

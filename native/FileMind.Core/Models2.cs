@@ -115,6 +115,19 @@ public sealed class FileDetails
     [JsonPropertyName("proposed")] public string? Proposed { get; set; }
     [JsonPropertyName("meta")] public FileMeta? Meta { get; set; }
     [JsonPropertyName("swatches")] public List<SwatchShare> Swatches { get; set; } = [];
+    /// <summary>Text found inside the picture by OCR (empty when none or not read yet).</summary>
+    [JsonPropertyName("ocr")] public string Ocr { get; set; } = "";
+}
+
+public sealed class OcrPending
+{
+    [JsonPropertyName("files")] public List<OcrFile> Files { get; set; } = [];
+}
+
+public sealed class OcrFile
+{
+    [JsonPropertyName("id")] public int Id { get; set; }
+    [JsonPropertyName("path")] public string Path { get; set; } = "";
 }
 
 public sealed class FileMeta

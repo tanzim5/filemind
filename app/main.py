@@ -748,6 +748,15 @@ def _rank(qvec, root, kinds, limit, exclude_id=None, query_text=None, keep=None,
                 break
         if keep and len(out) >= limit * 3:
             break
+    # Pictures whose own text (read by OCR) contains every word of the search float to the top, even when the model ranked them low.
+    seen_ids = {fid for _, _, fid in out}
+    for fid in _ocr_matches(tokens):
+        if fid in seen_ids or (exclude_id and fid == exclude_id):
+            continue
+        r = c.execute("SELECT id,name,root_id,kind,size,width,height,duration,fps,mtime,codec,pal FROM files WHERE id=? AND status='done'", (fid,)).fetchone()
+        if not r or (root and r["root_id"] != root) or (kinds and r["kind"] not in kinds) or (keep and not keep(r)):
+            continue
+        out.append((1.5, 0.3, fid))
     out.sort(key=lambda x: -x[0])
     chosen = out[:limit]
     if not chosen:
@@ -755,6 +764,19 @@ def _rank(qvec, root, kinds, limit, exclude_id=None, query_text=None, keep=None,
     full = {r["id"]: r for r in c.execute(
         f"SELECT * FROM files WHERE id IN ({','.join('?' for _ in chosen)})", [fid for _, _, fid in chosen])}
     return [_file_dict(full[fid], score) for _, score, fid in chosen if fid in full]
+
+
+def _ocr_matches(tokens) -> list[int]:
+    """Ids of pictures whose recognised text contains every word (at least three letters each) of the search."""
+    words = [t for t in tokens if len(t) >= 3][:6]
+    if not words:
+        return []
+    try:
+        rows = db.conn().execute("SELECT id FROM files WHERE ocr IS NOT NULL AND ocr != '' AND " + " AND ".join("ocr LIKE ?" for _ in words) + " LIMIT 300",
+                                 [f"%{w}%" for w in words]).fetchall()
+    except sqlite3.OperationalError:
+        return []
+    return [r[0] for r in rows]
 
 
 def _search_filter(body):
@@ -1115,6 +1137,34 @@ def analyze_moments(fid: int):
         raise HTTPException(404, str(exc)) from exc
 
 
+@app.get("/api/ocr/pending")
+def ocr_pending(limit: int = 20, mode: str = "screens"):
+    """Pictures still to be read for text. 'screens' means screenshots and PNGs; 'all' every picture; 'off' none."""
+    if mode == "off":
+        return {"files": []}
+    where = "kind='image' AND status='done' AND seq_json IS NULL AND (ocr_key IS NULL OR ocr_key != (size || ':' || mtime))"
+    limit = max(1, min(limit, 100))
+    if mode == "all":
+        rows = db.conn().execute(f"SELECT id, path FROM files WHERE {where} ORDER BY mtime DESC LIMIT ?", (limit,)).fetchall()
+    else:                                           # screenshots: by name, by folder, or by an exact screen size
+        rows = [r for r in db.conn().execute(f"SELECT id, name, path, width, height FROM files WHERE {where} ORDER BY mtime DESC LIMIT 3000")
+                if names_mod.source_of_row(r) == "screenshot"][:limit]
+    return {"files": [{"id": r["id"], "path": r["path"]} for r in rows]}
+
+
+@app.post("/api/ocr")
+def ocr_store(body: dict = Body(...)):
+    """{id, text}: the text a picture contains (empty is fine: it will not be asked for again until the file changes)."""
+    c = db.conn()
+    r = c.execute("SELECT size, mtime FROM files WHERE id=?", (int(body.get("id") or 0),)).fetchone()
+    if not r:
+        raise HTTPException(404)
+    text = " ".join(str(body.get("text") or "").split())[:20000]
+    c.execute("UPDATE files SET ocr=?, ocr_key=? WHERE id=?", (text, f"{r['size']}:{r['mtime']}", int(body["id"])))
+    c.commit()
+    return {"ok": True}
+
+
 @app.get("/api/info/{fid}")
 def info(fid: int):
     c = db.conn()
@@ -1141,6 +1191,7 @@ def info(fid: int):
             projs.append({"id": p["id"], "name": p["name"]})
     pn = c.execute("SELECT new_name FROM proposed_names WHERE file_id=?", (fid,)).fetchone()
     d = _file_dict(r)
+    d["ocr"] = (r["ocr"] or "")[:4000] if "ocr" in r.keys() else ""
     d.update(colors=colors, projects=projs, proposed=pn["new_name"] if pn else None,
              folder=os.path.dirname(r["path"]), error=r["error"],
              dimensions=_original_dimensions(r["path"], r["kind"], r["mtime"] or 0),

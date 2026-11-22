@@ -43,6 +43,8 @@ public sealed class AppSettings
     public bool PointerLight { get; set; } = true;
     /// <summary>"slim" (the detailed filters sit behind a Filters button) or "classic" (every section in the left sidebar).</summary>
     public string SidebarStyle { get; set; } = "slim";
+    /// <summary>Read the text in pictures with Windows OCR: "off", "screens" (screenshots) or "all".</summary>
+    public string OcrMode { get; set; } = "screens";
     public string? SkipVersion { get; set; }
     public long LastUpdateCheck { get; set; }
     /// <summary>"short" or "long": which side of a picture the size is measured on.</summary>

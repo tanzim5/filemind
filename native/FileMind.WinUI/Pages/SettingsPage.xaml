@@ -187,6 +187,11 @@
               <StackPanel Spacing="2"><TextBlock Text="Check for updates"/><TextBlock Text="Looks once a day, and asks before changing anything." Style="{StaticResource Helper}"/></StackPanel>
               <ToggleSwitch x:Name="UpdatesSwitch" Grid.Column="1" OnContent="" OffContent="" MinWidth="0" Toggled="Updates_Toggled"/>
             </Grid>
+            <RadioButtons x:Name="OcrChoice" Header="Find words inside pictures (OCR)" SelectionChanged="Ocr_Changed">
+              <RadioButton Tag="screens" Content="Screenshots only"/>
+              <RadioButton Tag="all" Content="Every picture (slower)"/>
+              <RadioButton Tag="off" Content="Off"/>
+            </RadioButtons>
             <StackPanel Orientation="Horizontal" Spacing="10">
               <Button x:Name="UpdateCheckBtn" Content="Check now" Click="UpdateCheck_Click" Style="{StaticResource GlassButton}"/>
               <Button x:Name="UpdateInstallBtn" Content="Update" Click="UpdateInstall_Click" Style="{StaticResource GlassAccentButton}" Visibility="Collapsed"/>
