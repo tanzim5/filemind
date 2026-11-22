@@ -352,6 +352,12 @@ public sealed partial class SettingsPage : Page
         St.OcrMode = (string)r.Tag; Save();
     }
 
+    private void MediaOnly_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (!_ready) return;
+        St.OnlyPicturesVideos = MediaOnlySwitch.IsOn; FileQuery.DefaultMediaOnly = MediaOnlySwitch.IsOn; Save();
+    }
+
     private void Light_Toggled(object sender, RoutedEventArgs e)
     {
         if (!_ready) return;
@@ -443,6 +449,7 @@ public sealed partial class SettingsPage : Page
         About.Text = $"File Mind {Updater.CurrentVersion} (native)\nData: {rt.Paths.Root}\nInstalled as: {Updater.Mode switch { InstallMode.Store => "Microsoft Store (the Store updates it)", InstallMode.Winget => "winget", _ => "unzipped folder" }}";
         UpdatesSwitch.IsOn = rt.Settings.CheckUpdates;
         LightSwitch.IsOn = rt.Settings.PointerLight;
+        MediaOnlySwitch.IsOn = rt.Settings.OnlyPicturesVideos;
         OcrChoice.SelectedIndex = rt.Settings.OcrMode switch { "all" => 1, "off" => 2, _ => 0 };
         SidebarStyleChoice.SelectedIndex = rt.Settings.SidebarStyle == "classic" ? 1 : 0;
         UpdateCheckBtn.IsEnabled = Updater.Available;

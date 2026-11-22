@@ -86,6 +86,14 @@ public sealed partial class LibraryPage : Page
         }
         FiltersBtn.Visibility = Classic ? Visibility.Collapsed : Visibility.Visible;
         if (Classic) return;
+        var media = new ToggleSwitch { Header = "Only pictures and videos on All", IsOn = FileQuery.DefaultMediaOnly, OnContent = "", OffContent = "" };
+        media.Toggled += async (_, _) =>
+        {
+            if (media.IsOn == FileQuery.DefaultMediaOnly) return;
+            FileQuery.DefaultMediaOnly = media.IsOn; Settings.OnlyPicturesVideos = media.IsOn; Settings.Save(AppRuntime.Current.Paths);
+            await GoAsync(() => { });
+        };
+        _filtersStack.Children.Add(media);
         foreach (var key in new[] { "refine", "colours", "moods", "folders" })
         {
             byKey[key].Visibility = Visibility.Visible;
@@ -1070,7 +1078,7 @@ public sealed partial class LibraryPage : Page
             int Kind(string k) => _stats.Kinds.GetValueOrDefault(k);
             var types = new List<FrameworkElement>
             {
-                TypeTile("All", "f-all", _q.Kind == "all", "all", _stats.Total),
+                TypeTile("All", "f-all", _q.Kind == "all", "all", FileQuery.DefaultMediaOnly ? Kind("image") + Kind("video") : _stats.Total),
                 TypeTile("Photos", "f-photo", _q.Kind == "image", "image", Kind("image")),
                 TypeTile("Videos", "f-video", _q.Kind == "video", "video", Kind("video")),
                 TypeTile("Sounds", "f-music", _q.Kind == "audio", "audio", Kind("audio")),
@@ -1292,7 +1300,7 @@ public sealed partial class LibraryPage : Page
         SyncDetailFields();
     }
 
-    private Task SetKind(string kind) => GoAsync(() => _q.Kind = _q.Kind == kind ? "all" : kind);
+    private Task SetKind(string kind) => kind == "all" ? ClearAllAsync() : GoAsync(() => _q.Kind = _q.Kind == kind ? "all" : kind);
 
     private Task ToggleMood(MoodEntry m) => GoAsync(() =>
     {

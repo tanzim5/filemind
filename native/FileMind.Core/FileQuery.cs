@@ -7,6 +7,13 @@ namespace FileMind.Core;
 public sealed class FileQuery
 {
     public string Kind { get; set; } = "all";
+
+    /// <summary>Set by the app from its settings: the plain All page leaves out text, PDFs and sounds.</summary>
+    public static bool DefaultMediaOnly { get; set; } = true;
+
+    /// <summary>True on the plain All page (no type, folder, tag, space or other scope), where only pictures and videos are shown.</summary>
+    public bool MediaOnlyActive => DefaultMediaOnly && Kind == "all" && Root is null && Project is null && !Unassigned && Color is null
+        && Near is null && Source is null && Discover is null && Pattern is null && Tag is null && Label is null;
     public int? Root { get; set; }
     public int? Project { get; set; }
     public bool Unassigned { get; set; }
@@ -69,6 +76,7 @@ public sealed class FileQuery
             if (!string.IsNullOrEmpty(text)) parts.Add($"{k}={Uri.EscapeDataString(text)}");
         }
         if (Kind != "all") Add("kind", Kind);
+        if (MediaOnlyActive) Add("media", "true");
         Add("root", Root); Add("project", Project);
         if (Unassigned) Add("unassigned", "true");
         Add("color", Color); Add("near", Near); Add("source", Source); Add("discover", Discover); Add("pattern", Pattern); Add("tag", Tag); Add("label", Label);
@@ -81,6 +89,7 @@ public sealed class FileQuery
     {
         var body = new Dictionary<string, object?> { ["qs"] = queries.ToArray(), ["limit"] = limit, ["offset"] = offset };
         if (Kind != "all") body["kinds"] = new[] { Kind };
+        else if (MediaOnlyActive) body["kinds"] = new[] { "image", "video" };
         if (Root is not null) body["root"] = Root;
         if (Project is not null) body["project"] = Project;
         if (Color is not null) body["color"] = Color;

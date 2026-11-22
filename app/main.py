@@ -245,8 +245,11 @@ def files(root: int | None = None, kind: str | None = None, project: int | None 
           min_width: int | None = None, min_height: int | None = None, min_pixels: int | None = None,
           min_duration: float | None = None, max_duration: float | None = None,
           min_fps: float | None = None, aspect: str | None = None,
-          codec: str | None = None, ids_only: bool = False, tag: str | None = None, label: str | None = None):
+          codec: str | None = None, ids_only: bool = False, tag: str | None = None, label: str | None = None,
+          media: bool = False):
     where, args = ["f.status='done'"], []      # only fully read files; never half-processed cards
+    if media:                                   # the All page can show just pictures and videos
+        where.append("f.kind IN ('image','video')")
     hide = _min_side_sql()
     if hide:
         where.append(hide)
@@ -516,7 +519,7 @@ def tags_delete(name: str):
 
 _DETAIL_KEYS = ("after", "before", "min_size", "max_size", "min_width", "min_height", "min_pixels",
                 "min_duration", "max_duration", "min_fps", "aspect", "codec")
-_SCOPE_KEYS = ("root", "kind", "project", "unassigned", "color", "near", "source", "pattern", "discover", "tag", "label")
+_SCOPE_KEYS = ("root", "kind", "project", "unassigned", "color", "near", "source", "pattern", "discover", "tag", "label", "media")
 
 
 @app.post("/api/facets")

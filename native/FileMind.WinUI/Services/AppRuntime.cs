@@ -22,6 +22,7 @@ public sealed class AppRuntime
     private AppRuntime()
     {
         Settings = AppSettings.Load(Paths);
+        FileQuery.DefaultMediaOnly = Settings.OnlyPicturesVideos;
         try { Directory.CreateDirectory(Paths.Logs); Diag.LogFile = Path.Combine(Paths.Logs, "app.log"); } catch (Exception) { }
         Http.DefaultRequestHeaders.UserAgent.ParseAdd("FileMind-Native");
     }

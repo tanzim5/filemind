@@ -55,6 +55,11 @@
             </Grid>
             <Grid ColumnSpacing="16">
               <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <StackPanel Spacing="2"><TextBlock Text="Only pictures and videos on All"/><TextBlock Text="The All page leaves out text, PDFs and sounds; they stay one tap away in File types." Style="{StaticResource Helper}"/></StackPanel>
+              <ToggleSwitch x:Name="MediaOnlySwitch" Grid.Column="1" OnContent="" OffContent="" MinWidth="0" Toggled="MediaOnly_Toggled"/>
+            </Grid>
+            <Grid ColumnSpacing="16">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
               <StackPanel Spacing="2"><TextBlock Text="Light follows the pointer"/><TextBlock Text="A soft glow and a small lift on the tile or card under the mouse." Style="{StaticResource Helper}"/></StackPanel>
               <ToggleSwitch x:Name="LightSwitch" Grid.Column="1" OnContent="" OffContent="" MinWidth="0" Toggled="Light_Toggled"/>
             </Grid>
