@@ -20,6 +20,7 @@ from . import colors as colors_mod
 from . import names as names_mod
 from . import commit as commit_mod
 from . import db, embedder, extract, indexer, media_meta
+from . import understand as understand_mod
 from . import suggest as suggest_mod
 from . import tags as tags_mod
 from . import fetch as fetch_mod
@@ -235,6 +236,9 @@ def status():
 
 
 # ---------------------------------------------------------------- browse / search
+_TAKEN = "(CASE WHEN f.taken > 0 THEN f.taken ELSE f.mtime END)"     # when a file was taken, not copied
+
+
 @app.get("/api/files")
 def files(root: int | None = None, kind: str | None = None, project: int | None = None,
           unassigned: bool = False, sort: str = "mtime", limit: int = 300, offset: int = 0,
@@ -271,9 +275,9 @@ def files(root: int | None = None, kind: str | None = None, project: int | None 
         if wanted:
             where.append(f"f.id IN (SELECT file_id FROM file_labels WHERE label IN ({','.join('?' * len(wanted))}))"); args += wanted
     if after is not None:
-        where.append("f.mtime>=?"); args.append(after)
+        where.append(f"{_TAKEN}>=?"); args.append(after)
     if before is not None:
-        where.append("f.mtime<?"); args.append(before)
+        where.append(f"{_TAKEN}<?"); args.append(before)
     if min_size is not None:
         where.append("f.size>=?"); args.append(min_size)
     if max_size is not None:
@@ -734,7 +738,7 @@ def _rank(qvec, root, kinds, limit, exclude_id=None, query_text=None, keep=None,
         batch = candidates[start:start + 512]
         batch_ids = [int(ids[idx]) for idx in batch]
         rows = {r["id"]: r for r in c.execute(
-            f"SELECT id,name,root_id,kind,size,width,height,duration,fps,mtime,codec,pal FROM files "
+            f"SELECT id,name,root_id,kind,size,width,height,duration,fps,mtime,taken,codec,pal FROM files "
             f"WHERE id IN ({','.join('?' for _ in batch_ids)})", batch_ids)}
         for idx, fid in zip(batch, batch_ids):
             if exclude_id and fid == exclude_id:
@@ -757,7 +761,7 @@ def _rank(qvec, root, kinds, limit, exclude_id=None, query_text=None, keep=None,
     for fid in _ocr_matches(tokens):
         if fid in seen_ids or (exclude_id and fid == exclude_id):
             continue
-        r = c.execute("SELECT id,name,root_id,kind,size,width,height,duration,fps,mtime,codec,pal FROM files WHERE id=? AND status='done'", (fid,)).fetchone()
+        r = c.execute("SELECT id,name,root_id,kind,size,width,height,duration,fps,mtime,taken,codec,pal FROM files WHERE id=? AND status='done'", (fid,)).fetchone()
         if not r or (root and r["root_id"] != root) or (kinds and r["kind"] not in kinds) or (keep and not keep(r)):
             continue
         out.append((1.5, 0.3, fid))
@@ -781,6 +785,12 @@ def _ocr_matches(tokens) -> list[int]:
     except sqlite3.OperationalError:
         return []
     return [r[0] for r in rows]
+
+
+def _when(r):
+    """The day a file was taken (EXIF / creation time) when known, otherwise when it was modified."""
+    taken = r["taken"] if "taken" in r.keys() else None
+    return taken if taken and taken > 0 else r["mtime"]
 
 
 def _search_filter(body):
@@ -820,10 +830,11 @@ def _search_filter(body):
                                         ("min_duration", "duration", lambda a, b: a >= b),
                                         ("max_duration", "duration", lambda a, b: a <= b),
                                         ("min_fps", "fps", lambda a, b: a >= b),
-                                        ("after", "mtime", lambda a, b: a >= b),
-                                        ("before", "mtime", lambda a, b: a < b)):
+                                        ("after", "taken", lambda a, b: a >= b),
+                                        ("before", "taken", lambda a, b: a < b)):
             value = filters.get(key)
-            if value is not None and (r[column] is None or not comparison(r[column], value)):
+            have = _when(r) if column == "taken" else r[column]
+            if value is not None and (have is None or not comparison(have, value)):
                 return False
         if filters.get("min_pixels") is not None and (r["width"] is None or r["height"] is None or r["width"] * r["height"] < filters["min_pixels"]):
             return False
@@ -876,103 +887,55 @@ def search(body: dict = Body(...)):
     qs = [q.strip() for q in (body.get("qs") or [body.get("q") or ""]) if q and q.strip()]
     if not qs:
         return {"files": []}
-    vecs, negs, understood, texts = [], [], {}, []
-    for q in qs:
-        if q.startswith("voice:"):
-            v = _voice.get(q[6:])
-            if v is None:
-                raise HTTPException(400, "That voice search has expired — record it again")
-            vecs.append(v); continue
-        it = _interpret(q)
-        if it["kind"] and not kinds:
-            kinds = [it["kind"]]; understood["kind"] = it["kind"]
-        if it["source"] and not body.get("source"):
-            src = it["source"]; prev = keep
-            keep = (lambda rr, src=src, prev=prev: (names_mod.source_of_row(rr) == src) and (prev is None or prev(rr)))
-            understood["source"] = names_mod.LABEL[src][0]
+    its = [understand_mod.understand(q, **_ask_context(body)) for q in qs]
+    merged, flt = dict(body), dict(body.get("filters") or {})
+    for it in its:                                   # what was said joins what was already chosen; chosen filters win
+        for k, v in it["filters"].items():
+            flt.setdefault(k, v)
+        if it["color"] and not merged.get("color"):
+            merged["color"] = it["color"]
+        if it["source"] and not merged.get("source"):
+            merged["source"] = it["source"]
+        if it["favourite"] and not merged.get("tag"):
+            merged["tag"] = FAVOURITE
+        if it["kinds"] and not kinds:
+            kinds = it["kinds"]
+    merged["filters"] = flt
+    keep = _search_filter(merged)
+    chips = [c for it in its for c in it["chips"]]
+    if not any(it["text"] for it in its) and (kinds or flt or merged.get("color") or merged.get("source") or merged.get("tag")):
+        # "files from 1 month ago", "red photos": nothing to look for by meaning, so these are just the matching files
+        params = {k: v for k, v in flt.items() if k in _DETAIL_PARAMS}
+        found = files(kind=kinds[0] if kinds and len(kinds) == 1 else None, color=merged.get("color"), source=merged.get("source"),
+                      tag=merged.get("tag"), root=root, limit=limit + offset, **params)["files"][offset:]
+        return {"files": found, "understood": chips}
+    vecs, negs, texts = [], [], []
+    for q, it in zip(qs, its):
         if it["without"]:
-            negs.append(embedder.embed_query(it["without"])); understood.setdefault("without", []).append(it["without"])
-        vecs.append(embedder.embed_query(it["text"])); texts.append(it["text"])
+            negs.append(embedder.embed_query(it["without"]))
+        text = it["text"] or {"video": "a video", "image": "a photo", "audio": "a sound"}.get(kinds[0] if kinds else "", q)
+        vecs.append(embedder.embed_query(text)); texts.append(text)
     qvec = vecs[0] if len(vecs) == 1 else np.vstack(vecs)
     neg = None
     if negs:
         neg = np.mean(negs, axis=0); neg /= np.linalg.norm(neg) or 1
-    files = _rank(qvec, root, kinds, limit + offset, query_text=texts[0] if len(vecs) == 1 and texts else None, keep=keep, neg=neg)[offset:]
-    return {"files": files, "understood": understood}
+    found = _rank(qvec, root, kinds, limit + offset, query_text=texts[0] if len(vecs) == 1 and texts else None, keep=keep, neg=neg)[offset:]
+    return {"files": found, "understood": chips}
 
 
-# --------------------------------------------------------------- reading a typed sentence
-_KIND_WORDS = [("video", r"videos?|clips?|footage|reels?|movies?"), ("image", r"photos?|images?|pictures?|pics?|stills?|renders?"),
-               ("audio", r"songs?|music|audio|sounds?|tracks?|voice ?overs?|recordings?")]
-_LEAD = r"^(?:show me |find me |find |search for |look for |get me |i want |give me )?(?:all |some |any |the |my )?"
+_DETAIL_PARAMS = {"after", "before", "min_size", "max_size", "min_width", "min_height", "min_pixels", "min_duration", "max_duration", "min_fps", "aspect", "codec"}
 
 
-def _interpret(q: str) -> dict:
-    """'videos of a man running without text from midjourney' -> kind video, source midjourney,
-    leave out 'text', search 'a man running'. Anything not recognised stays in the search as is."""
-    t, kind, source, without = q.strip(), None, None, None
-    low = t.lower()
-    for k, pat in _KIND_WORDS:
-        m = re.match(_LEAD + rf"(?:{pat})\b(?:\s+(?:of|with|showing|where|that|about)\b)?\s*", low)
-        if m and m.end() < len(low):
-            kind, t, low = k, t[m.end():], low[m.end():]
-            break
-    for key, (label, _) in names_mod.LABEL.items():
-        if key in ("camera", "screenshot", "creation", "flow"):      # ordinary words; too easy to misread
-            continue
-        names = {key, label.lower().split(" ")[0]}
-        m = re.search(r"\s*\b(?:from|by|made (?:with|in|by)|generated (?:with|by|in)|in|on)\s+(" + "|".join(map(re.escape, names)) + r")\b", low)
-        if m:
-            source = key; t, low = t[:m.start()] + t[m.end():], low[:m.start()] + low[m.end():]
-            break
-    m = re.search(r"\s*\b(?:without|but not|except|excluding|no)\s+(?:any\s+)?(.+)$", low)
-    if m and (m.start() > 0 or kind):
-        without = t[m.start(1):].strip(" .,"); t = t[:m.start()]
-    t = t.strip(" .,") or {"video": "a video", "image": "a photo", "audio": "a sound"}.get(kind, q)
-    return {"text": t, "kind": kind, "source": source, "without": without}
+def _ask_context(body: dict) -> dict:
+    """The clock and region the person is in, so "yesterday" and "5/8" mean what they mean to them."""
+    return {"now": float(body.get("now") or time.time()), "utc_offset_min": int(body.get("utc_offset_min") or 0),
+            "day_first": bool(body.get("day_first", True))}
 
 
-# --------------------------------------------------------------- voice: the spoken clip itself is the query
-_voice: dict[str, np.ndarray] = {}
-
-
-@app.get("/api/model")
-def model_status():
-    return fetch_mod.status()
-
-
-@app.post("/api/model/download")
-def model_download():
-    import threading
-    fetch_mod.start(on_done=lambda: threading.Thread(target=_warm_ideas, daemon=True).start())
-    return fetch_mod.status()
-
-
-@app.post("/api/voice")
-async def voice(file: UploadFile = File(...)):
-    """EmbeddingGemma understands speech directly, so the recording is embedded as a search query —
-    no transcription, nothing leaves this PC. Returns an id to search with and words it sounds close to."""
-    import subprocess, uuid
-    stamp = int(time.time() * 1000)
-    raw, wav = extract.TMP_DIR / f"voice_{stamp}.webm", extract.TMP_DIR / f"voice_{stamp}.wav"
-    raw.write_bytes(await file.read())
-    try:
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(raw), "-t", "20", "-ac", "1", "-ar", "16000",
-                        "-af", "silenceremove=start_periods=1:start_threshold=-45dB", str(wav)], capture_output=True, timeout=60)
-        if not wav.exists() or wav.stat().st_size < 4000:
-            raise HTTPException(400, "Didn't catch that — hold the mic and speak a little longer")
-        m = embedder.get_model()
-        v = embedder._norm(m.encode({"text": "task: search result | query: <|audio|>", "audio": str(wav)}, normalize_embeddings=True))
-        secs = round((wav.stat().st_size - 44) / 32000, 1)
-    finally:
-        raw.unlink(missing_ok=True); wav.unlink(missing_ok=True)
-    vid = uuid.uuid4().hex[:10]
-    _voice[vid] = v
-    while len(_voice) > 60:
-        _voice.pop(next(iter(_voice)))
-    sims = tags_mod._vecs() @ v
-    hint = [tags_mod.TAGS[i] for i in np.argsort(-sims)[:3]]
-    return {"id": vid, "secs": secs, "hint": hint}
+@app.post("/api/understand")
+def understand_endpoint(body: dict = Body(...)):
+    """Reads a typed or spoken question into exact filters plus the words left for the meaning search."""
+    return understand_mod.understand(str(body.get("text") or "")[:400], **_ask_context(body))
 
 
 @app.get("/api/voice/model")
@@ -1432,7 +1395,7 @@ def create_project(body: dict = Body(...)):
         if not isinstance(spec, dict):
             raise HTTPException(400, "Invalid live-space search")
         queries = spec.get("qs") or []
-        if not isinstance(queries, list) or len(queries) > 5 or any(not isinstance(q, str) or len(q) > 300 or q.startswith("voice:") for q in queries):
+        if not isinstance(queries, list) or len(queries) > 5 or any(not isinstance(q, str) or len(q) > 300 for q in queries):
             raise HTTPException(400, "Live spaces need up to five text searches")
         if queries:
             vectors = [embedder.embed_query(q.strip()) for q in queries if q.strip()]
