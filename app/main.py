@@ -1,4 +1,5 @@
 import asyncio
+import hmac
 import os
 import json
 import logging
@@ -13,7 +14,7 @@ from pathlib import Path
 from send2trash import send2trash
 
 import numpy as np
-from fastapi import Body, FastAPI, File, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, HTTPException, UploadFile, WebSocket
 from fastapi.responses import FileResponse
 
 from . import colors as colors_mod
@@ -21,6 +22,7 @@ from . import names as names_mod
 from . import commit as commit_mod
 from . import db, embedder, extract, indexer, media_meta
 from . import understand as understand_mod
+from . import voice_stream
 from . import suggest as suggest_mod
 from . import tags as tags_mod
 from . import fetch as fetch_mod
@@ -940,12 +942,27 @@ def understand_endpoint(body: dict = Body(...)):
 
 @app.get("/api/voice/model")
 def voice_model():
-    return transcribe_mod.dictation_status()
+    """The two voice models (quick for live words, careful for the final text): downloaded or not, and progress."""
+    return voice_stream.status()
 
 
 @app.post("/api/voice/model")
 def voice_model_prepare():
-    return transcribe_mod.prepare_dictation()
+    return voice_stream.prepare()
+
+
+@app.websocket("/api/voice/stream")
+async def voice_stream_ws(ws: WebSocket):
+    """Live dictation. The HTTP guard does not see WebSockets, so the token is checked here, and a browser page
+    (which always sends an Origin header) is refused."""
+    token = ws.query_params.get("t") or ws.headers.get("x-filemind-token") or ""
+    host = ws.headers.get("host", "")
+    if ws.headers.get("origin") or (host.rsplit(":", 1)[0] not in _HOSTS and host not in _HOSTS) \
+            or (_TOKEN and not hmac.compare_digest(token, _TOKEN)):
+        await ws.close(code=1008)
+        return
+    await ws.accept()
+    await voice_stream.run(ws, lambda text, ctx: understand_mod.understand(text, **ctx))
 
 
 @app.post("/api/index/speed")
@@ -955,31 +972,6 @@ def index_speed(body: dict = Body(...)):
         return {"level": indexer.set_speed(str(body.get("level", "")))}
     except ValueError as e:
         raise HTTPException(400, str(e))
-
-
-@app.post("/api/voice/warm")
-def voice_warm():
-    """Loads the voice model in the background while the person is still speaking."""
-    import threading
-    threading.Thread(target=transcribe_mod.warm_dictation, daemon=True).start()
-    return {"ok": True}
-
-
-@app.post("/api/voice/text")
-async def voice_text(file: UploadFile = File(...)):
-    """Speech to text for the quick-search launcher: the words become an ordinary typed search, so phrases like
-    "videos of the beach without people" are understood the same way as typing them."""
-    stamp = int(time.time() * 1000)
-    raw, wav = extract.TMP_DIR / f"dict_{stamp}.bin", extract.TMP_DIR / f"dict_{stamp}.wav"
-    raw.write_bytes(await file.read())
-    try:
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(raw), "-t", "30", "-ac", "1", "-ar", "16000",
-                        str(wav)], capture_output=True, timeout=60)
-        if not wav.exists() or wav.stat().st_size < 4000:
-            raise HTTPException(400, "Didn't catch that. Speak a little longer.")
-        return await asyncio.to_thread(transcribe_mod.dictate, str(wav))
-    finally:
-        raw.unlink(missing_ok=True); wav.unlink(missing_ok=True)
 
 
 @app.post("/api/search/image")
