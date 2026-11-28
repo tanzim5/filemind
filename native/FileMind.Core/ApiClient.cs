@@ -47,7 +47,15 @@ public sealed class ApiClient(Uri baseUri, string token = "") : IDisposable
 
     /// <summary>Semantic search, kept inside the same filters the library view uses.</summary>
     public async Task<List<FileItem>> SearchAsync(IEnumerable<string> texts, FileQuery query, int limit, int offset, CancellationToken ct = default) =>
-        (await PostAsync<SearchResult>("/api/search", query.ToSearchBody(texts, limit, offset), ct)).Files;
+        (await SearchWithChipsAsync(texts, query, limit, offset, ct)).Files;
+
+    /// <summary>The same, and what the engine understood in the words (dates, colours, sizes...).</summary>
+    public Task<SearchResult> SearchWithChipsAsync(IEnumerable<string> texts, FileQuery query, int limit, int offset, CancellationToken ct = default) =>
+        PostAsync<SearchResult>("/api/search", query.ToSearchBody(texts, limit, offset), ct);
+
+    /// <summary>Reads a typed or spoken question into filters and the words left to search for.</summary>
+    public Task<Understood> UnderstandAsync(string text, CancellationToken ct = default) =>
+        PostAsync<Understood>("/api/understand", FileQuery.AskContext(text), ct);
 
     /// <summary>Files like this one. With <paramref name="words"/> the engine mixes the file's vector with the words
     /// ("like this, but at night"); <paramref name="textWeight"/> (0 to 1, engine default 0.5) says how much the words count.</summary>

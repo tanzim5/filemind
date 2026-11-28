@@ -42,6 +42,40 @@ public sealed class FileQuery
 
     public FileQuery Clone() => (FileQuery)MemberwiseClone();
 
+    /// <summary>The person's clock and date order, so "yesterday" and "5/8" mean what they mean to them.</summary>
+    public static Dictionary<string, object> Clock() => new()
+    {
+        ["now"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0,
+        ["utc_offset_min"] = (int)TimeZoneInfo.Local.GetUtcOffset(DateTime.Now).TotalMinutes,
+        ["day_first"] = !CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern.TrimStart('\'', ' ').StartsWith("M", StringComparison.OrdinalIgnoreCase),
+    };
+
+    public static Dictionary<string, object> AskContext(string text)
+    {
+        var d = Clock(); d["text"] = text; return d;
+    }
+
+    /// <summary>Copies what the engine understood into this query (filters, type, colour, source, favourites) and returns the words that are left to search for.</summary>
+    public string Apply(Understood u)
+    {
+        double? D(string k) => u.Filters.TryGetValue(k, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.Number ? v.GetDouble() : null;
+        if (D("after") is { } a) After = a;
+        if (D("before") is { } b) Before = b;
+        if (D("min_size") is { } s1) MinSize = (long)s1;
+        if (D("max_size") is { } s2) MaxSize = (long)s2;
+        if (D("min_pixels") is { } px) MinPixels = (long)px;
+        if (D("min_duration") is { } d1) MinDuration = d1;
+        if (D("max_duration") is { } d2) MaxDuration = d2;
+        if (D("min_fps") is { } fps) MinFps = fps;
+        if (u.Filters.TryGetValue("aspect", out var asp) && asp.ValueKind == System.Text.Json.JsonValueKind.String) Aspect = asp.GetString();
+        if (u.Filters.TryGetValue("codec", out var cod) && cod.ValueKind == System.Text.Json.JsonValueKind.String) Codec = cod.GetString();
+        if (u.Kinds.Count == 1) Kind = u.Kinds[0];
+        if (u.Color is not null) Color = u.Color;
+        if (u.Source is not null) Source = u.Source;
+        if (u.Favourite) Tag = "Favourites";
+        return u.Text;
+    }
+
     public bool HasDetailFilters => DetailFilters().Count > 0;
 
     /// <summary>The detail filters under the engine's own names; shared by browsing and searching.</summary>
@@ -88,6 +122,7 @@ public sealed class FileQuery
     public Dictionary<string, object?> ToSearchBody(IEnumerable<string> queries, int limit, int offset)
     {
         var body = new Dictionary<string, object?> { ["qs"] = queries.ToArray(), ["limit"] = limit, ["offset"] = offset };
+        foreach (var (k, v) in Clock()) body[k] = v;
         if (Kind != "all") body["kinds"] = new[] { Kind };
         else if (MediaOnlyActive) body["kinds"] = new[] { "image", "video" };
         if (Root is not null) body["root"] = Root;
@@ -99,62 +134,5 @@ public sealed class FileQuery
         var f = DetailFilters();
         if (f.Count > 0) body["filters"] = f;
         return body;
-    }
-}
-
-public sealed record SmartFilterResult(FileQuery Query, string? Kind, string Text, List<string> Understood);
-
-/// <summary>Turns "4K videos of motorcycles" into exact filters plus the leftover words for a semantic search.
-/// A port of the web app's parseSmartFilter, so both behave the same.</summary>
-public static class SmartFilter
-{
-    private const RegexOptions O = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
-
-    public static SmartFilterResult Parse(string input)
-    {
-        var text = (input ?? "").Trim().ToLowerInvariant();
-        var q = new FileQuery();
-        var understood = new List<string>();
-
-        void Take(string pattern, Action<Match> apply)
-        {
-            var m = Regex.Match(text, pattern, O);
-            if (!m.Success) return;
-            apply(m);
-            text = text.Remove(m.Index, m.Length).Insert(m.Index, " ");
-        }
-        static double Num(string s) => double.Parse(s, CultureInfo.InvariantCulture);
-        static double Seconds(string n, string unit) => Num(n) * (unit.StartsWith('h') ? 3600 : unit.StartsWith('m') ? 60 : 1);
-        static long Bytes(string n, string unit) => (long)Math.Round(Num(n) * (unit.StartsWith('g') ? 1e9 : 1e6));
-
-        Take(@"\b(?:4k|uhd)\b", _ => { q.MinPixels = 3840L * 2160; understood.Add("4K or higher"); });
-        Take(@"\b(?:1080p|full\s*hd)\b", _ => { q.MinPixels = 1920L * 1080; understood.Add("Full HD or higher"); });
-        Take(@"\b(?:60\s*fps|60\s*frames?\s*per\s*second)\b", _ => { q.MinFps = 60; understood.Add("60 fps or higher"); });
-        Take(@"\b(?:30\s*fps|30\s*frames?\s*per\s*second)\b", _ => { q.MinFps = 30; understood.Add("30 fps or higher"); });
-        Take(@"\b(?:vertical|portrait)\b", _ => { q.Aspect = "portrait"; understood.Add("Portrait"); });
-        Take(@"\b(?:horizontal|landscape)\b", _ => { q.Aspect = "landscape"; understood.Add("Landscape"); });
-        Take(@"\bsquare\b", _ => { q.Aspect = "square"; understood.Add("Square"); });
-        Take(@"\b(?:wide|widescreen)\b", _ => { q.Aspect = "wide"; understood.Add("Wide"); });
-        Take(@"\b(?:under|shorter than|less than)\s*(\d+(?:\.\d+)?)\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?)\b",
-            m => { q.MaxDuration = Seconds(m.Groups[1].Value, m.Groups[2].Value); understood.Add($"Under {m.Groups[1].Value} {m.Groups[2].Value}"); });
-        Take(@"\b(?:over|longer than|more than)\s*(\d+(?:\.\d+)?)\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?)\b",
-            m => { q.MinDuration = Seconds(m.Groups[1].Value, m.Groups[2].Value); understood.Add($"Over {m.Groups[1].Value} {m.Groups[2].Value}"); });
-        Take(@"\b(?:larger than|over|bigger than)\s*(\d+(?:\.\d+)?)\s*(mb|gb)\b",
-            m => { q.MinSize = Bytes(m.Groups[1].Value, m.Groups[2].Value.ToLowerInvariant()); understood.Add($"Over {m.Groups[1].Value} {m.Groups[2].Value.ToUpperInvariant()}"); });
-        Take(@"\b(?:smaller than|under|less than)\s*(\d+(?:\.\d+)?)\s*(mb|gb)\b",
-            m => { q.MaxSize = Bytes(m.Groups[1].Value, m.Groups[2].Value.ToLowerInvariant()); understood.Add($"Under {m.Groups[1].Value} {m.Groups[2].Value.ToUpperInvariant()}"); });
-
-        string? kind = null;
-        var km = Regex.Match(text, @"\b(videos?|clips?|footage|images?|photos?|pictures?|audio|songs?|sounds?|tracks?)\b", O);
-        if (km.Success)
-        {
-            var w = km.Value;
-            kind = Regex.IsMatch(w, "video|clip|footage", O) ? "video" : Regex.IsMatch(w, "image|photo|picture", O) ? "image" : "audio";
-            text = text.Remove(km.Index, km.Length).Insert(km.Index, " ");
-            understood.Add(kind == "video" ? "Videos" : kind == "image" ? "Images" : "Audio");
-        }
-        text = Regex.Replace(text, @"\b(?:show me|find me|find|show|only|files?|of|with|that|are|the|my|all)\b", " ");
-        text = Regex.Replace(text, @"\s+", " ").Trim();
-        return new SmartFilterResult(q, kind, text, understood);
     }
 }

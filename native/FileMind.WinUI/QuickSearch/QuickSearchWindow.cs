@@ -256,12 +256,14 @@ public sealed class QuickSearchWindow : Window
         var cts = _searchCts = new CancellationTokenSource();
         try
         {
-            var files = await api.SearchAsync([text], new FileQuery { Kind = KindFilter }, Limit, 0, cts.Token);
+            var result = await api.SearchWithChipsAsync([text], new FileQuery { Kind = KindFilter }, Limit, 0, cts.Token);
             if (cts.IsCancellationRequested) return;
+            var files = result.Files;
             _list.ItemsSource = files.Select(BuildRow).ToList();
             if (files.Count > 0) _list.SelectedIndex = 0; else ShowPreview(null);
             Resize(true);
-            _status.Text = files.Count == 0 ? "Nothing matches. Try describing it differently." : "";
+            var understood = result.Understood.Count > 0 ? string.Join("  ·  ", result.Understood) : "";
+            _status.Text = files.Count == 0 ? "Nothing matches. Try describing it differently." + (understood.Length > 0 ? "  (" + understood + ")" : "") : understood;
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)

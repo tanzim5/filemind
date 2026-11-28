@@ -57,6 +57,30 @@ public sealed class FilesPage
 public sealed class SearchResult
 {
     [JsonPropertyName("files")] public List<FileItem> Files { get; set; } = [];
+    /// <summary>What the engine understood in the question ("Date: 5 Aug 2026", "Colour: Red", ...).</summary>
+    [JsonPropertyName("understood")] public List<UnderstoodChip> Understood { get; set; } = [];
+}
+
+public sealed class UnderstoodChip
+{
+    [JsonPropertyName("key")] public string Key { get; set; } = "";
+    [JsonPropertyName("label")] public string Label { get; set; } = "";
+    [JsonPropertyName("value")] public string Value { get; set; } = "";
+    public override string ToString() => Key == "text" ? $"“{Value}”" : $"{Label}: {Value}";
+}
+
+/// <summary>A question read by the engine: exact filters plus the words left for the meaning search.</summary>
+public sealed class Understood
+{
+    [JsonPropertyName("text")] public string Text { get; set; } = "";
+    [JsonPropertyName("without")] public string? Without { get; set; }
+    [JsonPropertyName("filters")] public Dictionary<string, JsonElement> Filters { get; set; } = [];
+    [JsonPropertyName("kinds")] public List<string> Kinds { get; set; } = [];
+    [JsonPropertyName("color")] public string? Color { get; set; }
+    [JsonPropertyName("source")] public string? Source { get; set; }
+    [JsonPropertyName("favourite")] public bool Favourite { get; set; }
+    [JsonPropertyName("chips")] public List<UnderstoodChip> Chips { get; set; } = [];
+    public string Summary => string.Join("  ·  ", Chips);
 }
 
 public sealed class RootFolder

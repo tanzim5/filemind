@@ -1559,23 +1559,19 @@ public sealed partial class LibraryPage : Page
 
     private async Task ApplySmartAsync(string input)
     {
-        var r = SmartFilter.Parse(input);
+        Understood u;
+        try { u = await Api.UnderstandAsync(input); }
+        catch (Exception ex) { App.Log("understand", ex, null); u = new Understood { Text = input }; }
         await GoAsync(() =>
         {
-            var s = r.Query;
-            if (s.MinPixels is not null) _q.MinPixels = s.MinPixels;
-            if (s.MinFps is not null) _q.MinFps = s.MinFps;
-            if (s.Aspect is not null) _q.Aspect = s.Aspect;
-            if (s.MinDuration is not null) _q.MinDuration = s.MinDuration;
-            if (s.MaxDuration is not null) _q.MaxDuration = s.MaxDuration;
-            if (s.MinSize is not null) _q.MinSize = s.MinSize;
-            if (s.MaxSize is not null) _q.MaxSize = s.MaxSize;
-            if (r.Kind is not null) _q.Kind = r.Kind;
+            var leftover = _q.Apply(u);
             // With a reference picture on the pill the words refine it, so the reference stays; otherwise they start a text search.
-            if (r.Text.Length > 0) _tags.Add((r.Text, r.Text));
+            var words = leftover.Length > 0 && u.Without is { Length: > 0 } w ? leftover + " without " + w : leftover;
+            if (words.Length > 0) _tags.Add((words, words));
             _title = "";
             SyncDetailFields();
         });
+        if (u.Chips.Count > 0) ShowToast("Understood: " + u.Summary);
     }
 
     private void SyncDetailFields()
