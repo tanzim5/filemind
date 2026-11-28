@@ -23,6 +23,10 @@ public sealed class ApiClient(Uri baseUri, string token = "") : IDisposable
     }
 
     public Uri BaseUri => baseUri;
+    /// <summary>Where live dictation connects (a WebSocket; the token proves it is this app).</summary>
+    public Uri VoiceStreamUri => new UriBuilder(baseUri) { Scheme = "ws", Path = "/api/voice/stream", Query = "t=" + Uri.EscapeDataString(token) }.Uri;
+    public Task<VoiceModelState> GetVoiceModelAsync(CancellationToken ct = default) => GetAsync<VoiceModelState>("/api/voice/model", ct);
+    public Task<VoiceModelState> PrepareVoiceModelAsync(CancellationToken ct = default) => PostAsync<VoiceModelState>("/api/voice/model", null, ct);
     public Uri ThumbUri(int id) => new(baseUri, $"/api/thumb/{id}");
     public Uri FileUri(int id) => new(baseUri, $"/api/file/{id}");
 
@@ -109,25 +113,10 @@ public sealed class ApiClient(Uri baseUri, string token = "") : IDisposable
     }
 
 
-    /// <summary>Speech to text on the engine (local Whisper): used when Windows speech recognition is unavailable.</summary>
-    public async Task<string> VoiceToTextAsync(string audioPath, CancellationToken ct = default)
-    {
-        using var form = new MultipartFormDataContent();
-        form.Add(new ByteArrayContent(await File.ReadAllBytesAsync(audioPath, ct)), "file", Path.GetFileName(audioPath));
-        using var response = await _http.PostAsync("/api/voice/text", form, ct);
-        return (await ReadAsync<JsonElement>(response, ct)).GetProperty("text").GetString() ?? "";
-    }
-
     /// <summary>Tells the engine how hard to work while indexing: quiet, balanced or fast.</summary>
     public async Task SetIndexSpeedAsync(string level)
     {
         try { using var r = await _http.PostAsJsonAsync("/api/index/speed", new { level }); } catch (Exception) { }
-    }
-
-    /// <summary>Loads the local voice model ahead of the first words, so the answer comes back sooner.</summary>
-    public async Task WarmVoiceAsync()
-    {
-        try { using var r = await _http.PostAsync("/api/voice/warm", null); } catch (Exception) { }
     }
 
     /// <summary>Find files that look or sound like a picture on disk.</summary>
@@ -141,14 +130,6 @@ public sealed class ApiClient(Uri baseUri, string token = "") : IDisposable
         return (await ReadAsync<SearchResult>(response, ct)).Files;
     }
 
-    /// <summary>Sends a recording (any format ffmpeg reads); the engine embeds the sound itself as the search query.</summary>
-    public async Task<VoiceResult> VoiceAsync(string path, CancellationToken ct = default)
-    {
-        using var form = new MultipartFormDataContent();
-        form.Add(new ByteArrayContent(await File.ReadAllBytesAsync(path, ct)), "file", Path.GetFileName(path));
-        using var response = await _http.PostAsync("/api/voice", form, ct);
-        return await ReadAsync<VoiceResult>(response, ct);
-    }
 
     public Task<List<ColorSwatch>> GetColorsAsync(CancellationToken ct = default) => GetAsync<List<ColorSwatch>>("/api/colors", ct);
     public async Task<List<SourceEntry>> GetSourcesAsync(CancellationToken ct = default) => (await GetAsync<SourcesResponse>("/api/sources", ct)).Sources;

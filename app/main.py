@@ -940,6 +940,18 @@ def understand_endpoint(body: dict = Body(...)):
     return understand_mod.understand(str(body.get("text") or "")[:400], **_ask_context(body))
 
 
+@app.get("/api/model")
+def model_status():
+    return fetch_mod.status()
+
+
+@app.post("/api/model/download")
+def model_download():
+    import threading
+    fetch_mod.start(on_done=lambda: threading.Thread(target=_warm_ideas, daemon=True).start())
+    return fetch_mod.status()
+
+
 @app.get("/api/voice/model")
 def voice_model():
     """The two voice models (quick for live words, careful for the final text): downloaded or not, and progress."""

@@ -27,10 +27,10 @@ public sealed class AppSettings
     public double Volume { get; set; } = 0.8;
     /// <summary>System-wide shortcut that opens the quick-search launcher.</summary>
     public string QuickSearchHotkey { get; set; } = "Ctrl+Shift+Space";
+    /// <summary>Opens Quick Search already listening: say "find me files from last week" and it searches.</summary>
+    public string VoiceHotkey { get; set; } = "Ctrl+Alt+Space";
     /// <summary>Closing the window keeps File Mind in the notification area so the shortcut keeps working.</summary>
     public bool KeepRunning { get; set; } = true;
-    /// <summary>Voice search: "local" (Whisper on this PC) or "windows" (Windows speech recognition).</summary>
-    public string VoiceEngine { get; set; } = "local";
     /// <summary>How hard indexing works the PC: "quiet" (one helper, gentle on fans), "balanced" or "fast".</summary>
     public string IndexSpeed { get; set; } = "balanced";
     /// <summary>Sidebar sections the person folded away (by key, e.g. "spaces" or "refine:Shape").</summary>

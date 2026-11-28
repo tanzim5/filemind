@@ -91,13 +91,12 @@
               <Button x:Name="HotkeyBtn" Grid.Column="1" Style="{StaticResource GlassButton}" MinWidth="190" Click="Hotkey_Click" PreviewKeyDown="Hotkey_KeyDown" LostFocus="Hotkey_Lost" Padding="12,8" VerticalAlignment="Center"/>
             </Grid>
             <TextBlock x:Name="HotkeyNote" Style="{StaticResource Helper}" Visibility="Collapsed"/>
-            <StackPanel Spacing="4">
-              <RadioButtons x:Name="VoiceChoice" Header="Voice search uses" SelectionChanged="Voice_Changed">
-                <RadioButton Tag="local" Content="On this PC (Whisper, private)"/>
-                <RadioButton Tag="windows" Content="Windows speech recognition"/>
-              </RadioButtons>
-              <TextBlock Text="On this PC keeps your voice on this computer. Windows speech recognition shows words as you speak, but Windows may send the audio to Microsoft when its online speech setting is on." Style="{StaticResource Helper}"/>
-            </StackPanel>
+            <Grid ColumnSpacing="16">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <StackPanel Spacing="2"><TextBlock Text="Voice shortcut"/><TextBlock Text="Opens Quick Search already listening. Ask for a file in your own words; press it again to finish." Style="{StaticResource Helper}"/></StackPanel>
+              <Button x:Name="VoiceHotkeyBtn" Grid.Column="1" Style="{StaticResource GlassButton}" MinWidth="190" Click="VoiceHotkey_Click" PreviewKeyDown="Hotkey_KeyDown" LostFocus="Hotkey_Lost" Padding="12,8" VerticalAlignment="Center"/>
+            </Grid>
+            <TextBlock Text="Voice runs on this PC with Whisper. Nothing you say is uploaded." Style="{StaticResource Helper}"/>
             <Grid ColumnSpacing="16">
               <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
               <StackPanel Spacing="2"><TextBlock Text="Keep running in the tray"/><TextBlock Text="When the window is closed, so the shortcut keeps working." Style="{StaticResource Helper}"/></StackPanel>

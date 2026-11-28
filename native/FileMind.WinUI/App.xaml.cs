@@ -39,6 +39,7 @@ public partial class App : Application
     public static bool Quitting { get; private set; }
     /// <summary>The shortcut actually registered (null when every candidate was taken).</summary>
     public static string? ActiveHotkey { get; private set; }
+    public static string? ActiveVoiceHotkey { get; private set; }
 
     /// <summary>The quick-search launcher, its global shortcut and the tray icon. The launcher window is created now and
     /// only shown/hidden afterwards, so the shortcut opens it instantly.</summary>
@@ -50,6 +51,7 @@ public partial class App : Application
             Launcher.AppWindow.Hide();
             _native = new NativeHost(Launcher.Hwnd);
             _native.HotkeyPressed += () => Launcher.DispatcherQueue.TryEnqueue(Launcher.Toggle);
+            _native.VoiceHotkeyPressed += () => Launcher.DispatcherQueue.TryEnqueue(() => _ = Launcher.ListenFromHotkeyAsync());
             _native.OpenRequested += () => Window?.DispatcherQueue.TryEnqueue(ShowMain);
             _native.QuitRequested += () => Window?.DispatcherQueue.TryEnqueue(Quit);
             // The chosen shortcut first; if another app owns it, the first free fallback (not saved, so it is retried next time).
@@ -57,6 +59,8 @@ public partial class App : Application
             ActiveHotkey = new[] { wanted, "Ctrl+Shift+Space", "Ctrl+Alt+Shift+Space", "Alt+Shift+F" }.Distinct()
                 .FirstOrDefault(c => _native.RegisterHotkey(c));
             if (ActiveHotkey != wanted) Log("hotkey", null, $"{wanted} is used by another app; using {ActiveHotkey ?? "none"}");
+            var voice = AppRuntime.Current.Settings.VoiceHotkey;
+            ActiveVoiceHotkey = new[] { voice, "Ctrl+Alt+Shift+V", "Alt+Shift+V" }.Distinct().FirstOrDefault(c => c != ActiveHotkey && _native.RegisterVoiceHotkey(c));
             // Development aid: FILEMIND_DEV_LAUNCHER=<text> opens the launcher with that query once the engine is up.
             if (Environment.GetEnvironmentVariable("FILEMIND_DEV_LAUNCHER") is { Length: > 0 } dev)
             {
@@ -65,7 +69,7 @@ public partial class App : Application
                 t.Start();
             }
             _native.ShowTrayIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "filemind.ico"),
-                ActiveHotkey is null ? "File Mind" : $"File Mind — {ActiveHotkey} to search");
+                ActiveHotkey is null ? "File Mind" : $"File Mind — {ActiveHotkey} to search" + (ActiveVoiceHotkey is null ? "" : $", {ActiveVoiceHotkey} to ask"));
         }
         catch (Exception ex) { Log("launcher", ex, ex.Message); }
     }
@@ -75,6 +79,13 @@ public partial class App : Application
     {
         var ok = _native?.RegisterHotkey(combo) ?? false;
         if (ok) ActiveHotkey = combo;
+        return ok;
+    }
+
+    public static bool SetVoiceHotkey(string combo)
+    {
+        var ok = combo != ActiveHotkey && (_native?.RegisterVoiceHotkey(combo) ?? false);
+        if (ok) ActiveVoiceHotkey = combo;
         return ok;
     }
 

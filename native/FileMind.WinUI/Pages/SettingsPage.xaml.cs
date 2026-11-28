@@ -27,7 +27,6 @@ public sealed partial class SettingsPage : Page
         BuildOrder();
         _ = BuildStorageAsync();
         ShowHotkey(); KeepSwitch.IsOn = St.KeepRunning;
-        VoiceChoice.SelectedIndex = St.VoiceEngine == "windows" ? 1 : 0;
         SimilarChoice.SelectedIndex = St.SimilarFiles == "side" ? 1 : 0;
         SizeSlider.Value = St.TileSize;
         GapSlider.Value = St.TileGap;
@@ -94,13 +93,6 @@ public sealed partial class SettingsPage : Page
         Save(); BuildOrder(); LibraryPage.Current?.ApplySections();
     }
 
-    private void Voice_Changed(object sender, SelectionChangedEventArgs e)
-    {
-        if (!_ready) return;
-        St.VoiceEngine = VoiceChoice.SelectedIndex == 1 ? "windows" : "local";
-        Save();
-    }
-
     // A tile's name is always shown. The chosen tile gets the accent ring (set by the caller) and a small check in its corner.
     private static UIElement Tile(Border frame, bool selected, Brush accent)
     {
@@ -163,10 +155,19 @@ public sealed partial class SettingsPage : Page
 
     // ---- Quick search shortcut: click, then press the new combination ----
     private bool _recording;
-    private void ShowHotkey() => HotkeyBtn.Content = (App.ActiveHotkey ?? St.QuickSearchHotkey).Replace("+", "  +  ");
+    private bool _recordingVoice;
+    private void ShowHotkey()
+    {
+        HotkeyBtn.Content = (App.ActiveHotkey ?? St.QuickSearchHotkey).Replace("+", "  +  ");
+        VoiceHotkeyBtn.Content = (App.ActiveVoiceHotkey ?? St.VoiceHotkey).Replace("+", "  +  ");
+    }
+    private void VoiceHotkey_Click(object sender, RoutedEventArgs e)
+    {
+        _recording = true; _recordingVoice = true; VoiceHotkeyBtn.Content = "Press the new shortcut..."; HotkeyNote.Visibility = Visibility.Collapsed;
+    }
     private void Hotkey_Click(object sender, RoutedEventArgs e)
     {
-        _recording = true; HotkeyBtn.Content = "Press the new shortcut..."; HotkeyNote.Visibility = Visibility.Collapsed;
+        _recording = true; _recordingVoice = false; HotkeyBtn.Content = "Press the new shortcut..."; HotkeyNote.Visibility = Visibility.Collapsed;
     }
     private void Hotkey_Lost(object sender, RoutedEventArgs e) { _recording = false; ShowHotkey(); }
     private void Hotkey_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
@@ -188,7 +189,7 @@ public sealed partial class SettingsPage : Page
         parts.Add(name);
         var combo = string.Join("+", parts);
         _recording = false;
-        if (App.SetHotkey(combo)) { St.QuickSearchHotkey = combo; Save(); HotkeyNote.Visibility = Visibility.Collapsed; }
+        if (_recordingVoice ? App.SetVoiceHotkey(combo) : App.SetHotkey(combo)) { if (_recordingVoice) St.VoiceHotkey = combo; else St.QuickSearchHotkey = combo; Save(); HotkeyNote.Visibility = Visibility.Collapsed; }
         else { HotkeyNote.Text = $"{combo.Replace("+", " + ")} is already used by another app. Pick a different one."; HotkeyNote.Visibility = Visibility.Visible; }
         ShowHotkey();
     }

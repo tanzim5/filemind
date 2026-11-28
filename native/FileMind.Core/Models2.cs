@@ -228,11 +228,3 @@ public sealed class IdeasResponse
 {
     [JsonPropertyName("ideas")] public List<IdeaEntry> Ideas { get; set; } = [];
 }
-
-/// <summary>A spoken search: the id to search with, how long it was, and words it sounds close to.</summary>
-public sealed class VoiceResult
-{
-    [JsonPropertyName("id")] public string Id { get; set; } = "";
-    [JsonPropertyName("secs")] public double Secs { get; set; }
-    [JsonPropertyName("hint")] public List<string> Hint { get; set; } = [];
-}

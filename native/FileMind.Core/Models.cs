@@ -157,6 +157,7 @@ public sealed class FacetResult
 public sealed class VoiceModelState
 {
     [JsonPropertyName("ready")] public bool Ready { get; set; }
+    [JsonPropertyName("final_ready")] public bool FinalReady { get; set; }
     [JsonPropertyName("running")] public bool Running { get; set; }
     [JsonPropertyName("done")] public long Done { get; set; }
     [JsonPropertyName("total")] public long Total { get; set; }
