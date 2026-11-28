@@ -97,43 +97,6 @@ def _file_dict(r, score=None):
     return d
 
 
-_PICK_PS = r"""
-Add-Type -AssemblyName System.Windows.Forms
-[System.Windows.Forms.Application]::EnableVisualStyles()
-$owner = New-Object System.Windows.Forms.Form -Property @{TopMost=$true; ShowInTaskbar=$false; Opacity=0; StartPosition='CenterScreen'; Width=1; Height=1}
-$owner.Show()
-$d = New-Object System.Windows.Forms.FolderBrowserDialog
-$d.Description = 'Choose a folder'
-$d.ShowNewFolderButton = $false
-if ($d.ShowDialog($owner) -eq 'OK') { [Console]::Out.Write($d.SelectedPath) }
-$owner.Dispose()
-"""
-
-
-@app.post("/api/pick_folder")
-def pick_folder():
-    """Opens the system folder picker on this PC (the app is local) and returns the chosen path."""
-    title = "Choose a folder"
-    if os.name == "nt":
-        cmds = [["powershell", "-NoProfile", "-STA", "-Command", _PICK_PS]]
-    elif sys.platform == "darwin":
-        cmds = [["osascript", "-e", f'POSIX path of (choose folder with prompt "{title}")']]
-    else:
-        cmds = [["zenity", "--file-selection", "--directory", f"--title={title}"],
-                ["kdialog", "--getexistingdirectory", str(Path.home()), "--title", title]]
-    for cmd in cmds:
-        try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-        except FileNotFoundError:
-            continue                                   # this dialog tool isn't installed; try the next
-        except Exception as e:
-            raise HTTPException(500, f"Could not open the folder picker: {e}")
-        path = r.stdout.strip()
-        return {"path": path.rstrip("/") or path or None}     # macOS adds a trailing slash; keep "/" itself
-    raise HTTPException(501, "No folder picker found on this system (install zenity or kdialog). "
-                             "You can paste the folder path instead.")
-
-
 @app.get("/api/known_folders")
 def known_folders():
     """Common library folders that exist on this PC, for one-click adding."""
@@ -523,8 +486,6 @@ def tags_delete(name: str):
     return tags_list()
 
 
-_DETAIL_KEYS = ("after", "before", "min_size", "max_size", "min_width", "min_height", "min_pixels",
-                "min_duration", "max_duration", "min_fps", "aspect", "codec")
 _SCOPE_KEYS = ("root", "kind", "project", "unassigned", "color", "near", "source", "pattern", "discover", "tag", "label", "media")
 
 
@@ -673,11 +634,6 @@ def _warm_ideas():
 def ideas(n: int = 30):
     """Search ideas that this library can actually answer, strongest and most varied first."""
     return {"ideas": _idea_kinds(suggest_mod.ideas(n))}
-
-
-@app.post("/api/ideas/related")
-def ideas_related(body: dict = Body(...)):
-    return {"ideas": _idea_kinds(suggest_mod.related([int(x) for x in body.get("ids", [])], body.get("q", ""), int(body.get("n", 6))))}
 
 
 def _idea_kinds(items):
@@ -1087,17 +1043,6 @@ def moment_status(fid: int):
         return moments_mod.status(fid)
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc)) from exc
-
-
-@app.get("/api/moment-clips")
-def moment_clips():
-    """Offer playable files in the Discover tool so it can be used without finding a viewer first."""
-    c = db.conn()
-    rows = c.execute("SELECT f.*, COALESCE(r.status,'new') AS moment_status FROM files f "
-                     "LEFT JOIN moment_runs r ON r.file_id=f.id AND r.size=f.size AND r.mtime=f.mtime "
-                     "WHERE f.status='done' AND f.kind IN ('video','audio') "
-                     "ORDER BY CASE WHEN r.status='ready' THEN 0 ELSE 1 END, f.mtime DESC LIMIT 24").fetchall()
-    return [{**_file_dict(row), "moment_status": row["moment_status"]} for row in rows]
 
 
 @app.post("/api/moments/{fid}")
@@ -1559,25 +1504,6 @@ def name_pattern(body: dict = Body(...)):
         n += 1
     c.commit()
     return {"ok": True}
-
-
-# ---------------------------------------------------------------- auto-grouping
-_STOP = set("the a an of and or to in for on with copy final new image img screenshot untitled "
-            "download file document pdf png jpg jpeg mp4 mov v1 v2 v3 de la le und der".split())
-
-
-def _suggest_name(rows) -> str:
-    toks = Counter()
-    for r in rows:
-        stem = os.path.splitext(r["name"])[0].lower()
-        for t in set(re.split(r"[^a-z]+", stem)):
-            if len(t) > 2 and t not in _STOP:
-                toks[t] += 1
-    common = [t for t, n in toks.most_common(3) if n >= max(2, len(rows) * 0.2)]
-    kinds = Counter(r["kind"] for r in rows).most_common(1)[0][0]
-    if common:
-        return " ".join(w.capitalize() for w in common)
-    return f"Group of {kinds}s"
 
 
 @app.post("/api/cluster")

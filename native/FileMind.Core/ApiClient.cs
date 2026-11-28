@@ -83,11 +83,6 @@ public sealed class ApiClient(Uri baseUri, string token = "") : IDisposable
     public Task<TranscriptState> GetTranscriptAsync(int id, CancellationToken ct = default) => GetAsync<TranscriptState>($"/api/transcript/{id}", ct);
     public Task<TranscriptState> StartTranscriptAsync(int id, CancellationToken ct = default) => PostAsync<TranscriptState>($"/api/transcript/{id}", null, ct);
 
-    public async Task DeleteTagAsync(string name, CancellationToken ct = default)
-    {
-        using var response = await _http.DeleteAsync($"/api/tags/{Uri.EscapeDataString(name)}", ct);
-        response.EnsureSuccessStatusCode();
-    }
     /// <summary>Makes the preview video of a sequence (the first time only) so it can be played.</summary>
     public Task PrepareSequenceAsync(int id, CancellationToken ct = default) => PostAsync<JsonElement>($"/api/sequence/{id}/proxy", null, ct);
     public Task SetSequenceFpsAsync(int id, double fps, CancellationToken ct = default) => PostAsync<JsonElement>($"/api/sequence/{id}/fps", new { fps }, ct);
@@ -103,9 +98,6 @@ public sealed class ApiClient(Uri baseUri, string token = "") : IDisposable
     public Task<TagList> GetTagsAsync(CancellationToken ct = default) => GetAsync<TagList>("/api/tags", ct);
     public Task<TagList> TagFilesAsync(IEnumerable<int> ids, IEnumerable<string>? add, IEnumerable<string>? remove, CancellationToken ct = default) =>
         PostAsync<TagList>("/api/tags", new { ids = ids.ToList(), add = add?.ToList() ?? [], remove = remove?.ToList() ?? [] }, ct);
-    public Task<TagList> DefineTagAsync(string name, string? color, string? rename = null, CancellationToken ct = default) =>
-        PostAsync<TagList>("/api/tags/define", new { name, color, rename }, ct);
-
     /// <summary>Counts for the Refine options: over a browsed scope (kind, root, source, ...) or the given result ids.</summary>
     public Task<FacetResult> GetFacetsAsync(Dictionary<string, object?> scope, IEnumerable<int>? ids, CancellationToken ct = default)
     {
