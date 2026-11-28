@@ -31,6 +31,7 @@ public sealed class QuickSearchWindow : Window
     private readonly StackPanel _info;
     private readonly DispatcherTimer _debounce = new() { Interval = TimeSpan.FromMilliseconds(150) };
     private readonly SpeechInput _speech = new();
+    private readonly GlassBackdrop _glass = new();
     private CancellationTokenSource? _searchCts;
     private string _lastQuery = "";
     private bool _listening, _shown, _activated, _liquidBackdrop;
@@ -62,7 +63,7 @@ public sealed class QuickSearchWindow : Window
     {
         Title = "File Mind quick search";
         Hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        SystemBackdrop = new DesktopAcrylicBackdrop();
+        SystemBackdrop = _glass;
 
         if (AppWindow.Presenter is OverlappedPresenter p)
         {
@@ -206,7 +207,8 @@ public sealed class QuickSearchWindow : Window
         if (liquid != _liquidBackdrop || SystemBackdrop is null && liquid)
         {
             _liquidBackdrop = liquid;
-            SystemBackdrop = liquid ? new DesktopAcrylicBackdrop() : null;
+            _glass.Update(p.Dark);
+            SystemBackdrop = liquid ? _glass : null;
         }
     }
 
