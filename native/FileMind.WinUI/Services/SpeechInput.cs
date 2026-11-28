@@ -36,6 +36,7 @@ public sealed class SpeechInput : IDisposable
     public async Task<SpeechResult> ListenAsync()
     {
         if (IsListening) throw new SpeechException("busy", "Already listening.");
+        if (AppRuntime.Current.Settings.VoiceEngine == "windows") return await ListenWindowsAsync();
         var api = AppRuntime.Current.Api ?? throw new SpeechException("starting", "File Mind is still starting.");
         IsListening = true; _cancelled = false;
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -93,13 +94,69 @@ public sealed class SpeechInput : IDisposable
         }
     }
 
+    private Windows.Media.SpeechRecognition.SpeechRecognizer? _win;
+
+    /// <summary>Windows' own dictation: no download, words appear as you speak. Windows may send the audio to Microsoft to read it.</summary>
+    private async Task<SpeechResult> ListenWindowsAsync()
+    {
+        var api = AppRuntime.Current.Api ?? throw new SpeechException("starting", "File Mind is still starting.");
+        IsListening = true; _cancelled = false;
+        var done = new TaskCompletionSource<Windows.Media.SpeechRecognition.SpeechRecognitionResultStatus?>();
+        var text = new StringBuilder();
+        try
+        {
+            var rec = new Windows.Media.SpeechRecognition.SpeechRecognizer();
+            _win = rec;
+            rec.Constraints.Add(new Windows.Media.SpeechRecognition.SpeechRecognitionTopicConstraint(Windows.Media.SpeechRecognition.SpeechRecognitionScenario.Dictation, "dictation"));
+            var compiled = await rec.CompileConstraintsAsync();
+            if (compiled.Status != Windows.Media.SpeechRecognition.SpeechRecognitionResultStatus.Success) throw new SpeechException("internal", "Windows speech could not start.");
+            rec.ContinuousRecognitionSession.AutoStopSilenceTimeout = TimeSpan.FromSeconds(1.5);
+            rec.HypothesisGenerated += (_, a) => Partial?.Invoke(text.ToString().Trim(), a.Hypothesis.Text);
+            rec.ContinuousRecognitionSession.ResultGenerated += (_, a) =>
+            {
+                if (a.Result.Status == Windows.Media.SpeechRecognition.SpeechRecognitionResultStatus.Success && !string.IsNullOrWhiteSpace(a.Result.Text))
+                { text.Append(' ').Append(a.Result.Text); Partial?.Invoke(text.ToString().Trim(), ""); }
+            };
+            rec.ContinuousRecognitionSession.Completed += (_, a) => done.TrySetResult(a.Status switch
+            {
+                Windows.Media.SpeechRecognition.SpeechRecognitionResultStatus.MicrophoneUnavailable => Windows.Media.SpeechRecognition.SpeechRecognitionResultStatus.MicrophoneUnavailable,
+                Windows.Media.SpeechRecognition.SpeechRecognitionResultStatus.NetworkFailure => Windows.Media.SpeechRecognition.SpeechRecognitionResultStatus.NetworkFailure,
+                _ => null
+            });
+            await rec.ContinuousRecognitionSession.StartAsync();
+            var first = await Task.WhenAny(done.Task, Task.Delay(TimeSpan.FromSeconds(30)));
+            if (first != done.Task) { try { await rec.ContinuousRecognitionSession.StopAsync(); } catch (Exception) { } }
+            else if (done.Task.Result is { } bad)
+                throw bad == Windows.Media.SpeechRecognition.SpeechRecognitionResultStatus.MicrophoneUnavailable ? new SpeechException("no_mic", "No microphone.") : new SpeechException("speech_privacy", "Windows speech is off.");
+            if (_cancelled) return new SpeechResult("", null);
+            var said = text.ToString().Trim();
+            Understood? u = null;
+            if (said.Length > 0) { try { u = await api.UnderstandAsync(said); } catch (Exception) { } }
+            return new SpeechResult(said, u);
+        }
+        catch (System.Runtime.InteropServices.COMException ex) when ((uint)ex.HResult == 0x80045509 || (uint)ex.HResult == 0x80131500)
+        { throw new SpeechException("speech_privacy", "Windows speech is off."); }
+        catch (UnauthorizedAccessException) { throw new SpeechException("mic_denied", "Microphone access is off for desktop apps."); }
+        finally
+        {
+            IsListening = false;
+            try { _win?.Dispose(); } catch (Exception) { }
+            _win = null;
+        }
+    }
+
     /// <summary>Ends listening now; whatever was said so far is read and returned.</summary>
-    public void Stop() => _ = SendAsync(Encoding.UTF8.GetBytes("{\"type\":\"stop\"}"), WebSocketMessageType.Text, CancellationToken.None);
+    public void Stop()
+    {
+        if (_win is { } w) { _ = w.ContinuousRecognitionSession.StopAsync(); return; }
+        _ = SendAsync(Encoding.UTF8.GetBytes("{\"type\":\"stop\"}"), WebSocketMessageType.Text, CancellationToken.None);
+    }
 
     /// <summary>Stops listening and throws the words away.</summary>
     public void Cancel()
     {
         _cancelled = true;
+        if (_win is { } w) { _ = w.ContinuousRecognitionSession.CancelAsync(); return; }
         _ = SendAsync(Encoding.UTF8.GetBytes("{\"type\":\"cancel\"}"), WebSocketMessageType.Text, CancellationToken.None);
         try { _mic?.Dispose(); } catch (Exception) { }
     }

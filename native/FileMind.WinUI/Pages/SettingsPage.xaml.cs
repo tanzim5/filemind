@@ -22,6 +22,8 @@ public sealed partial class SettingsPage : Page
         InitializeComponent();
         Loaded += async (_, _) => await FillAsync();
         GlassSlider.Value = St.Transparency * 100;
+        GlassSwitch.IsOn = St.Glass; GlassSlider.IsEnabled = St.Glass;
+        VoiceEngineBox.SelectedIndex = St.VoiceEngine == "windows" ? 1 : 0; ShowVoiceNote();
         MinSideBox.SelectedIndex = Math.Max(0, new[] { 0, 256, 300, 512, 720, 1080 }.ToList().IndexOf(St.MinSide));
         MinSideModeBox.SelectedIndex = St.MinSideMode == "long" ? 1 : 0;
         BuildOrder();
@@ -300,6 +302,22 @@ public sealed partial class SettingsPage : Page
     private Microsoft.UI.Xaml.DispatcherTimer? _glassSave;
     private void GlassSaveTick(object? s, object e) { _glassSave?.Stop(); Save(); }
 
+    private void GlassSwitch_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (!_ready) return;
+        St.Glass = GlassSwitch.IsOn; GlassSlider.IsEnabled = St.Glass; Save(); App.Window?.ApplyGlass();
+    }
+
+    private void ShowVoiceNote() => VoiceEngineNote.Text = St.VoiceEngine == "windows"
+        ? "Windows reads your voice, with no download. Windows may send the audio to Microsoft (needs Online speech recognition on)."
+        : "Whisper reads your voice on this PC, so nothing is uploaded. One-time download of about 145 MB.";
+
+    private void VoiceEngine_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_ready) return;
+        St.VoiceEngine = VoiceEngineBox.SelectedIndex == 1 ? "windows" : "whisper"; Save(); ShowVoiceNote();
+    }
+
     private void Glass_Changed(object sender, RangeBaseValueChangedEventArgs e)
     {
         if (!_ready) return;
@@ -486,8 +504,8 @@ public sealed partial class SettingsPage : Page
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var text = new StackPanel { Spacing = 2 };
             text.Children.Add(new TextBlock { Text = entry.Name });
-            text.Children.Add(new TextBlock { Text = entry.Purpose, Style = Ui.Style("Helper"), TextWrapping = TextWrapping.Wrap });
-            text.Children.Add(new TextBlock { Text = entry.Path, Style = Ui.Style("Helper"), IsTextSelectionEnabled = true, TextTrimming = TextTrimming.CharacterEllipsis, Opacity = 0.7 });
+            text.Children.Add(new TextBlock { Text = entry.Purpose, Style = (Style)Resources["Helper"], TextWrapping = TextWrapping.Wrap });
+            text.Children.Add(new TextBlock { Text = entry.Path, Style = (Style)Resources["Helper"], IsTextSelectionEnabled = true, TextTrimming = TextTrimming.CharacterEllipsis, Opacity = 0.7 });
             row.Children.Add(text);
             var size = new TextBlock { Text = StorageInfo.Format(entry.Bytes), VerticalAlignment = VerticalAlignment.Center, MinWidth = 64, TextAlignment = TextAlignment.Right };
             Grid.SetColumn(size, 1); row.Children.Add(size);

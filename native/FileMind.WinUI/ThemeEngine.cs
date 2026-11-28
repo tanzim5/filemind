@@ -59,8 +59,8 @@ public static class ThemeEngine
     // the page never drops below ~30 % opacity, the sidebar below ~16 % (the blurred acrylic behind keeps text legible).
     // Glass is for the control layer: the sidebar lets the wallpaper through, while the page the files sit on stays nearly solid so
     // pictures keep their colour (stacked see-through layers are what made it look muddy).
-    public static double RailOpacity(AppSettings st) => 1 - 0.85 * Math.Clamp(st.Transparency, 0, 1);
-    public static double PanelOpacity(AppSettings st) => 1 - 0.20 * Math.Clamp(st.Transparency, 0, 1);
+    public static double RailOpacity(AppSettings st) => !st.Glass ? 1 : 1 - 0.85 * Math.Clamp(st.Transparency, 0, 1);
+    public static double PanelOpacity(AppSettings st) => !st.Glass ? 1 : 1 - 0.20 * Math.Clamp(st.Transparency, 0, 1);
 
     /// <summary>One look now: clear glass with a bright top edge. (The older frosted style is gone.)</summary>
     public static bool IsLiquid(AppSettings st) => true;

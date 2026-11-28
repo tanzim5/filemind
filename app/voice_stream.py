@@ -122,7 +122,7 @@ _use_lock = threading.Lock()
 _idle_timer: threading.Timer | None = None
 _active = False
 
-state = {"running": False, "done": 0, "total": 640_000_000, "error": ""}
+state = {"running": False, "done": 0, "total": 145_000_000, "error": ""}   # the "base" model is all it needs
 
 
 def ready_partial() -> bool:
@@ -138,8 +138,9 @@ def status() -> dict:
 
 
 def prepare():
-    """Downloads the two voice models in the background; safe to call repeatedly."""
-    if state["running"] or (ready_partial() and ready_final()):
+    """Downloads the voice model (the small "base" one, about 145 MB) in the background; safe to call repeatedly.
+    A bigger "small" model is used for the final text only if it happens to be on the PC already."""
+    if state["running"] or ready_partial():
         return status()
     state.update(running=True, done=0, error="")
 
@@ -147,7 +148,7 @@ def prepare():
         try:
             with requests.Session() as session:
                 session.headers["User-Agent"] = "FileMind"
-                for repo, folder in ((PARTIAL_REPO, PARTIAL_DIR), (FINAL_REPO, FINAL_DIR)):
+                for repo, folder in ((PARTIAL_REPO, PARTIAL_DIR),):
                     folder.mkdir(parents=True, exist_ok=True)
                     for name in FILES:
                         out = folder / name

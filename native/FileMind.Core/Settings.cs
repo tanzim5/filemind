@@ -29,6 +29,10 @@ public sealed class AppSettings
     public string QuickSearchHotkey { get; set; } = "Ctrl+Shift+Space";
     /// <summary>Opens Quick Search already listening: say "find me files from last week" and it searches.</summary>
     public string VoiceHotkey { get; set; } = "Ctrl+Alt+Space";
+    /// <summary>"whisper" (on this PC, a one-time download of about 145 MB) or "windows" (Windows speech: no download, but Windows may send the audio to Microsoft).</summary>
+    public string VoiceEngine { get; set; } = "whisper";
+    /// <summary>The window is glass (the desktop shows through); off makes it solid.</summary>
+    public bool Glass { get; set; } = true;
     /// <summary>Closing the window keeps File Mind in the notification area so the shortcut keeps working.</summary>
     public bool KeepRunning { get; set; } = true;
     /// <summary>How hard indexing works the PC: "quiet" (one helper, gentle on fans), "balanced" or "fast".</summary>

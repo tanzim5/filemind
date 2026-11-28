@@ -84,7 +84,7 @@ public sealed partial class SpacesPage : Page
         var card = new StackPanel { Spacing = 10, Background = new SolidColorBrush(Colors.Transparent) };
         card.Children.Add(stack); card.Children.Add(label);
         card.Tapped += (_, _) => open();
-        card.PointerEntered += (_, _) => { Glow.On(card, 8, false, 140, false); };
+        card.PointerEntered += (_, _) => { Glow.On(card, 8, false, 95, false); };
         card.PointerExited += (_, _) => { Glow.Off(card, false); };
         if (extra is null) return card;
         // a card that comes with its own buttons (the suggestions): the buttons must not trigger the open
@@ -129,7 +129,7 @@ public sealed partial class SpacesPage : Page
         card.Children.Add(stack);
         card.Children.Add(new TextBlock { Text = "New space", FontSize = 13, HorizontalAlignment = HorizontalAlignment.Center, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
         card.Tapped += (_, _) => NewSpace_Click(this, new RoutedEventArgs());
-        card.PointerEntered += (_, _) => { Glow.On(card, 8, false, 140, false); };
+        card.PointerEntered += (_, _) => { Glow.On(card, 8, false, 95, false); };
         card.PointerExited += (_, _) => { Glow.Off(card, false); };
         return card;
     }

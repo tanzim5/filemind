@@ -540,6 +540,7 @@ public sealed partial class ViewerPage : Page
             // so no frame is being rendered from a player that is already gone.
             foreach (var child in MediaHost.Children.OfType<MediaPlayerElement>()) child.SetMediaPlayer(null);
             MediaHost.Children.Clear();
+            StageHost.Margin = new Thickness(24, 24, 24, 88);
             if (old is not null)
             {
                 old.Pause();
@@ -590,6 +591,7 @@ public sealed partial class ViewerPage : Page
         pill.Children.Add(counter); pill.Children.Add(mode);
         var host = new Grid(); host.Children.Add(sv); host.Children.Add(pill);
         MediaHost.Children.Add(host);
+        StageHost.Margin = new Thickness(24, 24, 24, 16);      // no control bar under a PDF: the pages use the whole stage
         var ct = _cts.Token;
         try
         {

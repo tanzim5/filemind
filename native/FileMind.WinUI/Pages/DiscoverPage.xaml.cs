@@ -117,7 +117,7 @@ public sealed partial class DiscoverPage : Page
         text.Children.Add(new TextBlock { Text = $"{g.Count:N0}", FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Brush("GlassTextSecondaryBrush") });
         card.Children.Add(text);
         card.Tapped += (_, _) => Open(new LibraryRequest(new FileQuery { Discover = g.Key }, g.Title));
-        card.PointerEntered += (_, _) => { Glow.On(card, 6, false, 140, false); };
+        card.PointerEntered += (_, _) => { Glow.On(card, 6, false, 95, false); };
         card.PointerExited += (_, _) => { Glow.Off(card, false); };
         return card;
     }

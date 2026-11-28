@@ -169,7 +169,7 @@ public sealed class QuickSearchWindow : Window
         _frame = new Border { Child = root, BorderThickness = new Thickness(1), BorderBrush = Res("GlassStrokeBrush") };
         ApplyTheme();
         Content = _frame;
-        Glow.Attach(_frame, 8, 240, true, false);
+        Glow.Attach(_frame, 8, 130, true, false);
 
         _debounce.Tick += async (_, _) => { _debounce.Stop(); await SearchAsync(_box.Text); };
         _speech.Partial += (stable, tentative) => DispatcherQueue.TryEnqueue(() => { if (_listening) { _box.Text = (stable + " " + tentative).Trim(); _box.SelectionStart = _box.Text.Length; } });
@@ -372,9 +372,13 @@ public sealed class QuickSearchWindow : Window
                 _statusAction = () => _ = Windows.System.Launcher.LaunchUriAsync(new Uri("ms-settings:privacy-microphone"));
                 break;
             case "no_mic": _status.Text = "No microphone found."; break;
+            case "speech_privacy":
+                _status.Text = "Windows speech needs 'Online speech recognition' on. Click here to open Windows settings.";
+                _statusAction = () => _ = Windows.System.Launcher.LaunchUriAsync(new Uri("ms-settings:privacy-speech"));
+                break;
             case "starting": _status.Text = "File Mind is still starting. Try again in a moment."; break;
             case "model_missing":
-                _status.Text = "Voice needs a one-time download (about 620 MB). Click here to start it.";
+                _status.Text = "Voice needs a one-time download (about 145 MB). Click here to start it, or pick Windows speech in Settings.";
                 _statusAction = () => _ = DownloadVoiceAsync();
                 break;
             default: _status.Text = "Voice search didn't work this time."; break;

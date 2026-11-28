@@ -29,6 +29,11 @@
             <StackPanel Spacing="8" Visibility="Collapsed"><TextBlock Text="Surface"/><StackPanel x:Name="SurfaceRow" Orientation="Horizontal" Spacing="8"/></StackPanel>
             <StackPanel Spacing="8"><TextBlock Text="Accent colour"/><StackPanel x:Name="AccentRow" Orientation="Horizontal" Spacing="10"/></StackPanel>
             <Grid ColumnSpacing="16">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <StackPanel Spacing="2"><TextBlock Text="Glass"/><TextBlock Text="Let the desktop show through the window. Off makes it solid." Style="{StaticResource Helper}"/></StackPanel>
+              <ToggleSwitch x:Name="GlassSwitch" Grid.Column="1" OnContent="" OffContent="" Toggled="GlassSwitch_Toggled"/>
+            </Grid>
+            <Grid ColumnSpacing="16">
               <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="44"/></Grid.ColumnDefinitions>
               <StackPanel Spacing="2"><TextBlock Text="Transparency"/><TextBlock Text="Lower shows more of your desktop." Style="{StaticResource Helper}"/></StackPanel>
               <Slider x:Name="GlassSlider" Grid.Column="1" Width="220" VerticalAlignment="Center" Minimum="0" Maximum="100" StepFrequency="5" ValueChanged="Glass_Changed"/>
@@ -96,7 +101,13 @@
               <StackPanel Spacing="2"><TextBlock Text="Voice shortcut"/><TextBlock Text="Opens Quick Search already listening. Ask for a file in your own words; press it again to finish." Style="{StaticResource Helper}"/></StackPanel>
               <Button x:Name="VoiceHotkeyBtn" Grid.Column="1" Style="{StaticResource GlassButton}" MinWidth="190" Click="VoiceHotkey_Click" PreviewKeyDown="Hotkey_KeyDown" LostFocus="Hotkey_Lost" Padding="12,8" VerticalAlignment="Center"/>
             </Grid>
-            <TextBlock Text="Voice runs on this PC with Whisper. Nothing you say is uploaded." Style="{StaticResource Helper}"/>
+            <Grid ColumnSpacing="16">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <StackPanel Spacing="2"><TextBlock Text="Voice engine"/><TextBlock x:Name="VoiceEngineNote" Style="{StaticResource Helper}" TextWrapping="Wrap"/></StackPanel>
+              <ComboBox x:Name="VoiceEngineBox" Grid.Column="1" MinWidth="190" SelectionChanged="VoiceEngine_Changed">
+                <ComboBoxItem Content="Whisper (on this PC)"/><ComboBoxItem Content="Windows speech"/>
+              </ComboBox>
+            </Grid>
             <Grid ColumnSpacing="16">
               <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
               <StackPanel Spacing="2"><TextBlock Text="Keep running in the tray"/><TextBlock Text="When the window is closed, so the shortcut keeps working." Style="{StaticResource Helper}"/></StackPanel>

@@ -296,7 +296,7 @@ public sealed partial class LibraryPage : Page
         card.Children.Add(img);
         card.Children.Add(new TextBlock { Text = m.File.Name, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis });
         card.Tapped += (_, _) => Frame.Navigate(typeof(ViewerPage), new ViewerRequest(m.File, [m.File], m.Start, m.End));
-        card.PointerEntered += (_, _) => Glow.On(card, 6, false, 140, false);
+        card.PointerEntered += (_, _) => Glow.On(card, 6, false, 95, false);
         card.PointerExited += (_, _) => Glow.Off(card, false);
         ToolTipService.SetToolTip(card, "Open at this moment");
         return card;
@@ -862,11 +862,15 @@ public sealed partial class LibraryPage : Page
                 break;
             case "no_mic": ShowToast("No microphone found."); break;
             case "starting": ShowToast("File Mind is still starting. Try again in a moment."); break;
+            case "speech_privacy":
+                ShowToast("Windows speech needs 'Online speech recognition' turned on. Opening Windows settings…");
+                await Windows.System.Launcher.LaunchUriAsync(new Uri("ms-settings:privacy-speech"));
+                break;
             case "model_missing":
                 try
                 {
                     await Api.PrepareVoiceModelAsync();
-                    ShowToast("Voice needs a one-time download (about 620 MB). It will be ready in a few minutes; see Settings.");
+                    ShowToast("Voice needs a one-time download (about 145 MB). It will be ready in a minute or two, or pick Windows speech in Settings.");
                 }
                 catch (Exception e) { App.Log("voice-model", e, e.Message); ShowToast("Couldn't start the voice download."); }
                 break;
@@ -1666,7 +1670,7 @@ public sealed partial class LibraryPage : Page
         return null;
     }
 
-    private void Tile_PointerEntered(object sender, PointerRoutedEventArgs e) { if (Vm(sender) is { } t) { t.Hover = true; if (sender is FrameworkElement fe) Glow.On(fe, 8, true, 140, false); } }
+    private void Tile_PointerEntered(object sender, PointerRoutedEventArgs e) { if (Vm(sender) is { } t) { t.Hover = true; if (sender is FrameworkElement fe) Glow.On(fe, 8, true, 95, false); } }
     private void Tile_PointerExited(object sender, PointerRoutedEventArgs e) { if (Vm(sender) is { } t) { t.Hover = false; if (sender is FrameworkElement fe) Glow.Off(fe); } }
 
     /// <summary>Right-click a tile: the usual things to do with it. Over a ticked tile the menu acts on every ticked file.</summary>

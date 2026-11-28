@@ -98,11 +98,19 @@ internal static class Anim
 
     private static ButtonBase? _down;
 
+    private static bool IsGlassStyle(Style s)
+    {
+        for (var x = s; x is not null; x = x.BasedOn)
+            foreach (var k in new[] { "GlassButton", "GlassChip" })
+                if (Application.Current.Resources.TryGetValue(k, out var g) && ReferenceEquals(x, g)) return true;
+        return false;
+    }
+
     private static ButtonBase? LightTarget(DependencyObject d)
     {
         for (; d is not null; d = VisualTreeHelper.GetParent(d))
             if (d is ButtonBase { IsEnabled: true, ActualWidth: >= 56, ActualHeight: >= 30 } b && b.Style is { } s
-                && Application.Current.Resources.TryGetValue("GlassButton", out var g) && (ReferenceEquals(s, g) || ReferenceEquals(s.BasedOn, g)))
+                && IsGlassStyle(s))
                 return b;
         return null;
     }
@@ -121,11 +129,11 @@ internal static class Anim
         root.AddHandler(UIElement.PointerEnteredEvent, new PointerEventHandler((_, e) =>
         {
             if (e.Pointer.PointerDeviceType == Microsoft.UI.Input.PointerDeviceType.Mouse && e.OriginalSource is DependencyObject d && LightTarget(d) is { } b)
-                Glow.On(b, b.CornerRadius.TopLeft, false, 70, true);
+                Glow.On(b, b.CornerRadius.TopLeft, false, 55, true);
         }), true);
         root.AddHandler(UIElement.PointerExitedEvent, new PointerEventHandler((_, e) =>
         {
-            if (e.OriginalSource is DependencyObject d && LightTarget(d) is { } b) Glow.Off(b, false);
+            if (e.OriginalSource is DependencyObject d && LightTarget(d) is { } b && !Glow.Inside(b, e)) Glow.Off(b, false);
         }), true);
         root.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(Up), true);
         root.AddHandler(UIElement.PointerCanceledEvent, new PointerEventHandler(Up), true);
