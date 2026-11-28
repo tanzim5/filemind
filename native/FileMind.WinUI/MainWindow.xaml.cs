@@ -42,6 +42,7 @@ public sealed partial class MainWindow : Window
         }), true);
         Root.SizeChanged += (_, _) => QueueTitleRegions();
         Pages.Anim.HookPress(Root);
+        Pages.Glow.Attach(RailCard, 0, 240, false, false);
         // Follow Windows when it changes between light and dark or gets a new accent colour.
         _ui.ColorValuesChanged += (_, _) => DispatcherQueue.TryEnqueue(() =>
         {

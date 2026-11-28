@@ -60,7 +60,7 @@
             </Grid>
             <Grid ColumnSpacing="16">
               <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-              <StackPanel Spacing="2"><TextBlock Text="Light follows the pointer"/><TextBlock Text="A soft glow and a small lift on the tile or card under the mouse." Style="{StaticResource Helper}"/></StackPanel>
+              <StackPanel Spacing="2"><TextBlock Text="Light follows the pointer"/><TextBlock Text="A soft light and edge highlight that follow the mouse over buttons, cards and panels." Style="{StaticResource Helper}"/></StackPanel>
               <ToggleSwitch x:Name="LightSwitch" Grid.Column="1" OnContent="" OffContent="" MinWidth="0" Toggled="Light_Toggled"/>
             </Grid>
             <Grid ColumnSpacing="16">

@@ -930,7 +930,13 @@ async def voice_stream_ws(ws: WebSocket):
         await ws.close(code=1008)
         return
     await ws.accept()
-    await voice_stream.run(ws, lambda text, ctx: understand_mod.understand(text, **ctx))
+    try:
+        await voice_stream.run(ws, lambda text, ctx: understand_mod.understand(text, **ctx))
+    finally:
+        try:
+            await ws.close()                      # a proper close, so the app still receives the last message
+        except Exception:
+            pass
 
 
 @app.post("/api/index/speed")

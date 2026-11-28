@@ -65,6 +65,23 @@ internal static class Anim
         catch (Exception) { done(); }
     }
 
+    /// <summary>Scales with a small spring: settles quickly, and a low damping gives a slight overshoot.</summary>
+    internal static void Spring(UIElement e, float to, float damping, int periodMs)
+    {
+        if (!On) return;
+        try
+        {
+            var v = ElementCompositionPreview.GetElementVisual(e);
+            if (e is FrameworkElement fe) v.CenterPoint = new Vector3((float)fe.ActualWidth / 2, (float)fe.ActualHeight / 2, 0);
+            var a = v.Compositor.CreateSpringVector3Animation();
+            a.FinalValue = new Vector3(to, to, 1);
+            a.DampingRatio = damping;
+            a.Period = TimeSpan.FromMilliseconds(periodMs);
+            v.StartAnimation("Scale", a);
+        }
+        catch (Exception) { }
+    }
+
     internal static void Scale(UIElement e, float to, int ms)
     {
         try
@@ -81,6 +98,15 @@ internal static class Anim
 
     private static ButtonBase? _down;
 
+    private static ButtonBase? LightTarget(DependencyObject d)
+    {
+        for (; d is not null; d = VisualTreeHelper.GetParent(d))
+            if (d is ButtonBase { IsEnabled: true, ActualWidth: >= 56, ActualHeight: >= 30 } b && b.Style is { } s
+                && Application.Current.Resources.TryGetValue("GlassButton", out var g) && (ReferenceEquals(s, g) || ReferenceEquals(s.BasedOn, g)))
+                return b;
+        return null;
+    }
+
     /// <summary>Every button and chip under <paramref name="root"/> dips to 97% while pressed.</summary>
     public static void HookPress(UIElement root)
     {
@@ -88,9 +114,19 @@ internal static class Anim
         {
             if (!On) return;
             for (var d = e.OriginalSource as DependencyObject; d is not null; d = VisualTreeHelper.GetParent(d))
-                if (d is ButtonBase b && b.IsEnabled) { _down = b; Scale(b, 0.97f, 70); return; }
+                if (d is ButtonBase b && b.IsEnabled) { _down = b; Spring(b, 0.965f, 0.9f, 40); return; }
         }), true);
-        void Up(object s, PointerRoutedEventArgs e) { if (_down is { } b) { _down = null; Scale(b, 1f, 120); } }
+        void Up(object s, PointerRoutedEventArgs e) { if (_down is { } b) { _down = null; Spring(b, 1f, 0.55f, 60); } }
+        // Real buttons (not tiny toolbar glyphs) catch a soft light that follows the mouse.
+        root.AddHandler(UIElement.PointerEnteredEvent, new PointerEventHandler((_, e) =>
+        {
+            if (e.Pointer.PointerDeviceType == Microsoft.UI.Input.PointerDeviceType.Mouse && e.OriginalSource is DependencyObject d && LightTarget(d) is { } b)
+                Glow.On(b, b.CornerRadius.TopLeft, false, 70, true);
+        }), true);
+        root.AddHandler(UIElement.PointerExitedEvent, new PointerEventHandler((_, e) =>
+        {
+            if (e.OriginalSource is DependencyObject d && LightTarget(d) is { } b) Glow.Off(b, false);
+        }), true);
         root.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(Up), true);
         root.AddHandler(UIElement.PointerCanceledEvent, new PointerEventHandler(Up), true);
         root.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler(Up), true);

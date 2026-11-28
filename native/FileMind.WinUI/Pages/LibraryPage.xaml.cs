@@ -296,7 +296,7 @@ public sealed partial class LibraryPage : Page
         card.Children.Add(img);
         card.Children.Add(new TextBlock { Text = m.File.Name, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis });
         card.Tapped += (_, _) => Frame.Navigate(typeof(ViewerPage), new ViewerRequest(m.File, [m.File], m.Start, m.End));
-        card.PointerEntered += (_, _) => Glow.On(card, 6, false);
+        card.PointerEntered += (_, _) => Glow.On(card, 6, false, 140, false);
         card.PointerExited += (_, _) => Glow.Off(card, false);
         ToolTipService.SetToolTip(card, "Open at this moment");
         return card;
@@ -1666,7 +1666,7 @@ public sealed partial class LibraryPage : Page
         return null;
     }
 
-    private void Tile_PointerEntered(object sender, PointerRoutedEventArgs e) { if (Vm(sender) is { } t) { t.Hover = true; if (sender is FrameworkElement fe) Glow.On(fe); } }
+    private void Tile_PointerEntered(object sender, PointerRoutedEventArgs e) { if (Vm(sender) is { } t) { t.Hover = true; if (sender is FrameworkElement fe) Glow.On(fe, 8, true, 140, false); } }
     private void Tile_PointerExited(object sender, PointerRoutedEventArgs e) { if (Vm(sender) is { } t) { t.Hover = false; if (sender is FrameworkElement fe) Glow.Off(fe); } }
 
     /// <summary>Right-click a tile: the usual things to do with it. Over a ticked tile the menu acts on every ticked file.</summary>

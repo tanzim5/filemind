@@ -169,6 +169,7 @@ public sealed class QuickSearchWindow : Window
         _frame = new Border { Child = root, BorderThickness = new Thickness(1), BorderBrush = Res("GlassStrokeBrush") };
         ApplyTheme();
         Content = _frame;
+        Glow.Attach(_frame, 8, 240, true, false);
 
         _debounce.Tick += async (_, _) => { _debounce.Stop(); await SearchAsync(_box.Text); };
         _speech.Partial += (stable, tentative) => DispatcherQueue.TryEnqueue(() => { if (_listening) { _box.Text = (stable + " " + tentative).Trim(); _box.SelectionStart = _box.Text.Length; } });

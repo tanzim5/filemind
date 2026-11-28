@@ -82,6 +82,7 @@ public sealed class SpeechInput : IDisposable
         }
         catch (OperationCanceledException) { return new SpeechResult("", null); }
         catch (WebSocketException) when (_cancelled) { return new SpeechResult("", null); }
+        catch (WebSocketException) { throw new SpeechException("internal", "The voice connection dropped."); }
         finally
         {
             IsListening = false;
