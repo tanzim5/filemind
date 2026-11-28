@@ -117,15 +117,6 @@ def _prep_image(path: str) -> Path:
     return out
 
 
-def embed_image_file(path: str) -> np.ndarray:
-    m = get_model()
-    prepped = _prep_image(path)
-    try:
-        return _norm(m.encode({"text": "<|image|>", "image": [str(prepped)]}, normalize_embeddings=True))
-    finally:
-        prepped.unlink(missing_ok=True)
-
-
 def embed_reference(path: Path, kind: str, text: str = "") -> np.ndarray:
     """One joint image/video/audio-and-text query in EmbeddingGemma 2's shared space."""
     prepared = prepare(path, kind, path.name)
@@ -236,5 +227,3 @@ def embed_images(preps: list[dict]) -> list[tuple[np.ndarray, str]]:
             discard(p)
 
 
-def embed_document(path: Path, kind: str, name: str) -> tuple[np.ndarray, str]:
-    return embed_prepared(prepare(path, kind, name))

@@ -57,10 +57,13 @@ public static class ThemeEngine
 
     // One transparency setting (0 = solid, 1 = most glass). The floors keep text readable over any wallpaper:
     // the page never drops below ~30 % opacity, the sidebar below ~16 % (the blurred acrylic behind keeps text legible).
-    public static double RailOpacity(AppSettings st) => 1 - (IsLiquid(st) ? 0.84 : 0.78) * Math.Clamp(st.Transparency, 0, 1);
-    public static double PanelOpacity(AppSettings st) => 1 - (IsLiquid(st) ? 0.70 : 0.62) * Math.Clamp(st.Transparency, 0, 1);
+    // Glass is for the control layer: the sidebar lets the wallpaper through, while the page the files sit on stays nearly solid so
+    // pictures keep their colour (stacked see-through layers are what made it look muddy).
+    public static double RailOpacity(AppSettings st) => !st.Glass ? 1 : 1 - 0.85 * Math.Clamp(st.Transparency, 0, 1);
+    public static double PanelOpacity(AppSettings st) => !st.Glass ? 1 : 1 - 0.20 * Math.Clamp(st.Transparency, 0, 1);
 
-    public static bool IsLiquid(AppSettings st) => st.Surface == "liquid";
+    /// <summary>One look now: clear glass with a bright top edge. (The older frosted style is gone.)</summary>
+    public static bool IsLiquid(AppSettings st) => true;
     /// <summary>True while the liquid-glass surface style is applied (set by <see cref="Apply"/>).</summary>
     public static bool Liquid { get; private set; }
 
@@ -96,8 +99,8 @@ public static class ThemeEngine
             // Clearer glass: the fills let more through, and the fields get a brighter, lighter body.
             if (p.Dark)
             {
-                Set("GlassFillBrush", A(0x22)); Set("GlassFillStrongBrush", A(0x36)); Set("GlassFillHoverBrush", A(0x2E));
-                Set("FieldFillBrush", A(0x2A)); Set("FieldBorderBrush", A(0x5A));
+                Set("GlassFillBrush", A(0x14)); Set("GlassFillStrongBrush", A(0x2A)); Set("GlassFillHoverBrush", A(0x22));
+                Set("FieldFillBrush", A(0x1E)); Set("FieldBorderBrush", A(0x4A));
             }
             else
             {
@@ -176,7 +179,7 @@ public static class ThemeEngine
         Set("AccentBrush", ac);
         if (Application.Current.Resources.TryGetValue("AuraBrush", out var av) && av is RadialGradientBrush aura && aura.GradientStops.Count == 2)
         {
-            aura.GradientStops[0].Color = Windows.UI.Color.FromArgb(p.Key == "amoled" ? (byte)0x14 : p.Dark ? (byte)0x26 : (byte)0x0A, ac.R, ac.G, ac.B);
+            aura.GradientStops[0].Color = Windows.UI.Color.FromArgb(p.Key == "amoled" ? (byte)0x0C : p.Dark ? (byte)0x14 : (byte)0x08, ac.R, ac.G, ac.B);
             aura.GradientStops[1].Color = Windows.UI.Color.FromArgb(0, ac.R, ac.G, ac.B);
         }
 

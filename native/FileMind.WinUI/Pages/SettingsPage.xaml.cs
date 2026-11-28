@@ -22,12 +22,13 @@ public sealed partial class SettingsPage : Page
         InitializeComponent();
         Loaded += async (_, _) => await FillAsync();
         GlassSlider.Value = St.Transparency * 100;
+        GlassSwitch.IsOn = St.Glass; GlassSlider.IsEnabled = St.Glass;
+        VoiceEngineBox.SelectedIndex = St.VoiceEngine == "windows" ? 1 : 0; ShowVoiceNote();
         MinSideBox.SelectedIndex = Math.Max(0, new[] { 0, 256, 300, 512, 720, 1080 }.ToList().IndexOf(St.MinSide));
         MinSideModeBox.SelectedIndex = St.MinSideMode == "long" ? 1 : 0;
         BuildOrder();
         _ = BuildStorageAsync();
         ShowHotkey(); KeepSwitch.IsOn = St.KeepRunning;
-        VoiceChoice.SelectedIndex = St.VoiceEngine == "windows" ? 1 : 0;
         SimilarChoice.SelectedIndex = St.SimilarFiles == "side" ? 1 : 0;
         SizeSlider.Value = St.TileSize;
         GapSlider.Value = St.TileGap;
@@ -94,13 +95,6 @@ public sealed partial class SettingsPage : Page
         Save(); BuildOrder(); LibraryPage.Current?.ApplySections();
     }
 
-    private void Voice_Changed(object sender, SelectionChangedEventArgs e)
-    {
-        if (!_ready) return;
-        St.VoiceEngine = VoiceChoice.SelectedIndex == 1 ? "windows" : "local";
-        Save();
-    }
-
     // A tile's name is always shown. The chosen tile gets the accent ring (set by the caller) and a small check in its corner.
     private static UIElement Tile(Border frame, bool selected, Brush accent)
     {
@@ -163,10 +157,19 @@ public sealed partial class SettingsPage : Page
 
     // ---- Quick search shortcut: click, then press the new combination ----
     private bool _recording;
-    private void ShowHotkey() => HotkeyBtn.Content = (App.ActiveHotkey ?? St.QuickSearchHotkey).Replace("+", "  +  ");
+    private bool _recordingVoice;
+    private void ShowHotkey()
+    {
+        HotkeyBtn.Content = (App.ActiveHotkey ?? St.QuickSearchHotkey).Replace("+", "  +  ");
+        VoiceHotkeyBtn.Content = (App.ActiveVoiceHotkey ?? St.VoiceHotkey).Replace("+", "  +  ");
+    }
+    private void VoiceHotkey_Click(object sender, RoutedEventArgs e)
+    {
+        _recording = true; _recordingVoice = true; VoiceHotkeyBtn.Content = "Press the new shortcut..."; HotkeyNote.Visibility = Visibility.Collapsed;
+    }
     private void Hotkey_Click(object sender, RoutedEventArgs e)
     {
-        _recording = true; HotkeyBtn.Content = "Press the new shortcut..."; HotkeyNote.Visibility = Visibility.Collapsed;
+        _recording = true; _recordingVoice = false; HotkeyBtn.Content = "Press the new shortcut..."; HotkeyNote.Visibility = Visibility.Collapsed;
     }
     private void Hotkey_Lost(object sender, RoutedEventArgs e) { _recording = false; ShowHotkey(); }
     private void Hotkey_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
@@ -188,7 +191,7 @@ public sealed partial class SettingsPage : Page
         parts.Add(name);
         var combo = string.Join("+", parts);
         _recording = false;
-        if (App.SetHotkey(combo)) { St.QuickSearchHotkey = combo; Save(); HotkeyNote.Visibility = Visibility.Collapsed; }
+        if (_recordingVoice ? App.SetVoiceHotkey(combo) : App.SetHotkey(combo)) { if (_recordingVoice) St.VoiceHotkey = combo; else St.QuickSearchHotkey = combo; Save(); HotkeyNote.Visibility = Visibility.Collapsed; }
         else { HotkeyNote.Text = $"{combo.Replace("+", " + ")} is already used by another app. Pick a different one."; HotkeyNote.Visibility = Visibility.Visible; }
         ShowHotkey();
     }
@@ -298,6 +301,22 @@ public sealed partial class SettingsPage : Page
 
     private Microsoft.UI.Xaml.DispatcherTimer? _glassSave;
     private void GlassSaveTick(object? s, object e) { _glassSave?.Stop(); Save(); }
+
+    private void GlassSwitch_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (!_ready) return;
+        St.Glass = GlassSwitch.IsOn; GlassSlider.IsEnabled = St.Glass; Save(); App.Window?.ApplyGlass();
+    }
+
+    private void ShowVoiceNote() => VoiceEngineNote.Text = St.VoiceEngine == "windows"
+        ? "Windows reads your voice, with no download. Windows may send the audio to Microsoft (needs Online speech recognition on)."
+        : "Whisper reads your voice on this PC, so nothing is uploaded. One-time download of about 145 MB.";
+
+    private void VoiceEngine_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_ready) return;
+        St.VoiceEngine = VoiceEngineBox.SelectedIndex == 1 ? "windows" : "whisper"; Save(); ShowVoiceNote();
+    }
 
     private void Glass_Changed(object sender, RangeBaseValueChangedEventArgs e)
     {
@@ -485,8 +504,8 @@ public sealed partial class SettingsPage : Page
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var text = new StackPanel { Spacing = 2 };
             text.Children.Add(new TextBlock { Text = entry.Name });
-            text.Children.Add(new TextBlock { Text = entry.Purpose, Style = Ui.Style("Helper"), TextWrapping = TextWrapping.Wrap });
-            text.Children.Add(new TextBlock { Text = entry.Path, Style = Ui.Style("Helper"), IsTextSelectionEnabled = true, TextTrimming = TextTrimming.CharacterEllipsis, Opacity = 0.7 });
+            text.Children.Add(new TextBlock { Text = entry.Purpose, Style = (Style)Resources["Helper"], TextWrapping = TextWrapping.Wrap });
+            text.Children.Add(new TextBlock { Text = entry.Path, Style = (Style)Resources["Helper"], IsTextSelectionEnabled = true, TextTrimming = TextTrimming.CharacterEllipsis, Opacity = 0.7 });
             row.Children.Add(text);
             var size = new TextBlock { Text = StorageInfo.Format(entry.Bytes), VerticalAlignment = VerticalAlignment.Center, MinWidth = 64, TextAlignment = TextAlignment.Right };
             Grid.SetColumn(size, 1); row.Children.Add(size);

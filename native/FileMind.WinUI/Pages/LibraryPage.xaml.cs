@@ -208,7 +208,8 @@ public sealed partial class LibraryPage : Page
             }, false);
         }
         AddAccelerator(VirtualKey.F, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, () => { FiltersBtn.Flyout?.ShowAt(FiltersBtn); return Task.CompletedTask; }, true);
-        AddAccelerator(VirtualKey.Escape, VirtualKeyModifiers.None, () => { ClearSelection(); return Task.CompletedTask; }, false);
+        AddAccelerator(VirtualKey.Escape, VirtualKeyModifiers.None, () => { if (_listening) CancelVoice(); else ClearSelection(); return Task.CompletedTask; }, true);
+        AddAccelerator(VirtualKey.V, VirtualKeyModifiers.Menu, () => { ToggleVoice(); return Task.CompletedTask; }, true);
         AddAccelerator(VirtualKey.Delete, VirtualKeyModifiers.None, async () => await DeleteSelectedAsync(), false);
         AddAccelerator(VirtualKey.C, VirtualKeyModifiers.Control, async () => await CopySelectedAsync(false), false);
         AddAccelerator(VirtualKey.C, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, async () => await CopySelectedAsync(true), false);
@@ -295,7 +296,7 @@ public sealed partial class LibraryPage : Page
         card.Children.Add(img);
         card.Children.Add(new TextBlock { Text = m.File.Name, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis });
         card.Tapped += (_, _) => Frame.Navigate(typeof(ViewerPage), new ViewerRequest(m.File, [m.File], m.Start, m.End));
-        card.PointerEntered += (_, _) => Glow.On(card, 6, false);
+        card.PointerEntered += (_, _) => Glow.On(card, 6, false, 95, false);
         card.PointerExited += (_, _) => Glow.Off(card, false);
         ToolTipService.SetToolTip(card, "Open at this moment");
         return card;
@@ -815,37 +816,66 @@ public sealed partial class LibraryPage : Page
 
     // ------------------------------------------------------------------ voice, and dropping files in
     private readonly SpeechInput _speech = new();
+    private bool _voiceCancelled;
 
-    /// <summary>Tap to talk. What you say is turned into text (on this PC) and searched like typed words, so "videos of the beach
-    /// over ten seconds" works the same spoken or typed. It stops by itself when you pause; tap again to stop early.</summary>
-    private async void Voice_Click(object sender, RoutedEventArgs e)
+    /// <summary>Tap to talk (or Alt+V). The words appear as you speak; when you pause, the question is understood (dates, colours,
+    /// sizes...) and searched. Tap again to finish early, Esc to cancel.</summary>
+    public async void ToggleVoice()
     {
         if (_listening) { _speech.Stop(); return; }
-        _listening = true;
+        _listening = true; _voiceCancelled = false;
         VoiceBtn.Background = Ui.Brush("AccentFillBrush");
-        ToolTipService.SetToolTip(VoiceBtn, "Listening… tap to stop");
+        ToolTipService.SetToolTip(VoiceBtn, "Listening… tap to finish");
         UpdateHint();
-        void Heard(string t) => DispatcherQueue.TryEnqueue(() => { if (_listening) SearchHint.Text = t.Length > 0 ? t : "Listening…"; });
-        _speech.Hypothesis += Heard;
-        string said;
-        try { said = (await _speech.ListenAsync()).Trim(); }
-        catch (Exception ex)
-        {
-            App.Log("voice", ex, ex.Message);
-            ShowToast("Couldn't use the microphone. Check Windows Settings > Privacy > Microphone, and let desktop apps use it.");
-            said = "";
-        }
+        void Heard(string stable, string tentative) => DispatcherQueue.TryEnqueue(() => { if (_listening) SearchHint.Text = (stable + " " + tentative).Trim() is { Length: > 0 } t ? t : "Listening…"; });
+        void Loud(double level) => DispatcherQueue.TryEnqueue(() => { if (_listening) VoiceBtn.Opacity = Math.Clamp(0.65 + level * 6, 0.65, 1); });
+        _speech.Partial += Heard; _speech.Level += Loud;
+        SpeechResult? result = null;
+        try { result = await _speech.ListenAsync(); }
+        catch (SpeechException ex) { await VoiceProblemAsync(ex); }
+        catch (Exception ex) { App.Log("voice", ex, ex.Message); ShowToast("Voice search didn't work this time."); }
         finally
         {
-            _speech.Hypothesis -= Heard;
+            _speech.Partial -= Heard; _speech.Level -= Loud;
             _listening = false;
-            VoiceBtn.ClearValue(Control.BackgroundProperty);
-            ToolTipService.SetToolTip(VoiceBtn, "Search by voice");
+            VoiceBtn.ClearValue(Control.BackgroundProperty); VoiceBtn.Opacity = 1;
+            ToolTipService.SetToolTip(VoiceBtn, "Search by voice (Alt+V)");
             UpdateHint();
         }
-        if (said.Length == 0) return;
-        ShowToast($"Heard: “{(said.Length > 90 ? said[..90] + "…" : said)}”");
-        await ApplySmartAsync(said);
+        if (result is null || _voiceCancelled) return;
+        var said = result.Text.Trim();
+        if (said.Length == 0) { ShowToast("Didn't catch that. Try again (Alt+V)."); return; }
+        await ApplySmartAsync(said, result.Understood);
+    }
+
+    private void Voice_Click(object sender, RoutedEventArgs e) => ToggleVoice();
+
+    public void CancelVoice() { if (_listening) { _voiceCancelled = true; _speech.Cancel(); } }
+
+    private async Task VoiceProblemAsync(SpeechException ex)
+    {
+        switch (ex.Code)
+        {
+            case "mic_denied":
+                ShowToast("Microphone is off for desktop apps. Opening Windows settings…");
+                await Windows.System.Launcher.LaunchUriAsync(new Uri("ms-settings:privacy-microphone"));
+                break;
+            case "no_mic": ShowToast("No microphone found."); break;
+            case "starting": ShowToast("File Mind is still starting. Try again in a moment."); break;
+            case "speech_privacy":
+                ShowToast("Windows speech needs 'Online speech recognition' turned on. Opening Windows settings…");
+                await Windows.System.Launcher.LaunchUriAsync(new Uri("ms-settings:privacy-speech"));
+                break;
+            case "model_missing":
+                try
+                {
+                    await Api.PrepareVoiceModelAsync();
+                    ShowToast("Voice needs a one-time download (about 145 MB). It will be ready in a minute or two, or pick Windows speech in Settings.");
+                }
+                catch (Exception e) { App.Log("voice-model", e, e.Message); ShowToast("Couldn't start the voice download."); }
+                break;
+            default: ShowToast("Voice search didn't work this time."); break;
+        }
     }
 
     private void Host_DragOver(object sender, DragEventArgs e)
@@ -1557,25 +1587,24 @@ public sealed partial class LibraryPage : Page
         else { await ApplyTagsAsync(ids, TagInfo.Favourite, null); ShowToast($"Added {ids.Count:N0} to Favourites."); }
     }
 
-    private async Task ApplySmartAsync(string input)
+    private async Task ApplySmartAsync(string input, Understood? known = null)
     {
-        var r = SmartFilter.Parse(input);
+        var u = known;
+        if (u is null)
+        {
+            try { u = await Api.UnderstandAsync(input); }
+            catch (Exception ex) { App.Log("understand", ex, null); u = new Understood { Text = input }; }
+        }
         await GoAsync(() =>
         {
-            var s = r.Query;
-            if (s.MinPixels is not null) _q.MinPixels = s.MinPixels;
-            if (s.MinFps is not null) _q.MinFps = s.MinFps;
-            if (s.Aspect is not null) _q.Aspect = s.Aspect;
-            if (s.MinDuration is not null) _q.MinDuration = s.MinDuration;
-            if (s.MaxDuration is not null) _q.MaxDuration = s.MaxDuration;
-            if (s.MinSize is not null) _q.MinSize = s.MinSize;
-            if (s.MaxSize is not null) _q.MaxSize = s.MaxSize;
-            if (r.Kind is not null) _q.Kind = r.Kind;
+            var leftover = _q.Apply(u);
             // With a reference picture on the pill the words refine it, so the reference stays; otherwise they start a text search.
-            if (r.Text.Length > 0) _tags.Add((r.Text, r.Text));
+            var words = leftover.Length > 0 && u.Without is { Length: > 0 } w ? leftover + " without " + w : leftover;
+            if (words.Length > 0) _tags.Add((words, words));
             _title = "";
             SyncDetailFields();
         });
+        if (u.Chips.Count > 0) ShowToast("Understood: " + u.Summary);
     }
 
     private void SyncDetailFields()
@@ -1641,7 +1670,7 @@ public sealed partial class LibraryPage : Page
         return null;
     }
 
-    private void Tile_PointerEntered(object sender, PointerRoutedEventArgs e) { if (Vm(sender) is { } t) { t.Hover = true; if (sender is FrameworkElement fe) Glow.On(fe); } }
+    private void Tile_PointerEntered(object sender, PointerRoutedEventArgs e) { if (Vm(sender) is { } t) { t.Hover = true; if (sender is FrameworkElement fe) Glow.On(fe, 8, true, 95, false); } }
     private void Tile_PointerExited(object sender, PointerRoutedEventArgs e) { if (Vm(sender) is { } t) { t.Hover = false; if (sender is FrameworkElement fe) Glow.Off(fe); } }
 
     /// <summary>Right-click a tile: the usual things to do with it. Over a ticked tile the menu acts on every ticked file.</summary>

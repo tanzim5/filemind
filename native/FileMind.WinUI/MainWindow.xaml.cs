@@ -14,7 +14,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        SystemBackdrop = DesktopAcrylicController.IsSupported() ? new DesktopAcrylicBackdrop() : new MicaBackdrop();
+        SystemBackdrop = Backdrop(ThemeEngine.Find(AppRuntime.Current.Settings.Theme));
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBar);
@@ -42,6 +42,7 @@ public sealed partial class MainWindow : Window
         }), true);
         Root.SizeChanged += (_, _) => QueueTitleRegions();
         Pages.Anim.HookPress(Root);
+        Pages.Glow.Attach(RailCard, 0, 130, false, false);
         // Follow Windows when it changes between light and dark or gets a new accent colour.
         _ui.ColorValuesChanged += (_, _) => DispatcherQueue.TryEnqueue(() =>
         {
@@ -169,6 +170,16 @@ public sealed partial class MainWindow : Window
         catch (Exception ex) { App.Log("glass", ex, ""); }
     }
 
+    private readonly GlassBackdrop _glass = new();
+
+    /// <summary>The clear, thin acrylic behind the window (Mica on PCs without acrylic).</summary>
+    private SystemBackdrop Backdrop(Palette p)
+    {
+        if (!DesktopAcrylicController.IsSupported()) return new MicaBackdrop();
+        _glass.Update(p.Dark);
+        return _glass;
+    }
+
     public void ApplyGlass()
     {
         try
@@ -186,8 +197,8 @@ public sealed partial class MainWindow : Window
             var hov = Windows.UI.Color.FromArgb(p.Dark ? (byte)0x24 : (byte)0x1A, fg.R, fg.G, fg.B);
             bar.ButtonHoverBackgroundColor = hov; bar.ButtonPressedBackgroundColor = hov;
             var amoled = p.Key == "amoled";
-            SystemBackdrop = amoled ? null : (DesktopAcrylicController.IsSupported() ? new DesktopAcrylicBackdrop() : new MicaBackdrop());
-            Root.Background = new SolidColorBrush(amoled ? Colors.Black : Colors.Transparent);
+            SystemBackdrop = amoled || !st.Glass ? null : Backdrop(p);
+            Root.Background = new SolidColorBrush(amoled ? Colors.Black : st.Glass ? Colors.Transparent : p.Panel);
             if (amoled) { RailCard.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 8, 8, 8)); PanelCard.Background = new SolidColorBrush(Colors.Black); BuildRail(); return; }
             RailCard.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(a(ThemeEngine.RailOpacity(st)), p.Rail.R, p.Rail.G, p.Rail.B));
             PanelCard.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(a(ThemeEngine.PanelOpacity(st)), p.Panel.R, p.Panel.G, p.Panel.B));

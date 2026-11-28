@@ -23,8 +23,14 @@ public sealed class ApiClient(Uri baseUri, string token = "") : IDisposable
     }
 
     public Uri BaseUri => baseUri;
-    public Uri ThumbUri(int id) => new(baseUri, $"/api/thumb/{id}");
-    public Uri FileUri(int id) => new(baseUri, $"/api/file/{id}");
+    /// <summary>Where live dictation connects (a WebSocket; the token proves it is this app).</summary>
+    public Uri VoiceStreamUri => new UriBuilder(baseUri) { Scheme = "ws", Path = "/api/voice/stream", Query = "fm_token=" + Uri.EscapeDataString(token) }.Uri;
+    public Task<VoiceModelState> GetVoiceModelAsync(CancellationToken ct = default) => GetAsync<VoiceModelState>("/api/voice/model", ct);
+    public Task<VoiceModelState> PrepareVoiceModelAsync(CancellationToken ct = default) => PostAsync<VoiceModelState>("/api/voice/model", null, ct);
+    // Pictures and media are fetched by Windows itself (no custom headers), so their addresses carry the token.
+    private string TokenQuery(char first) => token.Length > 0 ? $"{first}fm_token={Uri.EscapeDataString(token)}" : "";
+    public Uri ThumbUri(int id) => new(baseUri, $"/api/thumb/{id}{TokenQuery('?')}");
+    public Uri FileUri(int id) => new(baseUri, $"/api/file/{id}{TokenQuery('?')}");
 
     public Task<ModelStatus> GetModelAsync(CancellationToken ct = default) => GetAsync<ModelStatus>("/api/model", ct);
     public Task<ModelStatus> StartModelDownloadAsync(CancellationToken ct = default) => PostAsync<ModelStatus>("/api/model/download", null, ct);
@@ -47,7 +53,15 @@ public sealed class ApiClient(Uri baseUri, string token = "") : IDisposable
 
     /// <summary>Semantic search, kept inside the same filters the library view uses.</summary>
     public async Task<List<FileItem>> SearchAsync(IEnumerable<string> texts, FileQuery query, int limit, int offset, CancellationToken ct = default) =>
-        (await PostAsync<SearchResult>("/api/search", query.ToSearchBody(texts, limit, offset), ct)).Files;
+        (await SearchWithChipsAsync(texts, query, limit, offset, ct)).Files;
+
+    /// <summary>The same, and what the engine understood in the words (dates, colours, sizes...).</summary>
+    public Task<SearchResult> SearchWithChipsAsync(IEnumerable<string> texts, FileQuery query, int limit, int offset, CancellationToken ct = default) =>
+        PostAsync<SearchResult>("/api/search", query.ToSearchBody(texts, limit, offset), ct);
+
+    /// <summary>Reads a typed or spoken question into filters and the words left to search for.</summary>
+    public Task<Understood> UnderstandAsync(string text, CancellationToken ct = default) =>
+        PostAsync<Understood>("/api/understand", FileQuery.AskContext(text), ct);
 
     /// <summary>Files like this one. With <paramref name="words"/> the engine mixes the file's vector with the words
     /// ("like this, but at night"); <paramref name="textWeight"/> (0 to 1, engine default 0.5) says how much the words count.</summary>
@@ -69,11 +83,6 @@ public sealed class ApiClient(Uri baseUri, string token = "") : IDisposable
     public Task<TranscriptState> GetTranscriptAsync(int id, CancellationToken ct = default) => GetAsync<TranscriptState>($"/api/transcript/{id}", ct);
     public Task<TranscriptState> StartTranscriptAsync(int id, CancellationToken ct = default) => PostAsync<TranscriptState>($"/api/transcript/{id}", null, ct);
 
-    public async Task DeleteTagAsync(string name, CancellationToken ct = default)
-    {
-        using var response = await _http.DeleteAsync($"/api/tags/{Uri.EscapeDataString(name)}", ct);
-        response.EnsureSuccessStatusCode();
-    }
     /// <summary>Makes the preview video of a sequence (the first time only) so it can be played.</summary>
     public Task PrepareSequenceAsync(int id, CancellationToken ct = default) => PostAsync<JsonElement>($"/api/sequence/{id}/proxy", null, ct);
     public Task SetSequenceFpsAsync(int id, double fps, CancellationToken ct = default) => PostAsync<JsonElement>($"/api/sequence/{id}/fps", new { fps }, ct);
@@ -89,9 +98,6 @@ public sealed class ApiClient(Uri baseUri, string token = "") : IDisposable
     public Task<TagList> GetTagsAsync(CancellationToken ct = default) => GetAsync<TagList>("/api/tags", ct);
     public Task<TagList> TagFilesAsync(IEnumerable<int> ids, IEnumerable<string>? add, IEnumerable<string>? remove, CancellationToken ct = default) =>
         PostAsync<TagList>("/api/tags", new { ids = ids.ToList(), add = add?.ToList() ?? [], remove = remove?.ToList() ?? [] }, ct);
-    public Task<TagList> DefineTagAsync(string name, string? color, string? rename = null, CancellationToken ct = default) =>
-        PostAsync<TagList>("/api/tags/define", new { name, color, rename }, ct);
-
     /// <summary>Counts for the Refine options: over a browsed scope (kind, root, source, ...) or the given result ids.</summary>
     public Task<FacetResult> GetFacetsAsync(Dictionary<string, object?> scope, IEnumerable<int>? ids, CancellationToken ct = default)
     {
@@ -101,25 +107,10 @@ public sealed class ApiClient(Uri baseUri, string token = "") : IDisposable
     }
 
 
-    /// <summary>Speech to text on the engine (local Whisper): used when Windows speech recognition is unavailable.</summary>
-    public async Task<string> VoiceToTextAsync(string audioPath, CancellationToken ct = default)
-    {
-        using var form = new MultipartFormDataContent();
-        form.Add(new ByteArrayContent(await File.ReadAllBytesAsync(audioPath, ct)), "file", Path.GetFileName(audioPath));
-        using var response = await _http.PostAsync("/api/voice/text", form, ct);
-        return (await ReadAsync<JsonElement>(response, ct)).GetProperty("text").GetString() ?? "";
-    }
-
     /// <summary>Tells the engine how hard to work while indexing: quiet, balanced or fast.</summary>
     public async Task SetIndexSpeedAsync(string level)
     {
         try { using var r = await _http.PostAsJsonAsync("/api/index/speed", new { level }); } catch (Exception) { }
-    }
-
-    /// <summary>Loads the local voice model ahead of the first words, so the answer comes back sooner.</summary>
-    public async Task WarmVoiceAsync()
-    {
-        try { using var r = await _http.PostAsync("/api/voice/warm", null); } catch (Exception) { }
     }
 
     /// <summary>Find files that look or sound like a picture on disk.</summary>
@@ -133,14 +124,6 @@ public sealed class ApiClient(Uri baseUri, string token = "") : IDisposable
         return (await ReadAsync<SearchResult>(response, ct)).Files;
     }
 
-    /// <summary>Sends a recording (any format ffmpeg reads); the engine embeds the sound itself as the search query.</summary>
-    public async Task<VoiceResult> VoiceAsync(string path, CancellationToken ct = default)
-    {
-        using var form = new MultipartFormDataContent();
-        form.Add(new ByteArrayContent(await File.ReadAllBytesAsync(path, ct)), "file", Path.GetFileName(path));
-        using var response = await _http.PostAsync("/api/voice", form, ct);
-        return await ReadAsync<VoiceResult>(response, ct);
-    }
 
     public Task<List<ColorSwatch>> GetColorsAsync(CancellationToken ct = default) => GetAsync<List<ColorSwatch>>("/api/colors", ct);
     public async Task<List<SourceEntry>> GetSourcesAsync(CancellationToken ct = default) => (await GetAsync<SourcesResponse>("/api/sources", ct)).Sources;
@@ -161,7 +144,7 @@ public sealed class ApiClient(Uri baseUri, string token = "") : IDisposable
     public Task<MomentQueue> QueueMomentsAsync(bool all, IEnumerable<int>? ids = null, CancellationToken ct = default) =>
         PostAsync<MomentQueue>("/api/moments/queue", new { all, ids = ids?.ToArray() ?? [] }, ct);
     public Task<MomentQueue> GetMomentQueueAsync(CancellationToken ct = default) => GetAsync<MomentQueue>("/api/moments/queue", ct);
-    public Uri MomentFrameUri(int id, double seconds) => new(baseUri, $"/api/moments/{id}/frame?t={seconds.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+    public Uri MomentFrameUri(int id, double seconds) => new(baseUri, $"/api/moments/{id}/frame?t={seconds.ToString(System.Globalization.CultureInfo.InvariantCulture)}{TokenQuery('&')}");
     public Task<MomentState> GetMomentsAsync(int id, CancellationToken ct = default) => GetAsync<MomentState>($"/api/moments/{id}", ct);
     public Task<MomentState> StartMomentsAsync(int id, CancellationToken ct = default) => PostAsync<MomentState>($"/api/moments/{id}", null, ct);
     public async Task SetProposedNameAsync(int id, string name, CancellationToken ct = default)

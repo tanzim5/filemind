@@ -104,26 +104,3 @@ def ideas(n: int = 30):
     return picked[:n]
 
 
-def related(file_ids: list[int], exclude: str = "", n: int = 6):
-    """Ideas closest to the centre of a set of files (e.g. the current results)."""
-    ids, mat = indexer.matrix()
-    if not len(ids) or not file_ids:
-        return []
-    pos = {int(f): i for i, f in enumerate(ids)}
-    rows = [pos[f] for f in file_ids[:40] if f in pos]
-    if not rows:
-        return []
-    c = mat[rows].mean(axis=0)
-    c /= np.linalg.norm(c) or 1
-    P = _pool_vecs()
-    sc = P @ c
-    ex = exclude.strip().lower()
-    out = []
-    for i in np.argsort(-sc):
-        if POOL[i].lower() == ex:
-            continue
-        top = mat @ P[i]
-        out.append({"q": POOL[i], "top": [int(ids[j]) for j in np.argsort(-top)[:3]]})
-        if len(out) >= n:
-            break
-    return out

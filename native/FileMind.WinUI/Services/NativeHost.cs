@@ -9,14 +9,15 @@ public sealed class NativeHost : IDisposable
     private const int WM_HOTKEY = 0x0312, WM_APP_TRAY = 0x8000 + 1, WM_COMMAND = 0x0111;
     private const int WM_LBUTTONUP = 0x0202, WM_RBUTTONUP = 0x0205, WM_CONTEXTMENU = 0x007B;
     private const uint MOD_ALT = 1, MOD_CONTROL = 2, MOD_SHIFT = 4, MOD_WIN = 8, MOD_NOREPEAT = 0x4000;
-    private const int HotkeyId = 0xF11E;
+    private const int HotkeyId = 0xF11E, VoiceHotkeyId = 0xF11F;
     private const uint MenuOpen = 1, MenuSearch = 2, MenuQuit = 3;
 
     private readonly IntPtr _hwnd;
     private readonly SubclassProc _proc;     // kept alive: the native side holds a pointer to it
-    private bool _hotkey, _tray;
+    private bool _hotkey, _voiceHotkey, _tray;
 
     public event Action? HotkeyPressed;
+    public event Action? VoiceHotkeyPressed;
     public event Action? OpenRequested;
     public event Action? QuitRequested;
 
@@ -34,6 +35,15 @@ public sealed class NativeHost : IDisposable
         if (!TryParse(combo, out var mods, out var vk)) return false;
         _hotkey = RegisterHotKey(_hwnd, HotkeyId, mods | MOD_NOREPEAT, vk);
         return _hotkey;
+    }
+
+    /// <summary>The shortcut that opens Quick Search and starts listening.</summary>
+    public bool RegisterVoiceHotkey(string combo)
+    {
+        if (_voiceHotkey) { UnregisterHotKey(_hwnd, VoiceHotkeyId); _voiceHotkey = false; }
+        if (!TryParse(combo, out var mods, out var vk)) return false;
+        _voiceHotkey = RegisterHotKey(_hwnd, VoiceHotkeyId, mods | MOD_NOREPEAT, vk);
+        return _voiceHotkey;
     }
 
     public static bool TryParse(string combo, out uint mods, out uint vk)
@@ -71,6 +81,7 @@ public sealed class NativeHost : IDisposable
     private IntPtr WndProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, UIntPtr id, IntPtr data)
     {
         if (msg == WM_HOTKEY && (int)wParam == HotkeyId) { HotkeyPressed?.Invoke(); return IntPtr.Zero; }
+        if (msg == WM_HOTKEY && (int)wParam == VoiceHotkeyId) { VoiceHotkeyPressed?.Invoke(); return IntPtr.Zero; }
         if (msg == WM_APP_TRAY)
         {
             var ev = (int)(lParam.ToInt64() & 0xFFFF);

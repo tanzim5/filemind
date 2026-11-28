@@ -95,7 +95,7 @@ def init():
     if "pal" not in cols:
         conn().execute("ALTER TABLE files ADD COLUMN pal TEXT")      # JSON {swatch: share of picture}
     for name, sql_type in (("width", "INTEGER"), ("height", "INTEGER"), ("duration", "REAL"),
-                           ("fps", "REAL"), ("codec", "TEXT")):
+                           ("fps", "REAL"), ("codec", "TEXT"), ("taken", "REAL")):
         if name not in cols:
             conn().execute(f"ALTER TABLE files ADD COLUMN {name} {sql_type}")
     conn().executescript("""

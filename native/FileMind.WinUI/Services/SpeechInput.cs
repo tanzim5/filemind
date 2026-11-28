@@ -1,121 +1,177 @@
-using Windows.Media.SpeechRecognition;
+using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
+using FileMind.Core;
 
 namespace FileMind;
 
-/// <summary>Talk to search. By default the microphone is recorded and the engine turns it into text with local
-/// Whisper, so nothing leaves the PC; it stops by itself when you pause. Settings can switch to Windows' own speech
-/// recognizer instead, which shows words while you speak but may use Microsoft's online service.</summary>
+/// <summary>Why listening could not work: "mic_denied", "no_mic", "model_missing", "busy", "starting" or "internal".</summary>
+public sealed class SpeechException(string code, string message) : Exception(message)
+{
+    public string Code { get; } = code;
+}
+
+public sealed record SpeechResult(string Text, Understood? Understood);
+
+/// <summary>Talk to search. The microphone is streamed to the engine, which reads it with Whisper on this PC: the words
+/// appear while you speak (<see cref="Partial"/>), and when you pause the final text comes back already understood
+/// (dates, colours, sizes...). Nothing leaves the PC.</summary>
 public sealed class SpeechInput : IDisposable
 {
-    private SpeechRecognizer? _recognizer;
-    private bool _windowsFailed;
-    private VoiceRecorder? _recorder;
-    private CancellationTokenSource? _fallbackStop;
+    private ClientWebSocket? _ws;
+    private MicStream? _mic;
+    private readonly SemaphoreSlim _send = new(1, 1);
+    private volatile bool _cancelled;
 
-    /// <summary>Partial words while you are still speaking (raised off the UI thread).</summary>
-    public event Action<string>? Hypothesis;
+    /// <summary>The words so far: the ones that are settled, and the ones that may still change (raised off the UI thread).</summary>
+    public event Action<string, string>? Partial;
+    /// <summary>True while a voice is heard.</summary>
+    public event Action<bool>? Speech;
+    /// <summary>Microphone loudness 0 to 1, for the pulsing ring.</summary>
+    public event Action<double>? Level;
 
     public bool IsListening { get; private set; }
 
-    /// <summary>Listens for one spoken query and returns its text ("" when nothing was heard).</summary>
-    public async Task<string> ListenAsync()
+    /// <summary>Listens for one spoken question. Returns when the person pauses (or <see cref="Stop"/>); empty text when cancelled.</summary>
+    public async Task<SpeechResult> ListenAsync()
     {
-        IsListening = true;
+        if (IsListening) throw new SpeechException("busy", "Already listening.");
+        if (AppRuntime.Current.Settings.VoiceEngine == "windows") return await ListenWindowsAsync();
+        var api = AppRuntime.Current.Api ?? throw new SpeechException("starting", "File Mind is still starting.");
+        IsListening = true; _cancelled = false;
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         try
         {
-            if (AppRuntime.Current.Settings.VoiceEngine == "windows" && !_windowsFailed)
+            _ws = new ClientWebSocket();
+            try { await _ws.ConnectAsync(api.VoiceStreamUri, timeout.Token); }
+            catch (Exception ex) when (ex is WebSocketException or OperationCanceledException or HttpRequestException)
+            { throw new SpeechException("starting", "File Mind is still starting."); }
+            var start = new Dictionary<string, object>(FileQuery.Clock()) { ["type"] = "start" };
+            await SendAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(start)), WebSocketMessageType.Text, timeout.Token);
+
+            _mic = new MicStream();
+            _mic.Level += l => Level?.Invoke(l);
+            _mic.Chunk += pcm => _ = SendAsync(pcm, WebSocketMessageType.Binary, CancellationToken.None);
+            await _mic.StartAsync();
+
+            var buffer = new byte[16 * 1024];
+            while (!timeout.IsCancellationRequested && _ws.State == WebSocketState.Open)
             {
-                try { return await ListenWindowsAsync(); }
-                catch (Exception ex)
+                var sb = new StringBuilder();
+                WebSocketReceiveResult r;
+                do
                 {
-                    App.Log("speech", ex, "Windows speech recognition unavailable; using local Whisper");
-                    _windowsFailed = true;
-                    _recognizer?.Dispose(); _recognizer = null;
+                    r = await _ws.ReceiveAsync(buffer, timeout.Token);
+                    if (r.MessageType == WebSocketMessageType.Close) return new SpeechResult("", null);
+                    sb.Append(Encoding.UTF8.GetString(buffer, 0, r.Count));
+                } while (!r.EndOfMessage);
+
+                using var doc = JsonDocument.Parse(sb.ToString());
+                var root = doc.RootElement;
+                switch (root.GetProperty("type").GetString())
+                {
+                    case "partial": Partial?.Invoke(root.GetProperty("stable").GetString() ?? "", root.GetProperty("tentative").GetString() ?? ""); break;
+                    case "speech": Speech?.Invoke(root.GetProperty("on").GetBoolean()); break;
+                    case "error": throw new SpeechException(root.GetProperty("code").GetString() ?? "internal", root.GetProperty("message").GetString() ?? "");
+                    case "final":
+                        var text = root.GetProperty("text").GetString() ?? "";
+                        Understood? u = root.TryGetProperty("understood", out var uv) && uv.ValueKind == JsonValueKind.Object ? uv.Deserialize<Understood>() : null;
+                        return new SpeechResult(text, u);
                 }
             }
-            return await ListenWhisperAsync();
+            return new SpeechResult("", null);
         }
-        finally { IsListening = false; }
+        catch (OperationCanceledException) { return new SpeechResult("", null); }
+        catch (WebSocketException) when (_cancelled) { return new SpeechResult("", null); }
+        catch (WebSocketException) { throw new SpeechException("internal", "The voice connection dropped."); }
+        finally
+        {
+            IsListening = false;
+            try { _mic?.Dispose(); } catch (Exception) { }
+            _mic = null;
+            try { _ws?.Dispose(); } catch (Exception) { }
+            _ws = null;
+        }
     }
 
-    /// <summary>Ends listening early; whatever was said so far is used.</summary>
+    private Windows.Media.SpeechRecognition.SpeechRecognizer? _win;
+
+    /// <summary>Windows' own dictation: no download, words appear as you speak. Windows may send the audio to Microsoft to read it.</summary>
+    private async Task<SpeechResult> ListenWindowsAsync()
+    {
+        var api = AppRuntime.Current.Api ?? throw new SpeechException("starting", "File Mind is still starting.");
+        IsListening = true; _cancelled = false;
+        var done = new TaskCompletionSource<Windows.Media.SpeechRecognition.SpeechRecognitionResultStatus?>();
+        var text = new StringBuilder();
+        try
+        {
+            var rec = new Windows.Media.SpeechRecognition.SpeechRecognizer();
+            _win = rec;
+            rec.Constraints.Add(new Windows.Media.SpeechRecognition.SpeechRecognitionTopicConstraint(Windows.Media.SpeechRecognition.SpeechRecognitionScenario.Dictation, "dictation"));
+            var compiled = await rec.CompileConstraintsAsync();
+            if (compiled.Status != Windows.Media.SpeechRecognition.SpeechRecognitionResultStatus.Success) throw new SpeechException("internal", "Windows speech could not start.");
+            rec.ContinuousRecognitionSession.AutoStopSilenceTimeout = TimeSpan.FromSeconds(1.5);
+            rec.HypothesisGenerated += (_, a) => Partial?.Invoke(text.ToString().Trim(), a.Hypothesis.Text);
+            rec.ContinuousRecognitionSession.ResultGenerated += (_, a) =>
+            {
+                if (a.Result.Status == Windows.Media.SpeechRecognition.SpeechRecognitionResultStatus.Success && !string.IsNullOrWhiteSpace(a.Result.Text))
+                { text.Append(' ').Append(a.Result.Text); Partial?.Invoke(text.ToString().Trim(), ""); }
+            };
+            rec.ContinuousRecognitionSession.Completed += (_, a) => done.TrySetResult(a.Status switch
+            {
+                Windows.Media.SpeechRecognition.SpeechRecognitionResultStatus.MicrophoneUnavailable => Windows.Media.SpeechRecognition.SpeechRecognitionResultStatus.MicrophoneUnavailable,
+                Windows.Media.SpeechRecognition.SpeechRecognitionResultStatus.NetworkFailure => Windows.Media.SpeechRecognition.SpeechRecognitionResultStatus.NetworkFailure,
+                _ => null
+            });
+            await rec.ContinuousRecognitionSession.StartAsync();
+            var first = await Task.WhenAny(done.Task, Task.Delay(TimeSpan.FromSeconds(30)));
+            if (first != done.Task) { try { await rec.ContinuousRecognitionSession.StopAsync(); } catch (Exception) { } }
+            else if (done.Task.Result is { } bad)
+                throw bad == Windows.Media.SpeechRecognition.SpeechRecognitionResultStatus.MicrophoneUnavailable ? new SpeechException("no_mic", "No microphone.") : new SpeechException("speech_privacy", "Windows speech is off.");
+            if (_cancelled) return new SpeechResult("", null);
+            var said = text.ToString().Trim();
+            Understood? u = null;
+            if (said.Length > 0) { try { u = await api.UnderstandAsync(said); } catch (Exception) { } }
+            return new SpeechResult(said, u);
+        }
+        catch (System.Runtime.InteropServices.COMException ex) when ((uint)ex.HResult == 0x80045509 || (uint)ex.HResult == 0x80131500)
+        { throw new SpeechException("speech_privacy", "Windows speech is off."); }
+        catch (UnauthorizedAccessException) { throw new SpeechException("mic_denied", "Microphone access is off for desktop apps."); }
+        finally
+        {
+            IsListening = false;
+            try { _win?.Dispose(); } catch (Exception) { }
+            _win = null;
+        }
+    }
+
+    /// <summary>Ends listening now; whatever was said so far is read and returned.</summary>
     public void Stop()
     {
-        _fallbackStop?.Cancel();
-        try { _ = _recognizer?.StopRecognitionAsync(); } catch (Exception) { }
+        if (_win is { } w) { _ = w.ContinuousRecognitionSession.StopAsync(); return; }
+        _ = SendAsync(Encoding.UTF8.GetBytes("{\"type\":\"stop\"}"), WebSocketMessageType.Text, CancellationToken.None);
     }
 
-    private async Task<string> ListenWindowsAsync()
+    /// <summary>Stops listening and throws the words away.</summary>
+    public void Cancel()
     {
-        if (_recognizer is null)
-        {
-            var r = new SpeechRecognizer();
-            r.Constraints.Add(new SpeechRecognitionTopicConstraint(SpeechRecognitionScenario.WebSearch, "search"));
-            var compiled = await r.CompileConstraintsAsync();
-            if (compiled.Status != SpeechRecognitionResultStatus.Success)
-            {
-                r.Dispose();
-                throw new InvalidOperationException($"Speech constraints: {compiled.Status}");
-            }
-            r.Timeouts.InitialSilenceTimeout = TimeSpan.FromSeconds(6);
-            r.Timeouts.EndSilenceTimeout = TimeSpan.FromMilliseconds(700);
-            r.HypothesisGenerated += (_, e) => Hypothesis?.Invoke(e.Hypothesis.Text);
-            _recognizer = r;
-        }
-        var result = await _recognizer.RecognizeAsync();
-        if (result.Status is SpeechRecognitionResultStatus.Success or SpeechRecognitionResultStatus.UserCanceled)
-            return result.Text ?? "";
-        throw new InvalidOperationException($"Speech recognition: {result.Status}");
+        _cancelled = true;
+        if (_win is { } w) { _ = w.ContinuousRecognitionSession.CancelAsync(); return; }
+        _ = SendAsync(Encoding.UTF8.GetBytes("{\"type\":\"cancel\"}"), WebSocketMessageType.Text, CancellationToken.None);
+        try { _mic?.Dispose(); } catch (Exception) { }
     }
 
-    private async Task<string> ListenWhisperAsync()
+    private async Task SendAsync(byte[] data, WebSocketMessageType type, CancellationToken ct)
     {
-        var api = AppRuntime.Current.Api ?? throw new InvalidOperationException("File Mind is still starting.");
-        _recorder ??= new VoiceRecorder();
-        await _recorder.StartAsync();
-        Hypothesis?.Invoke("Listening…");
-        _ = api.WarmVoiceAsync();                       // the model loads while you are still speaking
-        _fallbackStop = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        var stop = _fallbackStop;
-        LevelMeter? meter = null;
+        var ws = _ws;
+        if (ws is null || ws.State != WebSocketState.Open) return;
         try
         {
-            // Stop by itself: once speech has been heard, 0.9 s of quiet ends it; 6 s with no speech at all gives up.
-            meter = new LevelMeter();
-            var started = DateTime.UtcNow;
-            DateTime? lastLoud = null;
-            var floor = 0.004;
-            meter.Level += level =>
-            {
-                var now = DateTime.UtcNow;
-                if ((now - started).TotalMilliseconds < 250) { floor = Math.Max(floor, level * 1.2); return; }   // room noise
-                if (level > Math.Max(floor * 2.5, 0.012)) lastLoud = now;
-                var quiet = lastLoud is null ? (now - started).TotalSeconds > 6 : (now - lastLoud.Value).TotalMilliseconds > 900;
-                if (quiet) { try { stop.Cancel(); } catch (Exception) { } }
-            };
-            await meter.StartAsync();
+            await _send.WaitAsync(ct);
+            try { await ws.SendAsync(data, type, true, ct); } finally { _send.Release(); }
         }
-        catch (Exception ex)
-        {
-            App.Log("speech", ex, "no level meter; listening for a fixed 8 seconds");
-            meter?.Dispose(); meter = null;
-            stop.CancelAfter(TimeSpan.FromSeconds(8));
-        }
-        try { await Task.Delay(Timeout.Infinite, stop.Token); } catch (TaskCanceledException) { }
-        meter?.Dispose();
-        var path = await _recorder.StopAsync();
-        if (path is null) return "";
-        try
-        {
-            Hypothesis?.Invoke("Understanding…");
-            return await api.VoiceToTextAsync(path);
-        }
-        finally { try { File.Delete(path); } catch (Exception) { } }
+        catch (Exception) { }
     }
 
-    public void Dispose()
-    {
-        _recognizer?.Dispose();
-        _recorder?.Dispose();
-    }
+    public void Dispose() { try { _mic?.Dispose(); _ws?.Dispose(); } catch (Exception) { } }
 }

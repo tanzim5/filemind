@@ -31,6 +31,7 @@ public sealed class QuickSearchWindow : Window
     private readonly StackPanel _info;
     private readonly DispatcherTimer _debounce = new() { Interval = TimeSpan.FromMilliseconds(150) };
     private readonly SpeechInput _speech = new();
+    private readonly GlassBackdrop _glass = new();
     private CancellationTokenSource? _searchCts;
     private string _lastQuery = "";
     private bool _listening, _shown, _activated, _liquidBackdrop;
@@ -62,7 +63,7 @@ public sealed class QuickSearchWindow : Window
     {
         Title = "File Mind quick search";
         Hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        SystemBackdrop = new DesktopAcrylicBackdrop();
+        SystemBackdrop = _glass;
 
         if (AppWindow.Presenter is OverlappedPresenter p)
         {
@@ -168,9 +169,12 @@ public sealed class QuickSearchWindow : Window
         _frame = new Border { Child = root, BorderThickness = new Thickness(1), BorderBrush = Res("GlassStrokeBrush") };
         ApplyTheme();
         Content = _frame;
+        Glow.Attach(_frame, 8, 130, true, false);
 
         _debounce.Tick += async (_, _) => { _debounce.Stop(); await SearchAsync(_box.Text); };
-        _speech.Hypothesis += text => DispatcherQueue.TryEnqueue(() => { if (_listening) _box.Text = text; });
+        _speech.Partial += (stable, tentative) => DispatcherQueue.TryEnqueue(() => { if (_listening) { _box.Text = (stable + " " + tentative).Trim(); _box.SelectionStart = _box.Text.Length; } });
+        _speech.Level += level => DispatcherQueue.TryEnqueue(() => { if (_listening) _mic.Opacity = Math.Clamp(0.65 + level * 6, 0.65, 1); });
+        _status.Tapped += (_, _) => _statusAction?.Invoke();
         // It closes on Esc, on opening a result, on the hotkey again, or when you really click away. A deactivation right after it
         // appears, or one that Windows reverses a moment later, is not a click away: it is ignored.
         Activated += (_, e) =>
@@ -204,13 +208,23 @@ public sealed class QuickSearchWindow : Window
         if (liquid != _liquidBackdrop || SystemBackdrop is null && liquid)
         {
             _liquidBackdrop = liquid;
-            SystemBackdrop = liquid ? new DesktopAcrylicBackdrop() : null;
+            _glass.Update(p.Dark);
+            SystemBackdrop = liquid ? _glass : null;
         }
     }
 
     private string KindFilter => (_kind.SelectedItem as ComboBoxItem)?.Tag as string ?? "all";
 
     /// <summary>Shows the launcher on the monitor under the mouse, focused and ready to type; toggles it if open.</summary>
+    /// <summary>The voice shortcut: shows the launcher if needed and starts listening; pressed again while listening, it finishes.</summary>
+    public async Task ListenFromHotkeyAsync()
+    {
+        if (_listening) { _speech.Stop(); return; }
+        if (!_shown) Toggle();
+        await Task.Delay(120);                       // let the window take focus before the microphone opens
+        await ToggleListenAsync();
+    }
+
     public void Toggle()
     {
         if (_shown) { HideLauncher(); return; }
@@ -229,7 +243,7 @@ public sealed class QuickSearchWindow : Window
 
     private void HideLauncher()
     {
-        if (_listening) _speech.Stop();
+        if (_listening) { _voiceCancelled = true; _speech.Cancel(); }
         _shown = false;
         AppWindow.Hide();
     }
@@ -256,12 +270,14 @@ public sealed class QuickSearchWindow : Window
         var cts = _searchCts = new CancellationTokenSource();
         try
         {
-            var files = await api.SearchAsync([text], new FileQuery { Kind = KindFilter }, Limit, 0, cts.Token);
+            var result = await api.SearchWithChipsAsync([text], new FileQuery { Kind = KindFilter }, Limit, 0, cts.Token);
             if (cts.IsCancellationRequested) return;
+            var files = result.Files;
             _list.ItemsSource = files.Select(BuildRow).ToList();
             if (files.Count > 0) _list.SelectedIndex = 0; else ShowPreview(null);
             Resize(true);
-            _status.Text = files.Count == 0 ? "Nothing matches. Try describing it differently." : "";
+            var understood = result.Understood.Count > 0 ? string.Join("  ·  ", result.Understood) : "";
+            _status.Text = files.Count == 0 ? "Nothing matches. Try describing it differently." + (understood.Length > 0 ? "  (" + understood + ")" : "") : understood;
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -306,33 +322,86 @@ public sealed class QuickSearchWindow : Window
 
     private static string KindIcon(FileItem f) => f.Kind switch { "image" => "photo", "video" => "video", "audio" => "audio", "text" => "text", _ => "file" };
 
-    private async Task ToggleListenAsync()
+    private bool _voiceCancelled;
+    private string _beforeVoice = "";
+    private Action? _statusAction;
+
+    /// <summary>Starts (or finishes) listening. The words appear in the box as they are spoken; when you pause, the question is searched.</summary>
+    public async Task ToggleListenAsync()
     {
         if (_listening) { _speech.Stop(); return; }
-        _listening = true;
+        _listening = true; _voiceCancelled = false; _statusAction = null;
+        _beforeVoice = _box.Text;
         _mic.Background = Res("AccentFillBrush");
-        _box.Text = ""; _box.PlaceholderText = "Listening… describe the file you want";
-        try
-        {
-            var said = (await _speech.ListenAsync()).Trim();
-            _listening = false;
-            _box.Text = said;
-            _box.SelectionStart = said.Length;
-            if (said.Length > 0) await SearchAsync(said);
-        }
+        _box.Text = ""; _box.PlaceholderText = "Listening… ask for a file";
+        _status.Text = "Say what you are looking for. Esc cancels.";
+        Resize(true);
+        SpeechResult? result = null;
+        try { result = await _speech.ListenAsync(); }
+        catch (SpeechException ex) { VoiceProblem(ex); }
         catch (Exception ex)
         {
             Resize(true);
-            _status.Text = "Couldn't use the microphone. Check Windows Settings → Privacy → Microphone.";
+            _status.Text = "Voice search didn't work this time.";
             App.Log("quick search voice", ex, ex.Message);
         }
         finally
         {
             _listening = false;
+            _mic.ClearValue(Control.BackgroundProperty); _mic.Opacity = 1;
             _mic.Background = new SolidColorBrush(Colors.Transparent);
             _box.PlaceholderText = "Search files, or describe one…";
             _box.Focus(FocusState.Programmatic);
         }
+        if (result is null) { _box.Text = _beforeVoice; return; }
+        if (_voiceCancelled) { _box.Text = _beforeVoice; _status.Text = ""; return; }
+        var said = result.Text.Trim();
+        if (said.Length == 0) { _box.Text = _beforeVoice; Resize(true); _status.Text = "Didn't catch that. Try again (Alt+V)."; return; }
+        _box.Text = said;
+        _box.SelectionStart = said.Length;
+        await SearchAsync(said);
+    }
+
+    private void VoiceProblem(SpeechException ex)
+    {
+        Resize(true);
+        switch (ex.Code)
+        {
+            case "mic_denied":
+                _status.Text = "Microphone is off for desktop apps. Click here to open Windows settings.";
+                _statusAction = () => _ = Windows.System.Launcher.LaunchUriAsync(new Uri("ms-settings:privacy-microphone"));
+                break;
+            case "no_mic": _status.Text = "No microphone found."; break;
+            case "speech_privacy":
+                _status.Text = "Windows speech needs 'Online speech recognition' on. Click here to open Windows settings.";
+                _statusAction = () => _ = Windows.System.Launcher.LaunchUriAsync(new Uri("ms-settings:privacy-speech"));
+                break;
+            case "starting": _status.Text = "File Mind is still starting. Try again in a moment."; break;
+            case "model_missing":
+                _status.Text = "Voice needs a one-time download (about 145 MB). Click here to start it, or pick Windows speech in Settings.";
+                _statusAction = () => _ = DownloadVoiceAsync();
+                break;
+            default: _status.Text = "Voice search didn't work this time."; break;
+        }
+    }
+
+    private async Task DownloadVoiceAsync()
+    {
+        var api = AppRuntime.Current.Api;
+        if (api is null) return;
+        _statusAction = null;
+        try
+        {
+            var s = await api.PrepareVoiceModelAsync();
+            while (s.Running)
+            {
+                _status.Text = $"Downloading the voice model… {Math.Min(100, s.Done * 100 / Math.Max(1, s.Total))} %";
+                await Task.Delay(1000);
+                s = await api.GetVoiceModelAsync();
+            }
+            _status.Text = s.Ready ? "Voice is ready. Press Alt+V and ask." : "The download didn't finish: " + s.Error;
+        }
+        catch (Exception ex) { App.Log("voice-model", ex, ex.Message); _status.Text = "The voice download didn't work."; }
     }
 
     private async void Box_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -344,7 +413,7 @@ public sealed class QuickSearchWindow : Window
         {
             case VirtualKey.Escape:
                 e.Handled = true;
-                if (_listening) _speech.Stop(); else HideLauncher();
+                if (_listening) { _voiceCancelled = true; _speech.Cancel(); } else HideLauncher();
                 break;
             case VirtualKey.Down or VirtualKey.Up when _list.Items.Count > 0:
                 e.Handled = true;
