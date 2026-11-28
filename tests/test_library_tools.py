@@ -1,3 +1,5 @@
+import os
+os.environ["FILEMIND_TESTING"] = "1"
 import json
 import sqlite3
 import tempfile

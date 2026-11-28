@@ -24,11 +24,13 @@ public sealed class ApiClient(Uri baseUri, string token = "") : IDisposable
 
     public Uri BaseUri => baseUri;
     /// <summary>Where live dictation connects (a WebSocket; the token proves it is this app).</summary>
-    public Uri VoiceStreamUri => new UriBuilder(baseUri) { Scheme = "ws", Path = "/api/voice/stream", Query = "t=" + Uri.EscapeDataString(token) }.Uri;
+    public Uri VoiceStreamUri => new UriBuilder(baseUri) { Scheme = "ws", Path = "/api/voice/stream", Query = "fm_token=" + Uri.EscapeDataString(token) }.Uri;
     public Task<VoiceModelState> GetVoiceModelAsync(CancellationToken ct = default) => GetAsync<VoiceModelState>("/api/voice/model", ct);
     public Task<VoiceModelState> PrepareVoiceModelAsync(CancellationToken ct = default) => PostAsync<VoiceModelState>("/api/voice/model", null, ct);
-    public Uri ThumbUri(int id) => new(baseUri, $"/api/thumb/{id}");
-    public Uri FileUri(int id) => new(baseUri, $"/api/file/{id}");
+    // Pictures and media are fetched by Windows itself (no custom headers), so their addresses carry the token.
+    private string TokenQuery(char first) => token.Length > 0 ? $"{first}fm_token={Uri.EscapeDataString(token)}" : "";
+    public Uri ThumbUri(int id) => new(baseUri, $"/api/thumb/{id}{TokenQuery('?')}");
+    public Uri FileUri(int id) => new(baseUri, $"/api/file/{id}{TokenQuery('?')}");
 
     public Task<ModelStatus> GetModelAsync(CancellationToken ct = default) => GetAsync<ModelStatus>("/api/model", ct);
     public Task<ModelStatus> StartModelDownloadAsync(CancellationToken ct = default) => PostAsync<ModelStatus>("/api/model/download", null, ct);
@@ -150,7 +152,7 @@ public sealed class ApiClient(Uri baseUri, string token = "") : IDisposable
     public Task<MomentQueue> QueueMomentsAsync(bool all, IEnumerable<int>? ids = null, CancellationToken ct = default) =>
         PostAsync<MomentQueue>("/api/moments/queue", new { all, ids = ids?.ToArray() ?? [] }, ct);
     public Task<MomentQueue> GetMomentQueueAsync(CancellationToken ct = default) => GetAsync<MomentQueue>("/api/moments/queue", ct);
-    public Uri MomentFrameUri(int id, double seconds) => new(baseUri, $"/api/moments/{id}/frame?t={seconds.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+    public Uri MomentFrameUri(int id, double seconds) => new(baseUri, $"/api/moments/{id}/frame?t={seconds.ToString(System.Globalization.CultureInfo.InvariantCulture)}{TokenQuery('&')}");
     public Task<MomentState> GetMomentsAsync(int id, CancellationToken ct = default) => GetAsync<MomentState>($"/api/moments/{id}", ct);
     public Task<MomentState> StartMomentsAsync(int id, CancellationToken ct = default) => PostAsync<MomentState>($"/api/moments/{id}", null, ct);
     public async Task SetProposedNameAsync(int id, string name, CancellationToken ct = default)

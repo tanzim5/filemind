@@ -1,4 +1,5 @@
 import os
+os.environ["FILEMIND_TESTING"] = "1"
 import tempfile
 import unittest
 
@@ -6,6 +7,8 @@ import numpy as np
 
 _tmp = tempfile.mkdtemp()
 os.environ.setdefault("FILEMIND_DATA", _tmp)
+
+os.environ["FILEMIND_TESTING"] = "1"
 
 from app import voice_stream  # noqa: E402
 
@@ -89,14 +92,14 @@ class SocketTests(unittest.TestCase):
             with self.client.websocket_connect("/api/voice/stream"):
                 pass
         with self.assertRaises(WebSocketDisconnect):
-            with self.client.websocket_connect("/api/voice/stream?t=secret", headers={"origin": "http://evil.example"}):
+            with self.client.websocket_connect("/api/voice/stream?fm_token=secret", headers={"origin": "http://evil.example"}):
                 pass
 
     def test_a_missing_model_is_reported_not_crashed(self):
         orig = voice_stream.ready_partial
         voice_stream.ready_partial = lambda: False
         self.addCleanup(setattr, voice_stream, "ready_partial", orig)
-        with self.client.websocket_connect("/api/voice/stream?t=secret") as ws:
+        with self.client.websocket_connect("/api/voice/stream?fm_token=secret") as ws:
             msg = ws.receive_json()
         self.assertEqual((msg["type"], msg["code"]), ("error", "model_missing"))
 

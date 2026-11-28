@@ -967,9 +967,9 @@ def voice_model_prepare():
 async def voice_stream_ws(ws: WebSocket):
     """Live dictation. The HTTP guard does not see WebSockets, so the token is checked here, and a browser page
     (which always sends an Origin header) is refused."""
-    token = ws.query_params.get("t") or ws.headers.get("x-filemind-token") or ""
+    token = ws.query_params.get("fm_token") or ws.headers.get("x-filemind-token") or ""
     host = ws.headers.get("host", "")
-    if ws.headers.get("origin") or (host.rsplit(":", 1)[0] not in _HOSTS and host not in _HOSTS) \
+    if ws.headers.get("origin") or (host.rsplit(":", 1)[0] not in _allowed_hosts() and host not in _allowed_hosts()) \
             or (_TOKEN and not hmac.compare_digest(token, _TOKEN)):
         await ws.close(code=1008)
         return
@@ -1748,7 +1748,11 @@ def export_clear():
 
 
 _TOKEN = os.environ.get("FILEMIND_TOKEN", "")
-_HOSTS = {"127.0.0.1", "localhost", "[::1]", "testserver"}
+_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
+
+
+def _allowed_hosts():
+    return _HOSTS | ({"testserver"} if os.environ.get("FILEMIND_TESTING") else set())
 
 
 @app.middleware("http")
@@ -1756,10 +1760,16 @@ async def _guard(request, call_next):
     """The engine is for the app on this PC only. A web page you visit must not be able to drive it:
     requests need a local Host name (blocks DNS tricks) and, for anything that changes data, the token the app started us with."""
     from fastapi.responses import JSONResponse
-    if request.headers.get("host", "").rsplit(":", 1)[0] not in _HOSTS and request.headers.get("host", "") not in _HOSTS:
+    if request.headers.get("host", "").rsplit(":", 1)[0] not in _allowed_hosts() and request.headers.get("host", "") not in _allowed_hosts():
         return JSONResponse({"detail": "Not allowed."}, status_code=400)
-    if _TOKEN and request.method not in ("GET", "HEAD", "OPTIONS") and request.headers.get("x-filemind-token") != _TOKEN:
+    # A web page can load http://127.0.0.1:<port>/... too (images and video render cross-site), so reading needs the token as well.
+    # Only /api/health is open. Browsers always say where a request comes from; this app never does.
+    if request.headers.get("origin") or request.headers.get("sec-fetch-site") in ("cross-site", "same-site"):
         return JSONResponse({"detail": "Not allowed."}, status_code=403)
+    if _TOKEN and request.url.path != "/api/health":
+        supplied = request.headers.get("x-filemind-token") or request.query_params.get("fm_token") or ""
+        if not hmac.compare_digest(supplied, _TOKEN):
+            return JSONResponse({"detail": "Not allowed."}, status_code=403)
     return await call_next(request)
 
 
